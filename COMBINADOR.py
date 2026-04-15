@@ -345,7 +345,7 @@ WHERE Zfer = ?
 """
 
 SQL_BLOQUEOS_ACTIVOS = """
-SELECT formula, acero_variante
+SELECT formula, acero_variante, color_codigo
 FROM   dbo.M5_Bloqueos
 WHERE  pedido_origen = ?
   AND  activo = 1
@@ -411,7 +411,8 @@ class MotorExplosion:
         cursor.execute(SQL_BLOQUEOS_ACTIVOS, (zfer,))
         filas = cursor.fetchall()
         cursor.close()
-        return {(f[0], f[1]) for f in filas}
+        # Cada fila = (formula, acero_variante, color_codigo)
+        return {(f[0], f[1], f[2] or "") for f in filas}
 
     def explotar(self, zfer: str) -> list:
        
@@ -483,7 +484,7 @@ class MotorExplosion:
                     stats["base"] += 1
                     continue
 
-                if (fila.formula, fila.acero_variante) in bloqueos:
+                if (fila.formula, fila.acero_variante, color) in bloqueos:
                     stats["bloqueadas"] += 1
                     continue
 
@@ -510,7 +511,9 @@ def main():
     print("  MÓDULO 5 — Motor de explosión v2")
     print("="*60)
 
-    ZFER_PRUEBA = "700178899"   #CAMBIOSSSSSSSSSSSSSSSSSSSSSSS
+    # Acepta ZFER desde variable de entorno (cuando se llama desde MODULO5.py)
+    # o usa el valor por defecto para ejecución manual.
+    ZFER_PRUEBA = os.environ.get("M5_ZFER_BASE", "700178939")
 
     try:
         print("\n  Conectando a producción (agpcol.database.windows.net)...")
@@ -522,7 +525,7 @@ def main():
         motor = MotorExplosion(conn_prod, conn_local)
         tuplas = motor.explotar(ZFER_PRUEBA)
 
-        ruta_salida = r"C:\Users\abotero\OneDrive - AGP GROUP\Documentos\MODULO_5\combinaciones3.xlsx"
+        ruta_salida = r"C:\Users\abotero\OneDrive - AGP GROUP\Documentos\MODULO_5\combinaciones5.xlsx"
         
         wb_out = openpyxl.Workbook()
         ws = wb_out.active
@@ -542,6 +545,7 @@ def main():
             print(f"  {i:<4} {t.formula:<12} {t.acero_variante:<6} {t.color_codigo}")
         if len(tuplas) > 15:
             print(f"  ... y {len(tuplas)-15} más.")
+
 
         conn_prod.close()
         conn_local.close()

@@ -1,0 +1,1229 @@
+{
+  "batch_id": "16c0ce93-4167-487d-b041-76e71dccfd49",
+  "fecha_inicio": "2026-04-15T07:59:27.360537",
+  "fecha_fin": "2026-04-15T07:59:44.396285",
+  "zfer_base": "700179235",
+  "formula_base": "L30-2",
+  "operador": "abotero",
+  "totales": {
+    "a_procesar_sap": 5,
+    "procesados": 5,
+    "exitosos": 0,
+    "errores": 5,
+    "solo_reporte": 125
+  },
+  "items_sap": [
+    {
+      "idx": 1,
+      "formula": "L30-2",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "zfer_base": "700179235",
+      "zfer_nuevo": "",
+      "zfor_nuevo": "",
+      "posiciones_bom": [],
+      "estado": "ERROR",
+      "error": "(-2147352567, 'Ocurrió una excepción.', (619, 'SAP Frontend Server', 'The control could not be found by id.', 'C:\\\\Program Files (x86)\\\\SAP\\\\FrontEnd\\\\SAPGUI\\\\sapfront.HLP', 393215, 0), None)",
+      "fecha_inicio": "2026-04-15T07:59:27.360537",
+      "fecha_fin": "2026-04-15T07:59:30.744175",
+      "duracion_seg": 3.4
+    },
+    {
+      "idx": 2,
+      "formula": "L30-2",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "zfer_base": "700179235",
+      "zfer_nuevo": "",
+      "zfor_nuevo": "",
+      "posiciones_bom": [],
+      "estado": "ERROR",
+      "error": "(-2147352567, 'Ocurrió una excepción.', (619, 'SAP Frontend Server', 'The control could not be found by id.', 'C:\\\\Program Files (x86)\\\\SAP\\\\FrontEnd\\\\SAPGUI\\\\sapfront.HLP', 393215, 0), None)",
+      "fecha_inicio": "2026-04-15T07:59:30.777287",
+      "fecha_fin": "2026-04-15T07:59:34.135805",
+      "duracion_seg": 3.4
+    },
+    {
+      "idx": 3,
+      "formula": "L30-2",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "zfer_base": "700179235",
+      "zfer_nuevo": "",
+      "zfor_nuevo": "",
+      "posiciones_bom": [],
+      "estado": "ERROR",
+      "error": "(-2147352567, 'Ocurrió una excepción.', (619, 'SAP Frontend Server', 'The control could not be found by id.', 'C:\\\\Program Files (x86)\\\\SAP\\\\FrontEnd\\\\SAPGUI\\\\sapfront.HLP', 393215, 0), None)",
+      "fecha_inicio": "2026-04-15T07:59:34.146004",
+      "fecha_fin": "2026-04-15T07:59:37.477944",
+      "duracion_seg": 3.3
+    },
+    {
+      "idx": 4,
+      "formula": "L30-2",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "zfer_base": "700179235",
+      "zfer_nuevo": "",
+      "zfor_nuevo": "",
+      "posiciones_bom": [],
+      "estado": "ERROR",
+      "error": "(-2147352567, 'Ocurrió una excepción.', (619, 'SAP Frontend Server', 'The control could not be found by id.', 'C:\\\\Program Files (x86)\\\\SAP\\\\FrontEnd\\\\SAPGUI\\\\sapfront.HLP', 393215, 0), None)",
+      "fecha_inicio": "2026-04-15T07:59:37.485973",
+      "fecha_fin": "2026-04-15T07:59:40.819624",
+      "duracion_seg": 3.3
+    },
+    {
+      "idx": 5,
+      "formula": "L30-2",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "zfer_base": "700179235",
+      "zfer_nuevo": "",
+      "zfor_nuevo": "",
+      "posiciones_bom": [],
+      "estado": "ERROR",
+      "error": "(-2147352567, 'Ocurrió una excepción.', (619, 'SAP Frontend Server', 'The control could not be found by id.', 'C:\\\\Program Files (x86)\\\\SAP\\\\FrontEnd\\\\SAPGUI\\\\sapfront.HLP', 393215, 0), None)",
+      "fecha_inicio": "2026-04-15T07:59:40.824102",
+      "fecha_fin": "2026-04-15T07:59:44.197786",
+      "duracion_seg": 3.4
+    }
+  ],
+  "items_solo_reporte": [
+    {
+      "zfer_base": "700179235",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L23-36' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L23-36' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L23-36' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L23-36' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L23-36' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L23-36' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L23-36",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L23-36' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L24-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L24-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L24-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L24-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L24-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L24-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L43-11",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L43-11' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L43-11",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L43-11' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L43-11",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L43-11' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L43-11",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L43-11' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L43-11",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L43-11' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L43-11",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L43-11' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-6' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-6' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-6' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-6' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-6' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-6' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L22-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-32",
+      "acero": "SP",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-32' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-31",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-31' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-31",
+      "acero": "SP",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-31' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-31",
+      "acero": "SP",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-31' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-31",
+      "acero": "SP",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-31' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-31",
+      "acero": "SP",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-31' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L18-1' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L18-1' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L18-1' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L18-1' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-3' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-3' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-3' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-3' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-3' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L19-3' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L18-1' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L18-1' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L18-1' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L18-1' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L18-1' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L18-1' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L16-2",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L16-2' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L16-2",
+      "acero": "SP",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L16-2' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L16-2",
+      "acero": "SP",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L16-2' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "22-G2 Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "23-G2 Dark Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "22-G2 Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "23-G2 Dark Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L15-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L33-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L33-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L33-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L33-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L33-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L33-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L33-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L33-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L33-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L33-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L33-4' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L42-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L42-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L42-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L42-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L32-6",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L32-6' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L32-6",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L32-6' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L32-5",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L32-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L32-5",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L32-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L32-5",
+      "acero": "SN",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L32-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L32-5",
+      "acero": "SN",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L32-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L32-5",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L32-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L32-5",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L32-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L32-5",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L32-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L32-5",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L32-5' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L28-10' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L28-10' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L28-10' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L28-10' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L28-10' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L28-10",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L28-10' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L28-10",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L28-10' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L28-10",
+      "acero": "SN",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L28-10' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L28-10",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L28-10' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L28-10",
+      "acero": "SN",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L28-10' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-11' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-11' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-11' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-11' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-13' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-13' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-13' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-13' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-13' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-13' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive+PC color 35%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-13' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700179235",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive+PC color 22%.",
+      "cod_pieza": "011",
+      "tipo_pieza": "LEE (011)",
+      "motivo": "Formula 'L36-13' difiere de la base 'L30-2' — requiere cambio de formula previo"
+    }
+  ]
+}

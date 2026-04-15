@@ -34,12 +34,25 @@ CREATE TABLE dbo.M5_Bloqueos (
     tipo_pieza      NVARCHAR(20)        NOT NULL,
     formula         NVARCHAR(20)        NOT NULL,
     acero_variante  NVARCHAR(5)         NOT NULL,
+    color_codigo    NVARCHAR(50)        NOT NULL DEFAULT '',
     motivo          NVARCHAR(500)       NOT NULL,
     bloqueado_por   NVARCHAR(100)       NOT NULL,
     fecha_bloqueo   DATETIME            NOT NULL DEFAULT GETDATE(),
     activo          BIT                 NOT NULL DEFAULT 1,
     CONSTRAINT PK_M5_Bloqueos PRIMARY KEY CLUSTERED (id ASC)
 )
+"""
+
+# Migración idempotente: agrega color_codigo si la tabla ya existe sin ella
+SQL_MIGRAR_COLOR_CODIGO = """
+IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'M5_Bloqueos' AND COLUMN_NAME = 'color_codigo'
+)
+BEGIN
+    ALTER TABLE dbo.M5_Bloqueos
+    ADD color_codigo NVARCHAR(50) NOT NULL DEFAULT ''
+END
 """
 
 SQL_INDICE_BLOQUEOS = """
@@ -85,7 +98,9 @@ def tabla_existe(cursor, nombre_tabla:str) -> bool:
 def crear_tabla_bloqueos(cursor) -> None:
     nombre = "M5_Bloqueos"
     if tabla_existe(cursor, nombre):
-        print(f"  [OK] {nombre} ya existe — sin cambios.")
+        print(f"  [OK] {nombre} ya existe — verificando migraciones...")
+        cursor.execute(SQL_MIGRAR_COLOR_CODIGO)
+        print(f"  [OK] Migracion color_codigo aplicada (o ya existia).")
         return
     print(f"  [→]  Creando {nombre}...")
     cursor.execute(SQL_CREAR_BLOQUEOS)
