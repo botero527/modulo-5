@@ -1,0 +1,1197 @@
+{
+  "batch_id": "d1cdd49c-cf3b-4c01-a9dd-f916b35b9e08",
+  "fecha_inicio": "2026-04-16T08:16:32.139462",
+  "fecha_fin": null,
+  "zfer_base": "700158951",
+  "formula_base": "L23-36",
+  "operador": "abotero",
+  "totales": {
+    "a_procesar_sap": 1,
+    "procesados": 1,
+    "exitosos": 0,
+    "errores": 1,
+    "solo_reporte": 129
+  },
+  "items_sap": [
+    {
+      "idx": 1,
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "zfer_base": "700158951",
+      "zfer_nuevo": "700163064",
+      "zfor_nuevo": "501142973",
+      "posiciones_bom": [],
+      "estado": "ERROR",
+      "error": "ZPPR0020 falló — TIMEOUT: ZPPR0020 no completó fase 8 en 10 minutos.",
+      "fecha_inicio": "2026-04-16T08:16:32.139462",
+      "fecha_fin": "2026-04-16T08:27:02.021007",
+      "duracion_seg": 629.9
+    }
+  ],
+  "items_solo_reporte": [
+    {
+      "zfer_base": "700158951",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L24-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L24-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L24-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L24-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L22-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L22-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L22-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L22-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L22-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L22-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L22-6",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L22-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L22-6",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L22-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L22-6",
+      "acero": "SN",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L22-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L22-6",
+      "acero": "SN",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L22-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16/L19-20",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16/L19-20",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16/L19-20",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16",
+      "acero": "SP",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16",
+      "acero": "SP",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16",
+      "acero": "SP",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16",
+      "acero": "SP",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-16",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-16' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-3' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-3' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-3' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-3' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L18-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L16-2",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L16-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L16-2",
+      "acero": "SP",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L16-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L16-2",
+      "acero": "SP",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L16-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "22-G2 Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "23-G2 Dark Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "22-G2 Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "23-G2 Dark Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L15-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L33-4",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L33-4' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L42-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L42-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L42-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L42-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L30-2",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L30-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L30-2",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L30-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L30-2",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L30-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L30-2",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L30-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L30-2",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L30-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L30-2",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L30-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L32-6",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L32-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L32-6",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L32-6' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L28-5",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L28-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L28-5",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L28-5' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L28-2",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L28-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L28-2",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L28-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L28-2",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L28-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-18",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-18' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-18",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-18' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L19-18",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L19-18' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L28-10' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L28-10' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L28-10' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L28-10' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-11' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-11' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-11' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-11' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-13' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-13' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-13' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-13' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-13' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-13' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-13' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L36-13' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "LL48-1",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'LL48-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L13-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L13-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L13-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L13-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "22-G2 Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L13-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "23-G2 Dark Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L13-2' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L14-1",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L14-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L14-1",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L14-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L14-1",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L14-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700158951",
+      "formula": "L14-1",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "009",
+      "tipo_pieza": "Posterior",
+      "motivo": "Formula 'L14-1' difiere de la base 'L23-36' — requiere cambio de formula previo"
+    }
+  ]
+}

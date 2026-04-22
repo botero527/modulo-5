@@ -519,7 +519,10 @@ class TabSAP(tk.Frame):
     def _obtener_formula_base(self, zfer: str) -> str:
         """
         Consulta rapida a BD de produccion para obtener la formula del ZFER base.
-        Se llama desde el hilo de UI antes de mostrar el dialogo.
+        Busca en dos tablas en orden:
+          1. ZFER_Characteristics_Genesis  (SpecID = ZFER, columna FormulaCode)
+          2. TCAL_CALENDARIO_COLOMBIA_DIRECT (ZFER = ZFER, columna Formula)
+        Retorna "" si no encuentra en ninguna.
         """
         try:
             from SAP_AUTOMATIZADOR import DB_PROD
@@ -533,16 +536,34 @@ class TabSAP(tk.Frame):
                 autocommit=True, timeout=10,
             )
             cur = conn.cursor()
+
+            # 1. ZFER_Characteristics_Genesis
             cur.execute(
-                "SELECT TOP 1 Formula FROM VW_AppEnvolvente_LandMacro WHERE Zfer = ?",
+                "SELECT TOP 1 FormulaCode FROM dbo.ZFER_Characteristics_Genesis "
+                "WHERE SpecID = ?",
+                (zfer,)
+            )
+            row = cur.fetchone()
+            if row and row[0]:
+                conn.close()
+                return str(row[0]).strip()
+
+            # 2. TCAL_CALENDARIO_COLOMBIA_DIRECT
+            cur.execute(
+                "SELECT TOP 1 Formula FROM dbo.TCAL_CALENDARIO_COLOMBIA_DIRECT "
+                "WHERE ZFER = ?",
                 (zfer,)
             )
             row = cur.fetchone()
             conn.close()
-            return str(row[0]).strip() if row and row[0] else ""
-        except Exception:
-            return ""
+            if row and row[0]:
+                return str(row[0]).strip()
 
+        except Exception:
+            pass
+        return ""
+#VEHICULO	VERSION DE DISEÑO	FORMULA	COLOR	PIEZA
+#Z0409_	000_	LL40-8_	01_	001
     def _iniciar(self):
         if self._corriendo:
             return
@@ -562,25 +583,31 @@ class TabSAP(tk.Frame):
         zfer_base    = items[0].zfer_origen if items else ""
         formula_base = self._obtener_formula_base(zfer_base)
 
-        if formula_base:
-            fb           = formula_base.strip().upper()
-            items_sap    = [it for it in items if it.formula.strip().upper() == fb]
-            items_solo   = [it for it in items if it.formula.strip().upper() != fb]
-        else:
-            items_sap    = list(items)
-            items_solo   = []
+        if not formula_base:
+            # No se encontro en ninguna tabla — bloquear y alertar
+            messagebox.showerror(
+                "Formula no encontrada",
+                f"No se encontro la formula del ZFER base '{zfer_base}' en ninguna "
+                f"de las tablas de referencia:\n\n"
+                f"  • ZFER_Characteristics_Genesis\n"
+                f"  • TCAL_CALENDARIO_COLOMBIA_DIRECT\n\n"
+                f"Verifica que el ZFER este registrado en la BD de produccion "
+                f"antes de continuar.",
+                parent=self,
+            )
+            return
+
+        fb         = formula_base.strip().upper()
+        items_sap  = [it for it in items if it.formula.strip().upper() == fb]
+        items_solo = [it for it in items if it.formula.strip().upper() != fb]
 
         # ── Dialogo con numeros reales ────────────────────────────────────────
         lineas = []
-        if formula_base:
-            lineas.append(f"Formula base detectada: {formula_base}")
-            lineas.append("")
-            lineas.append(f"  Cambio de color (van a SAP) : {len(items_sap)}")
-            if items_solo:
-                lineas.append(f"  Solo reporte (otra formula)  : {len(items_solo)}")
-        else:
-            lineas.append(f"  [AVISO] No se detecto la formula base.")
-            lineas.append(f"  Se procesaran todas las {len(items_sap)} combinaciones.")
+        lineas.append(f"Formula base detectada: {formula_base}")
+        lineas.append("")
+        lineas.append(f"  Cambio de color (van a SAP) : {len(items_sap)}")
+        if items_solo:
+            lineas.append(f"  Solo reporte (otra formula)  : {len(items_solo)}")
         lineas.append("")
         lineas.append("SAP GUI debe estar abierto con sesion activa.")
         lineas.append("Continuar?")

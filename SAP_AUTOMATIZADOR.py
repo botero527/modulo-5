@@ -300,6 +300,8 @@ class AutomatizadorSAP:
         Retorna (zfer_nuevo, zfor_nuevo, zpla_seleccionado).
         El campo material se llena directamente (ctxtP_MATER-LOW), sin popup.
         """
+        # Cerrar cualquier diálogo pendiente antes de navegar
+        self._cerrar_dialogs_abiertos()
         self._navegar("ZMME0001")
         self.session.findById("wnd[0]").maximize()
         self._esperar(T_RAPIDO)
@@ -360,6 +362,12 @@ class AutomatizadorSAP:
             raise RuntimeError(f"ZFER_NUEVO vacío tras ejecutar ZMME0001. SAP: '{msg_sap}'")
 
         print(f"    ZMME0001 OK: ZFER_NUEVO={zfer_nuevo} | ZFOR={zfor_nuevo} | ZPLA={zpla_seleccionado}")
+
+        # Volver a pantalla de selección (F3) para que los campos estén disponibles
+        # al regresar de ZPPR0020 (el resultado queda en la pantalla del grid)
+        self.session.findById("wnd[0]").sendVKey(3)  # F3 = Retroceder
+        self._esperar(T_RAPIDO)
+
         return zfer_nuevo, zfor_nuevo, zpla_seleccionado
 
     # ── ZMME0001 — Paso 4: Comparar BOM + agregar filas + copy ───────────────
@@ -500,6 +508,9 @@ class AutomatizadorSAP:
                 self._esperar(T_LENTO)
                 msg_final = self._estado_sap()
                 print(f"    COPY_ITEM: {msg_final}")
+                # Si el statusbar contiene "error" → reportar como fallo
+                if msg_final and "error" in msg_final.lower():
+                    ok = False
             except Exception as e:
                 print(f"    [WARN] COPY_ITEM: {e}")
 
@@ -507,21 +518,40 @@ class AutomatizadorSAP:
 
     # ── MM02 — Actualizar PARTNUMBER AGP ─────────────────────────────────────
 
+    def _cerrar_dialogs_abiertos(self):
+        """Cierra cualquier wnd[1]/wnd[2] abierto antes de navegar."""
+        for wnd in ("wnd[2]", "wnd[1]"):
+            try:
+                self.session.findById(wnd)
+                # Intenta cancelar (F12) primero, luego Enter
+                try:
+                    self.session.findById(wnd).sendVKey(12)
+                except Exception:
+                    try:
+                        self.session.findById(wnd).sendVKey(0)
+                    except Exception:
+                        pass
+                self._esperar(T_RAPIDO)
+            except Exception:
+                pass
+
     def mm02_actualizar_partnumber(self, material: str, nuevo_partnumber: str):
         """
         MM02 del material → Clasificación → TAB4 (PIEZA) → actualiza PARTNUMBER (fila 0) → guarda.
-        Basado en Script3.vbs.
         """
+        self._cerrar_dialogs_abiertos()
         self._navegar("MM02")
         self.session.findById(self._ID_MM02_MATNR).text = material
         self.session.findById("wnd[0]").sendVKey(0)
         self._esperar(T_MEDIO)
 
-        # Aceptar diálogos de vistas (dos veces como en VBS)
-        self.session.findById("wnd[1]").sendVKey(0)
-        self._esperar(T_RAPIDO)
-        self.session.findById("wnd[1]").sendVKey(0)
-        self._esperar(T_RAPIDO)
+        # Aceptar diálogos de vistas (pueden aparecer o no según configuración MM02)
+        for _ in range(2):
+            try:
+                self.session.findById("wnd[1]").sendVKey(0)
+                self._esperar(T_RAPIDO)
+            except Exception:
+                break
 
         self.session.findById(self._ID_MM02_TAB03).select()
         self._esperar(T_RAPIDO)
@@ -555,37 +585,55 @@ class AutomatizadorSAP:
 
         print(f"      MM02 {material} PARTNUMBER → {nuevo_partnumber}")
 
-    # ── Formula base desde BD de produccion ──────────────────────────────────
-
+     
     def leer_formula_base_bd(self, zfer: str) -> str:
         """
-        Consulta la BD de produccion para obtener la formula del ZFER base.
-        Mas confiable que parsear el PARTNUMBER.
-        Retorna "" si no conecta o no encuentra el ZFER.
+        Consulta la formula del ZFER base en la BD de produccion.
+        Busca en dos tablas en orden:
+          1. ZFER_Characteristics_Genesis  (SpecID = ZFER, columna FormulaCode)
+          2. TCAL_CALENDARIO_COLOMBIA_DIRECT (ZFER = ZFER, columna Formula)
+        Retorna "" si no conecta o no encuentra el ZFER en ninguna tabla.
         """
+        conn_str = (
+            f"DRIVER={{{DB_PROD['driver']}}};"
+            f"SERVER={DB_PROD['server']};"
+            f"DATABASE={DB_PROD['database']};"
+            f"UID={DB_PROD['user']};"
+            f"PWD={DB_PROD['password']};"
+        )
         try:
-            conn_str = (
-                f"DRIVER={{{DB_PROD['driver']}}};"
-                f"SERVER={DB_PROD['server']};"
-                f"DATABASE={DB_PROD['database']};"
-                f"UID={DB_PROD['user']};"
-                f"PWD={DB_PROD['password']};"
-            )
-            conn = pyodbc.connect(conn_str, autocommit=True, timeout=10)
+            conn   = pyodbc.connect(conn_str, autocommit=True, timeout=10)
             cursor = conn.cursor()
+
+            # 1. ZFER_Characteristics_Genesis
             cursor.execute(
-                "SELECT TOP 1 Formula FROM VW_AppEnvolvente_LandMacro WHERE Zfer = ?",
+                "SELECT TOP 1 FormulaCode FROM dbo.ZFER_Characteristics_Genesis "
+                "WHERE SpecID = ?",
+                (zfer,)
+            )
+            fila = cursor.fetchone()
+            if fila and fila[0]:
+                conn.close()
+                print(f"    Formula encontrada en Genesis: {fila[0].strip()}")
+                return str(fila[0]).strip()
+
+            # 2. TCAL_CALENDARIO_COLOMBIA_DIRECT
+            cursor.execute(
+                "SELECT TOP 1 Formula FROM dbo.TCAL_CALENDARIO_COLOMBIA_DIRECT "
+                "WHERE ZFER = ?",
                 (zfer,)
             )
             fila = cursor.fetchone()
             conn.close()
             if fila and fila[0]:
+                print(f"    Formula encontrada en Calendario: {fila[0].strip()}")
                 return str(fila[0]).strip()
+
         except Exception as e:
             print(f"    [WARN] leer_formula_base_bd: {e}")
         return ""
 
-    # ── ZPPR0020 — Paso 3: esperar fases ──────────────────────────────────────
+    # ── ZPPR0020 — Paso 3: esperar fases en sesion nueva ─────────────────────
 
     def zppr0020_esperar_fases(
         self,
@@ -594,158 +642,276 @@ class AutomatizadorSAP:
         max_espera_seg: int = 600,
     ) -> dict:
         """
-        Paso 3: Navega a ZPPR0020, ejecuta con Mod.por=PROGRAING y Centro=CO01,
-        luego hace polling con F9 cada intervalo_seg hasta que:
-          - Alguna fase tenga "E" → retorna ok=False con detalle del error
-          - Fase 8 en adelante sea "S" → retorna ok=True
-          - Se agote el tiempo → retorna ok=False por timeout
-
-        Retorna dict:
-            ok         : bool
-            zpla       : str   (Mat. ZPLA del registro encontrado)
-            fase_error : str   (ej. "Fase 3") — solo si ok=False
-            detalle    : str   (descripción del error o timeout)
-            fases      : dict  ({"Fase1": "S", "Fase2": "S", ...})
+        Paso 3: Abre una NUEVA sesion SAP para ZPPR0020 (deja ZMME0001 intacta
+        en la sesion principal). Hace polling hasta que:
+          - Alguna fase tenga "E" → error, cierra sesion auxiliar, retorna ok=False
+          - Mas de 7 fases tienen "S" → OK, cierra sesion auxiliar, retorna ok=True
+          - Se agote el tiempo → timeout, cierra sesion auxiliar, retorna ok=False
         """
-        self._navegar("ZPPR0020")
-        self._esperar(T_MEDIO)
-
-        self.session.findById(self._ID_ZPPR_USER).text   = self._SAP_USER
-        self.session.findById(self._ID_ZPPR_CENTRO).text  = "CO01"
-        self.session.findById(self._ID_BTN_EXEC).press()
+        # Abrir nueva sesion (ZMME0001 se queda abierta en self.session)
+        print("     Abriendo sesion auxiliar para ZPPR0020...")
+        self.session.createSession()
         self._esperar(T_LENTO)
 
-        iteraciones = max(1, max_espera_seg // intervalo_seg)
+        # Obtener la nueva sesion (ultima creada)
+        idx_nueva = self.conn_sap.Children.Count - 1
+        ses2 = self.conn_sap.Children(idx_nueva)
+        ses2.findById("wnd[0]").maximize()
 
-        for intento in range(iteraciones):
-            resultado = self._leer_zppr0020_grid(zfer_nuevo)
+        try:
+            # Navegar a ZPPR0020 en la sesion auxiliar
+            ses2.findById("wnd[0]/tbar[0]/okcd").text = "ZPPR0020"
+            ses2.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
 
-            if resultado.get("encontrado"):
-                fases = resultado.get("fases", {})
-                zpla  = resultado.get("zpla", "")
+            ses2.findById(self._ID_ZPPR_USER).text  = self._SAP_USER
+            ses2.findById(self._ID_ZPPR_CENTRO).text = "CO01"
+            ses2.findById(self._ID_BTN_EXEC).press()
+            self._esperar(T_LENTO)
 
-                # Verificar errores en cualquier fase
-                for nombre_fase, valor in fases.items():
-                    if valor.strip().upper() == "E":
+            iteraciones = max(1, max_espera_seg // intervalo_seg)
+            sin_datos_contador = 0
+
+            for intento in range(iteraciones):
+                resultado = self._leer_zppr0020_grid(zfer_nuevo, ses2)
+
+                if resultado.get("encontrado"):
+                    fases = resultado.get("fases", {})
+                    zpla  = resultado.get("zpla", "")
+
+                    # Si hay "E" en cualquier fase → error inmediato
+                    for nombre_fase, valor in fases.items():
+                        if str(valor).strip().upper() == "E":
+                            return {
+                                "ok":         False,
+                                "zpla":       zpla,
+                                "fase_error": nombre_fase,
+                                "detalle":    f"{nombre_fase} tiene estado 'E' (Error) en ZPPR0020.",
+                                "fases":      fases,
+                            }
+
+                    # Contar cuantas fases tienen "S"
+                    fases_con_s = [v for v in fases.values() if str(v).strip().upper() == "S"]
+                    n_s = len(fases_con_s)
+
+                    if n_s > 7:
+                        print(f"    ZPPR0020 OK: {n_s} fases con S | ZPLA={zpla}")
                         return {
-                            "ok":         False,
+                            "ok":         True,
                             "zpla":       zpla,
-                            "fase_error": nombre_fase,
-                            "detalle":    f"La {nombre_fase} tiene estado 'E' (Error) en ZPPR0020.",
+                            "fase_error": "",
+                            "detalle":    f"{n_s} fases completadas con S",
                             "fases":      fases,
                         }
 
-                # Verificar que Fase 8 y siguientes tengan "S"
-                fases_con_s = [k for k, v in fases.items() if v.strip().upper() == "S"]
-                numeros_s   = []
-                for k in fases_con_s:
-                    try:
-                        numeros_s.append(int(k.replace("Fase", "").replace(" ", "").strip()))
-                    except Exception:
-                        pass
+                    print(f"    ZPPR0020: {n_s} fases S (esperando >7)... intento {intento+1}/{iteraciones}")
 
-                if numeros_s and max(numeros_s) >= 8:
-                    print(f"    ZPPR0020 OK: fases OK hasta {max(numeros_s)} | ZPLA={zpla}")
-                    return {
-                        "ok":         True,
-                        "zpla":       zpla,
-                        "fase_error": "",
-                        "detalle":    f"Fases completadas hasta Fase {max(numeros_s)}",
-                        "fases":      fases,
-                    }
+                else:
+                    sin_datos_contador += 1
+                    print(f"    ZPPR0020: sin datos intento {intento+1}/{iteraciones}")
+                    if sin_datos_contador >= 10:
+                        return {
+                            "ok":         False,
+                            "zpla":       "",
+                            "fase_error": "SIN_DATOS",
+                            "detalle":    f"ZPPR0020 no mostró datos del ZFER {zfer_nuevo} en {sin_datos_contador * intervalo_seg}s.",
+                            "fases":      {},
+                        }
 
-            if intento < iteraciones - 1:
-                print(f"    ZPPR0020: intento {intento+1}/{iteraciones}, esperando {intervalo_seg}s...")
-                time.sleep(intervalo_seg)
-                self.session.findById("wnd[0]").sendVKey(9)   # F9 refresh
-                self._esperar(T_MEDIO)
+                if intento < iteraciones - 1:
+                    time.sleep(intervalo_seg)
+                    ses2.findById("wnd[0]").sendVKey(9)   # F9 refresh
+                    self._esperar(T_MEDIO)
 
-        return {
-            "ok":         False,
-            "zpla":       "",
-            "fase_error": "TIMEOUT",
-            "detalle":    f"ZPPR0020 no completó fase 8 en {max_espera_seg//60} minutos.",
-            "fases":      {},
-        }
+            return {
+                "ok":         False,
+                "zpla":       "",
+                "fase_error": "TIMEOUT",
+                "detalle":    f"ZPPR0020 no completó en {max_espera_seg//60} minutos.",
+                "fases":      {},
+            }
 
-    def _leer_zppr0020_grid(self, zfer_nuevo: str) -> dict:
+        finally:
+            # Cerrar sesion auxiliar con /i (delete session) — más limpio que /nex
+            try:
+                ses2.findById("wnd[0]/tbar[0]/okcd").text = "/i"
+                ses2.findById("wnd[0]").sendVKey(0)
+            except Exception:
+                try:
+                    ses2.findById("wnd[0]").close()
+                except Exception:
+                    pass
+            self._esperar(T_MEDIO)
+
+            # Re-adquirir self.session: al cerrar ses2 el COM reference puede quedar
+            # inválido si SAP GUI re-indexó las sesiones
+            try:
+                self.session = self.conn_sap.Children(0)
+                self.session.findById("wnd[0]").maximize()
+            except Exception as e_reacq:
+                print(f"     [WARN] Re-adquirir sesion principal: {e_reacq}")
+
+            print("     Sesion auxiliar ZPPR0020 cerrada.")
+
+    def _buscar_grid_recursivo(self, contenedor, profundidad: int = 0):
         """
-        Lee el grid ALV de ZPPR0020 y busca la fila con Mat. ZFER = zfer_nuevo.
-        Retorna dict con: encontrado, zpla, fases {nombre: valor}
-        Intenta varios IDs de grid porque el nombre exacto depende del sistema.
+        Busca recursivamente el primer GuiGridView o GuiTableControl.
+        Recorre TODOS los hijos (ContainerType o no) hasta profundidad 8.
         """
+        if profundidad > 8:
+            return None
+        try:
+            n = contenedor.Children.Count
+        except Exception:
+            return None
+        for i in range(n):
+            try:
+                hijo = contenedor.Children(i)
+            except Exception:
+                continue
+            try:
+                tipo = hijo.Type
+            except Exception:
+                tipo = ""
+            if tipo in ("GuiGridView", "GuiTableControl"):
+                return hijo
+            # Recurrir en cualquier hijo que tenga Children (sea o no ContainerType)
+            encontrado = self._buscar_grid_recursivo(hijo, profundidad + 1)
+            if encontrado is not None:
+                return encontrado
+        return None
+
+    def _debug_imprimir_elementos_sap(self, titulo: str = "wnd[0]"):
+        """
+        Imprime TODOS los elementos de la pantalla para debug.
+        Útil cuando no se encuentra el grid para identificar los IDs reales.
+        """
+        print(f"\n    === DEBUG: Elementos en {titulo} ===")
+        try:
+            wnd = self.session.findById("wnd[0]")
+            self._imprimir_hijos(wnd, 0, max_nivel=3)
+            print(f"    === FIN DEBUG ===\n")
+        except Exception as e:
+            print(f"    [ERROR DEBUG] {e}")
+
+    def _imprimir_hijos(self, obj, nivel: int, max_nivel: int = 3):
+        """Imprime los hijos de un objeto recursivamente."""
+        if nivel > max_nivel:
+            return
+        try:
+            n = obj.Children.Count
+        except Exception:
+            return
+        pre = "  " * (nivel + 1)
+        for i in range(n):
+            try:
+                hijo = obj.Children(i)
+                tipo = getattr(hijo, "Type", "?")
+                id_obj = getattr(hijo, "Id", "?")
+                # Solo mostrar elementos interesantes (grids, containers, etc.)
+                if tipo in ("GuiGridView", "GuiTableControl", "GuiSplitterShell", 
+                            "GuiContainerShell", "GuiShell", "GuiToolbar") or nivel == 0:
+                    print(f"{pre}[{i}] {tipo}: {id_obj}")
+                # Continuar explorando
+                self._imprimir_hijos(hijo, nivel + 1, max_nivel)
+            except Exception:
+                pass
+
+    def _leer_zppr0020_grid(self, zfer_nuevo: str, ses=None) -> dict:
+        """
+        Lee el grid ALV de ZPPR0020 y busca la fila con ZFER = zfer_nuevo.
+        Usa ses si se provee (sesion auxiliar), si no usa self.session.
+        Columnas confirmadas: MAT_ZFER, MAT_ZPLA, PHASE1..PHASEn
+        """
+        if ses is None:
+            ses = self.session
         resultado = {"encontrado": False, "zpla": "", "fases": {}}
 
-        # Posibles IDs del grid ALV en ZPPR0020
-        _GRID_IDS = [
-            "wnd[0]/usr/cntlGRID/shellcont/shell",
+        _RUTAS = [
+            "wnd[0]/usr/cntlGRID1/shellcont/shell/shellcont[1]/shell",
             "wnd[0]/usr/cntlGRID1/shellcont/shell",
-            "wnd[0]/usr/cntlEUGRID/shellcont/shell",
-            "wnd[0]/usr/cntlZPPR_GRID/shellcont/shell",
+            "wnd[0]/usr/cntlGRID/shellcont/shell",
+            "wnd[0]/shellcont/shell",
         ]
-
-        # Posibles nombres de columna para el ZFER nuevo
-        _ZFER_COLS = ("ZFER", "MATNR_ZFER", "ZFER_NEW", "MAT_ZFER", "MATNR")
-        # Posibles nombres de columna para el ZPLA
-        _ZPLA_COLS = ("ZPLA", "MATNR_ZPLA", "ZPLA_NEW", "MAT_ZPLA")
-
         grid = None
-        for gid in _GRID_IDS:
+        for ruta in _RUTAS:
             try:
-                grid = self.session.findById(gid)
-                break
+                obj = ses.findById(ruta)
+                rc  = obj.RowCount
+                if rc is not None:
+                    grid = obj
+                    break
             except Exception:
                 pass
 
         if grid is None:
-            print("    [WARN] _leer_zppr0020_grid: ningún grid ID encontrado.")
+            try:
+                wnd  = ses.findById("wnd[0]")
+                grid = self._buscar_grid_recursivo(wnd)
+            except Exception:
+                pass
+
+        if grid is None:
+            print("    [WARN] ZPPR0020: grid no encontrado.")
             return resultado
 
         try:
             n_filas = grid.RowCount
+            if not n_filas:
+                return resultado
+
+            try:
+                cols = list(grid.ColumnOrder)
+            except Exception:
+                cols = []
+
             for i in range(n_filas):
+                # Buscar ZFER en fila
                 zfer_fila = ""
-                for col in _ZFER_COLS:
-                    try:
-                        zfer_fila = grid.GetCellValue(i, col).strip()
-                        if zfer_fila:
-                            break
-                    except Exception:
-                        pass
-
-                if zfer_fila == zfer_nuevo:
-                    resultado["encontrado"] = True
-
-                    # Leer ZPLA
-                    for col in _ZPLA_COLS:
+                for col in cols:
+                    if "MAT_ZFER" in col.upper() or col.upper() in ("ZFER", "MATNR_ZFER"):
                         try:
-                            zpla_val = grid.GetCellValue(i, col).strip()
-                            if zpla_val:
-                                resultado["zpla"] = zpla_val
+                            zfer_fila = str(grid.GetCellValue(i, col) or "").strip()
+                            if zfer_fila:
+                                break
+                        except Exception:
+                            pass
+                if zfer_fila != zfer_nuevo:
+                    continue
+
+                resultado["encontrado"] = True
+
+                # Leer ZPLA
+                for col in cols:
+                    if "MAT_ZPLA" in col.upper() or col.upper() in ("ZPLA", "MATNR_ZPLA"):
+                        try:
+                            v = str(grid.GetCellValue(i, col) or "").strip()
+                            if v:
+                                resultado["zpla"] = v
                                 break
                         except Exception:
                             pass
 
-                    # Leer fases (intentar FASE1..FASE15 con variantes)
-                    fases = {}
-                    for n in range(1, 16):
-                        for nombre_col in (f"FASE{n}", f"FASE_{n:02d}", f"FASE {n}",
-                                           f"F{n:02d}", f"FASE{n:02d}"):
-                            try:
-                                val = grid.GetCellValue(i, nombre_col).strip()
-                                if val:
-                                    fases[f"Fase {n}"] = val
-                                    break
-                            except Exception:
-                                pass
-                    resultado["fases"] = fases
+                # Leer fases (columnas PHASE1, PHASE2, ...)
+                fases = {}
+                n_fase = 1
+                for col in cols:
+                    if col.upper().startswith("PHASE"):
+                        try:
+                            v = str(grid.GetCellValue(i, col) or "").strip()
+                            fases[f"Fase {n_fase}"] = v
+                            n_fase += 1
+                        except Exception:
+                            pass
+                resultado["fases"] = fases
 
-                    print(f"    ZPPR0020: fila {i} encontrada — ZPLA={resultado['zpla']} "
-                          f"fases={fases}")
-                    break
+                n_s = sum(1 for v in fases.values() if v.upper() == "S")
+                n_e = sum(1 for v in fases.values() if v.upper() == "E")
+                print(f"    ZPPR0020 fila {i}: ZPLA={resultado['zpla']} | S={n_s} | E={n_e}")
+                break
 
         except Exception as e:
-            print(f"    [WARN] _leer_zppr0020_grid lectura: {e}")
+            print(f"    [WARN] _leer_zppr0020_grid: {e}")
 
         return resultado
 
@@ -933,11 +1099,9 @@ class AutomatizadorSAP:
                 zpla = fase_result["zpla"]
             print(f"     ZPPR0020 OK. ZPLA={zpla}")
 
-            # ── PASO 4: Volver a ZMME0001 → Comparar BOM → llenar filas ──────────
-            self._navegar("ZMME0001")
-            self._esperar(T_RAPIDO)
+            # ── PASO 4: ZMME0001 en pantalla de seleccion (volvimos con F3) ────────
+            # Re-establecer campos y cambiar material a ZFER_NUEVO para Comparar BOM
 
-            # Re-establecer campos (SAP puede resetear la pantalla al navegar con /N)
             try:
                 self.session.findById(self._ID_RAD_HOMOLOG).setFocus()
                 self.session.findById(self._ID_RAD_HOMOLOG).select()
@@ -948,14 +1112,14 @@ class AutomatizadorSAP:
                 self._esperar(T_RAPIDO)
                 self.session.findById(self._ID_CTX_P_COLOR).text = p_color
                 self.session.findById(self._ID_CTX_P_FRANJ).text = p_franj
-                # ZPLA: verificar si aún está seteado; si no, re-seleccionar via F4
+                # ZPLA: re-seleccionar si está vacío
                 try:
                     zpla_actual = self.session.findById(self._ID_CTX_P_ZPLA).text.strip()
                 except Exception:
                     zpla_actual = ""
                 if not zpla_actual:
                     self.session.findById(self._ID_CTX_P_ZPLA).setFocus()
-                    self.session.findById("wnd[0]").sendVKey(4)
+                    self.session.findById("wnd[0]").sendVKey(4)   # F4
                     self._esperar(T_MEDIO)
                     self.session.findById(self._ID_ZPLA_SHELL).selectedRows = "0"
                     self.session.findById(self._ID_ZPLA_SHELL).doubleClickCurrentCell()
@@ -1043,7 +1207,7 @@ class AutomatizadorSAP:
         print(f"  Leyendo MM02 del ZFER base {zfer_base}...")
         try:
             clasif_base = self.leer_clasificacion_zfer(zfer_base)
-            p_franj     = "01" if clasif_base.tiene_franja else "00"
+            p_franj     = clasif_base.franja if clasif_base.franja else "00"
         except Exception as e:
             print(f"  [WARN] No se pudo leer MM02 base: {e}")
             p_franj = "00"
@@ -1095,7 +1259,7 @@ class AutomatizadorSAP:
             """, (
                 res.batch_id,
                 res.zfer_base,
-                res.tipo_pieza or "N/A",
+                (res.tipo_pieza or "N/A")[:20],
                 res.formula,
                 res.color,
                 res.acero,

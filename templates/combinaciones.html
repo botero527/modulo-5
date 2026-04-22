@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+{% block title %}Combinaciones {{ material }} — AGP Intelligence{% endblock %}
+
+{% block content %}
+
+<!-- ── Barra superior ──────────────────────────────────────────────────────── -->
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+  <a href="/zfer/{{ material }}" class="back-link"><i class="bi bi-arrow-left me-1"></i>Volver al ZFER</a>
+  <a href="/" class="back-link" style="color:#484f58;"><i class="bi bi-house me-1"></i>Inicio</a>
+</div>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <div style="font-size:.75rem; text-transform:uppercase; letter-spacing:1.5px; color:var(--muted); margin-bottom:.3rem;">
+      <i class="bi bi-diagram-3-fill me-1" style="color:var(--accent2);"></i>Motor de Combinaciones
+    </div>
+    <div style="font-size:2rem; font-weight:900; color:var(--accent2); letter-spacing:1px;">{{ material }}</div>
+    <div class="desc-text mt-1">{{ head.TEXTO_BREVE_MATERIAL or '—' }}</div>
+    <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
+      {% if formula_code %}
+      <span class="tag t-formula"><i class="bi bi-flask me-1"></i>{{ formula_code }}</span>
+      {% endif %}
+      {% if piece_type %}
+      <span class="tag t-pieza">{{ piece_type }} — {{ piece_nombre }}</span>
+      {% endif %}
+      {% if partnumber %}
+      <code style="color:#e3b341; font-size:.8rem; background:#1c1a10; border:1px solid #9e6a03; padding:.2rem .5rem; border-radius:6px;">{{ partnumber }}</code>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Stat chips -->
+  <div class="d-flex gap-2 flex-wrap">
+    <div class="stat-chip" style="border-color:#2ea043;">
+      <div class="stat-num" style="color:#56d364;">{{ n_existe }}</div>
+      <div class="stat-lbl">Ya existen</div>
+    </div>
+    <div class="stat-chip" style="border-color:#9e6a03;">
+      <div class="stat-num" style="color:#e3b341;">{{ n_disponible }}</div>
+      <div class="stat-lbl">ZPLA disponible</div>
+    </div>
+    <div class="stat-chip" style="border-color:#484f58;">
+      <div class="stat-num" style="color:#484f58;">{{ n_sin_zpla }}</div>
+      <div class="stat-lbl">Sin ZPLA</div>
+    </div>
+  </div>
+</div>
+
+{% if not pn_parsed %}
+<!-- ── Sin PARTNUMBER ─────────────────────────────────────────────────────── -->
+<div style="background:#2d2416; border:1px solid #9e6a03; border-radius:12px; padding:1.2rem 1.5rem; margin-bottom:1.5rem;">
+  <i class="bi bi-exclamation-triangle-fill me-2" style="color:#e3b341;"></i>
+  <strong style="color:#e3b341;">Sin Partnumber</strong>
+  <span style="color:#8b949e; margin-left:.5rem;">
+    Este ZFER no tiene Z_AGP_PARTNUMBER definido — no es posible buscar variantes por patrón de número.
+    Se requiere que el ZFER tenga el atributo de clasificación Z_AGP_PARTNUMBER para activar el comparador.
+  </span>
+</div>
+{% endif %}
+
+<!-- ── Info de búsqueda ─────────────────────────────────────────────────────── -->
+{% if pn_parsed %}
+<div class="card mb-4">
+  <div class="card-body" style="padding:.9rem 1.5rem;">
+    <div class="row g-3 align-items-center">
+      <div class="col-auto">
+        <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Patrón buscado (LIKE)</span>
+        <div style="margin-top:.2rem;">
+          <code style="color:var(--accent); font-size:.88rem; background:#0d1e2e; padding:.25rem .6rem; border-radius:6px; border:1px solid #1f6feb;">
+            {{ pn_parsed.vehiculo }}_{{ pn_parsed.version }}_{{ pn_parsed.formula }}_<span style="color:#e3b341;">**</span>_{{ pn_parsed.pieza }}
+          </code>
+        </div>
+      </div>
+      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+        <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Vehículo</span>
+        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem;">{{ pn_parsed.vehiculo }}</div>
+      </div>
+      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+        <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Versión</span>
+        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem;">{{ pn_parsed.version }}</div>
+      </div>
+      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+        <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Fórmula</span>
+        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem; color:#79c0ff;">{{ pn_parsed.formula }}</div>
+      </div>
+      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+        <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Pieza</span>
+        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem;">{{ pn_parsed.pieza }}</div>
+      </div>
+      {% if differentials %}
+      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+        <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Diferencial base</span>
+        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem; color:#d2a8ff;">{{ differentials }}</div>
+      </div>
+      {% endif %}
+      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+        <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">ZPLAs compatibles</span>
+        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem; color:var(--accent);">{{ zplas | length }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Leyenda ──────────────────────────────────────────────────────────────── -->
+<div class="d-flex gap-3 mb-3 flex-wrap align-items-center">
+  <span style="color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.8px;">Leyenda:</span>
+  <span style="display:inline-flex; align-items:center; gap:.4rem; font-size:.82rem;">
+    <span style="width:10px; height:10px; border-radius:50%; background:#56d364; display:inline-block;"></span>
+    <span style="color:#56d364;">Ya existe</span> — ZFER creado y activo
+  </span>
+  <span style="display:inline-flex; align-items:center; gap:.4rem; font-size:.82rem;">
+    <span style="width:10px; height:10px; border-radius:50%; background:#e3b341; display:inline-block;"></span>
+    <span style="color:#e3b341;">ZPLA disponible</span> — falta crear el ZFER
+  </span>
+  <span style="display:inline-flex; align-items:center; gap:.4rem; font-size:.82rem;">
+    <span style="width:10px; height:10px; border-radius:50%; background:#484f58; display:inline-block;"></span>
+    <span style="color:#484f58;">Sin ZPLA</span> — no se puede crear
+  </span>
+</div>
+
+<!-- ── Matriz de combinaciones ─────────────────────────────────────────────── -->
+<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:.75rem; margin-bottom:2rem;">
+  {% for c in matrix %}
+
+  {% if c.estado == 'EXISTE' %}
+    {% set card_bg = '#0d2318' %}
+    {% set card_border = '#2ea043' %}
+    {% set badge_color = '#56d364' %}
+    {% set badge_bg = '#1c2e1c' %}
+    {% set badge_border = '#2ea043' %}
+    {% set badge_label = 'EXISTE' %}
+    {% set icon = 'bi-check-circle-fill' %}
+  {% elif c.estado == 'DISPONIBLE' %}
+    {% set card_bg = '#1e1a0d' %}
+    {% set card_border = '#9e6a03' %}
+    {% set badge_color = '#e3b341' %}
+    {% set badge_bg = '#2d2416' %}
+    {% set badge_border = '#9e6a03' %}
+    {% set badge_label = 'DISPONIBLE' %}
+    {% set icon = 'bi-plus-circle-fill' %}
+  {% else %}
+    {% set card_bg = '#0d1117' %}
+    {% set card_border = '#21262d' %}
+    {% set badge_color = '#484f58' %}
+    {% set badge_bg = '#161b22' %}
+    {% set badge_border = '#30363d' %}
+    {% set badge_label = 'SIN ZPLA' %}
+    {% set icon = 'bi-dash-circle' %}
+  {% endif %}
+
+  <div style="background:{{ card_bg }}; border:1px solid {{ card_border }}; border-radius:12px; padding:.9rem 1rem;
+              {% if c.es_base %}outline:2px solid var(--accent2); outline-offset:2px;{% endif %}
+              position:relative; transition:border-color .15s;">
+
+    {% if c.es_base %}
+    <div style="position:absolute; top:-9px; left:12px; background:var(--accent2); color:#fff;
+                font-size:.62rem; font-weight:800; padding:.1rem .5rem; border-radius:20px; letter-spacing:.5px;">
+      BASE
+    </div>
+    {% endif %}
+
+    <!-- Color code y badge -->
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <span style="background:{{ badge_bg }}; color:{{ badge_color }}; border:1px solid {{ badge_border }};
+                   padding:.2rem .55rem; border-radius:20px; font-size:.8rem; font-weight:700;">
+        {{ c.color_codigo }}
+      </span>
+      <span style="color:{{ badge_color }}; font-size:.72rem; font-weight:700; display:flex; align-items:center; gap:.3rem;">
+        <i class="bi {{ icon }}" style="font-size:.85rem;"></i>{{ badge_label }}
+      </span>
+    </div>
+
+    <!-- Nombre del color -->
+    <div style="font-weight:700; font-size:.92rem; color:var(--text); margin-bottom:.5rem; line-height:1.2;">
+      {{ c.color_nombre }}
+    </div>
+
+    <!-- Info según estado -->
+    {% if c.estado == 'EXISTE' %}
+    <div style="font-size:.78rem;">
+      <a href="/zfer/{{ c.zfer }}" style="color:var(--accent); font-weight:700; text-decoration:none; font-size:.82rem;">
+        <i class="bi bi-box-arrow-up-right me-1" style="font-size:.7rem;"></i>{{ c.zfer }}
+      </a>
+      {% if c.zfer_pn %}
+      <div style="margin-top:.3rem;">
+        <code style="color:#e3b341; font-size:.72rem; background:#1c1a10; padding:.1rem .35rem; border-radius:4px; border:1px solid #5a3e00;">{{ c.zfer_pn }}</code>
+      </div>
+      {% endif %}
+      {% if c.zfer_texto %}
+      <div style="color:#484f58; font-size:.7rem; margin-top:.2rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        {{ c.zfer_texto }}
+      </div>
+      {% endif %}
+    </div>
+
+    {% elif c.estado == 'DISPONIBLE' %}
+    <div style="font-size:.78rem; color:var(--muted);">
+      <span style="color:#e3b341; font-weight:600;">ZPLA:</span>
+      <span style="font-weight:700; color:#e6edf3; font-size:.82rem; margin-left:.3rem;">{{ c.zpla }}</span>
+    </div>
+
+    {% else %}
+    <div style="font-size:.75rem; color:#484f58;">Sin ZPLA para esta combinación</div>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── Tabla detalle ZFERs existentes ─────────────────────────────────────── -->
+{% if variantes %}
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="bi bi-table me-2" style="color:#56d364;"></i>
+    Detalle de variantes existentes
+    <span class="tag t-neutral" style="font-size:.72rem; margin-left:.5rem;">{{ variantes | length }} ZFERs</span>
+  </div>
+  <div class="card-body" style="padding:0;">
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:.87rem;">
+        <thead>
+          <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+            <th style="padding:.55rem 1.2rem;">ZFER</th>
+            <th style="padding:.55rem .6rem;">Color</th>
+            <th style="padding:.55rem .6rem;">Nombre Color</th>
+            <th style="padding:.55rem .6rem;">Franja</th>
+            <th style="padding:.55rem .6rem;">Partnumber AGP</th>
+            <th style="padding:.55rem .6rem;">Descripción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in variantes %}
+          <tr class="market-tr" {% if v.material == material %}style="background:rgba(124,58,237,.07);"{% endif %}>
+            <td style="padding:.55rem 1.2rem;">
+              {% if v.material == material %}
+                <span style="color:var(--accent2); font-weight:900;">{{ v.material }}</span>
+                <span class="tag" style="background:#2d1f3d; color:#d2a8ff; border:1px solid #8957e5; font-size:.65rem; margin-left:.3rem;">BASE</span>
+              {% else %}
+                <a href="/zfer/{{ v.material }}" style="color:var(--accent); font-weight:700; text-decoration:none;">{{ v.material }}</a>
+              {% endif %}
+            </td>
+            <td style="padding:.55rem .6rem;">
+              {% if v.color_raw %}<span class="tag t-color">{{ v.color_raw }}</span>{% else %}<span style="color:#484f58;">—</span>{% endif %}
+            </td>
+            <td style="padding:.55rem .6rem; color:var(--text);">{{ v.color_nombre }}</td>
+            <td style="padding:.55rem .6rem;">
+              {% if v.franja_raw and v.franja_raw != '00' %}
+              <span class="tag t-franja" style="font-size:.73rem;">{{ v.franja_raw }}</span>
+              {% else %}<span style="color:#484f58;">—</span>{% endif %}
+            </td>
+            <td style="padding:.55rem .6rem;">
+              <code style="color:#e3b341; font-size:.78rem;">{{ v.partnumber or '—' }}</code>
+            </td>
+            <td style="padding:.55rem .6rem; color:var(--muted); font-size:.8rem; max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              {{ v.texto or '—' }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Tabla ZPLAs compatibles agrupada por color ──────────────────────────── -->
+{% if matrix %}
+{% set colores_con_zpla_matrix = matrix | selectattr('zpla_count', 'gt', 0) | list %}
+{% endif %}
+{% if zplas %}
+{% set colores_vistos = [] %}
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-layers-fill me-2" style="color:#e3b341;"></i>
+    ZPLAs compatibles — agrupados por color
+    <span class="tag t-neutral" style="font-size:.72rem; margin-left:.5rem;">{{ zplas | length }} ZPLAs · {{ zplas | map(attribute='color') | unique | list | length }} colores</span>
+  </div>
+  <div class="card-body" style="padding:0;">
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:.87rem;">
+        <thead>
+          <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+            <th style="padding:.55rem 1.2rem;">Color</th>
+            <th style="padding:.55rem .6rem;">Nombre Color</th>
+            <th style="padding:.55rem .6rem;">ZPLAs disponibles</th>
+            <th style="padding:.55rem .6rem;">Differentials</th>
+            <th style="padding:.55rem .6rem;">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {# Agrupar zplas por color usando el namespace para poder modificar en loop #}
+          {% set ns = namespace(ultimo_color='') %}
+          {% for z in zplas %}
+          {% if z.color != ns.ultimo_color %}
+          {% set ns.ultimo_color = z.color %}
+          {% set zplas_mismo_color = zplas | selectattr('color', 'eq', z.color) | list %}
+          {% set ya_existe = z.color in (variantes | map(attribute='color_raw') | list) %}
+          <tr class="market-tr">
+            <td style="padding:.65rem 1.2rem;"><span class="tag t-color">{{ z.color }}</span></td>
+            <td style="padding:.65rem .6rem; font-weight:600; color:var(--text);">{{ z.color_nombre }}</td>
+            <td style="padding:.65rem .6rem;">
+              {% for zp in zplas_mismo_color %}
+              <span style="font-size:.78rem; color:var(--muted);">{{ zp.material }}</span>
+              {% if not loop.last %}<span style="color:#30363d; margin:0 .3rem;">·</span>{% endif %}
+              {% endfor %}
+              {% if zplas_mismo_color | length > 1 %}
+              <span class="tag t-neutral" style="font-size:.68rem; margin-left:.3rem;">{{ zplas_mismo_color | length }}</span>
+              {% endif %}
+            </td>
+            <td style="padding:.65rem .6rem; color:var(--muted); font-size:.78rem;">
+              {# Mostrar todos los diferenciales únicos de los ZPLAs de este color #}
+              {{ zplas_mismo_color | map(attribute='differentials') | unique | join(' / ') or '—' }}
+            </td>
+            <td style="padding:.65rem .6rem;">
+              {% if ya_existe %}
+              <span class="tag" style="background:#1c2e1c; color:#56d364; border:1px solid #2ea043; font-size:.72rem;">
+                <i class="bi bi-check-circle-fill me-1"></i>ZFER existe
+              </span>
+              {% else %}
+              <span class="tag" style="background:#2d2416; color:#e3b341; border:1px solid #9e6a03; font-size:.72rem;">
+                <i class="bi bi-plus-circle-fill me-1"></i>Pendiente crear
+              </span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla detalle completo ZPLAs (colapsable) -->
+<details style="margin-top:.75rem;">
+  <summary style="cursor:pointer; color:var(--muted); font-size:.82rem; padding:.5rem 0;">
+    <i class="bi bi-chevron-right me-1"></i>Ver detalle completo de ZPLAs ({{ zplas | length }} registros)
+  </summary>
+  <div class="card mt-2">
+    <div class="card-body" style="padding:0;">
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:.83rem;">
+          <thead>
+            <tr style="color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+              <th style="padding:.5rem 1.2rem;">ZPLA</th>
+              <th style="padding:.5rem .6rem;">Color</th>
+              <th style="padding:.5rem .6rem;">Nombre Color</th>
+              <th style="padding:.5rem .6rem;">Franja</th>
+              <th style="padding:.5rem .6rem;">Nivel</th>
+              <th style="padding:.5rem .6rem;">Differentials</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for z in zplas %}
+          <tr class="market-tr">
+            <td style="padding:.5rem 1.2rem; font-weight:700; color:var(--text);">{{ z.material }}</td>
+            <td style="padding:.5rem .6rem;"><span class="tag t-color" style="font-size:.75rem;">{{ z.color }}</span></td>
+            <td style="padding:.5rem .6rem; color:var(--text);">{{ z.color_nombre }}</td>
+            <td style="padding:.5rem .6rem;">
+              {% if z.shade_band and z.shade_band != '00' %}
+              <span class="tag t-franja" style="font-size:.7rem;">{{ z.shade_band }}</span>
+              {% else %}<span style="color:#484f58;">—</span>{% endif %}
+            </td>
+            <td style="padding:.5rem .6rem; color:var(--muted); font-size:.8rem;">{{ z.level or '—' }}</td>
+            <td style="padding:.5rem .6rem; color:var(--muted); font-size:.78rem; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              {{ z.differentials or '—' }}
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</details>
+{% endif %}
+
+{% endblock %}

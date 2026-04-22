@@ -66,7 +66,7 @@ CREATE TABLE dbo.M5_LogEjecucion (
     id              INT IDENTITY(1,1)   NOT NULL,
     batch_id        UNIQUEIDENTIFIER    NOT NULL,
     pedido_origen   NVARCHAR(50)        NOT NULL,
-    tipo_pieza      NVARCHAR(20)        NOT NULL,
+    tipo_pieza      NVARCHAR(100)      NOT NULL,
     formula         NVARCHAR(20)        NOT NULL,
     color_codigo    NVARCHAR(50)        NOT NULL,
     acero_variante  NVARCHAR(5)         NOT NULL,

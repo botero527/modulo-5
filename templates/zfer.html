@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}{{ material }} — AGP Intelligence{% endblock %}
+
+{% block content %}
+
+<!-- ── Barra superior con búsqueda rápida ──────────────────────────────── -->
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+  <a href="/" class="back-link"><i class="bi bi-arrow-left me-1"></i>Nueva búsqueda</a>
+  <a href="/combinaciones/{{ material }}" style="display:inline-flex; align-items:center; background:var(--accent2); color:#fff; font-weight:700; border-radius:8px; padding:.4rem 1rem; font-size:.85rem; text-decoration:none;">
+    <i class="bi bi-diagram-3-fill me-1"></i>Ver Combinaciones
+  </a>
+  <form method="GET" action="#" onsubmit="window.location='/zfer/'+document.getElementById('qs').value.trim();return false;"
+        style="display:flex; max-width:300px;">
+    <input id="qs" type="text" class="search-box" style="flex:1; font-size:.9rem; padding:.45rem .85rem; border-radius:8px 0 0 8px;"
+           placeholder="Otro ZFER..." autocomplete="off">
+    <button type="submit" class="btn-go" style="padding:.45rem 1rem; border-radius:0 8px 8px 0; font-size:.9rem;">
+      <i class="bi bi-search"></i>
+    </button>
+  </form>
+</div>
+
+<!-- ── Header ZFER ─────────────────────────────────────────────────────── -->
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <div class="zfer-hero">{{ material }}</div>
+    <div class="desc-text mt-1">{{ head.TEXTO_BREVE_MATERIAL or '—' }}</div>
+    <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
+      <span class="tag t-neutral">
+        <i class="bi bi-circle-fill me-1" style="font-size:.5rem; color:#56d364;"></i>
+        STATUS: {{ head.STATUS or '—' }}
+      </span>
+      {% if head.ZFOR %}
+      <span class="tag t-formula"><i class="bi bi-link-45deg me-1"></i>ZFOR: {{ head.ZFOR }}</span>
+      {% endif %}
+      {% if head.GRUPO_ARTICULOS %}
+      <span class="tag t-neutral">Grupo: {{ head.GRUPO_ARTICULOS }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="d-flex gap-2 flex-wrap">
+    <div class="stat-chip">
+      <div class="stat-num">{{ entregas_n }}</div>
+      <div class="stat-lbl">Líneas entrega</div>
+    </div>
+    <div class="stat-chip">
+      <div class="stat-num">{{ total_entregas }}</div>
+      <div class="stat-lbl">Registros mercado</div>
+    </div>
+    <div class="stat-chip">
+      <div class="stat-num">{{ mercados | length }}</div>
+      <div class="stat-lbl">Mercados</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Contenido principal ─────────────────────────────────────────────── -->
+<div class="row g-4">
+
+  <!-- ── Col izquierda: Atributos ──────────────────────────────────────── -->
+  <div class="col-xl-4 col-lg-5">
+
+    <!-- Card atributos -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <i class="bi bi-tags-fill me-2" style="color:var(--accent);"></i>
+        Atributos de Clasificación
+      </div>
+      <div class="card-body" style="padding:1rem 1.5rem;">
+        {% if attrs_display %}
+          {% for a in attrs_display %}
+          <div class="attr-row d-flex justify-content-between align-items-center">
+            <span class="attr-key">{{ a.label }}</span>
+            <span style="text-align:right; max-width:60%;">
+              {% if a.atnam == 'Z_COLOR' %}
+                <span class="tag t-color">{{ a.decoded }}</span>
+              {% elif a.atnam == 'Z_FORMULA_CODE' %}
+                <span class="tag t-formula"><i class="bi bi-flask me-1"></i>{{ a.raw }}</span>
+              {% elif a.atnam == 'Z_PIECE_TYPE' %}
+                <span class="tag t-pieza">{{ a.decoded }}</span>
+              {% elif a.atnam == 'Z_SHADE_BAND' %}
+                <span class="tag t-franja">{{ a.decoded }}</span>
+              {% elif a.atnam == 'Z_AGP_PARTNUMBER' %}
+                <code style="color:#e3b341; font-size:.82rem;">{{ a.raw }}</code>
+              {% else %}
+                <span style="font-weight:600; font-size:.9rem;">{{ a.decoded }}</span>
+              {% endif %}
+            </span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-4" style="color:#484f58;">
+            <i class="bi bi-inbox" style="font-size:1.8rem; display:block; margin-bottom:.5rem;"></i>
+            Sin atributos de clasificación
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Card info BD -->
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-info-circle me-2" style="color:var(--muted);"></i>
+        Información del Registro
+      </div>
+      <div class="card-body" style="padding:1rem 1.5rem;">
+        <div class="attr-row d-flex justify-content-between">
+          <span class="attr-key">Creado el</span>
+          <span style="font-size:.88rem;">{{ head.CREADO_EL or '—' }}</span>
+        </div>
+        <div class="attr-row d-flex justify-content-between">
+          <span class="attr-key">Última mod.</span>
+          <span style="font-size:.88rem;">{{ head.ULTIMA_MOD or '—' }}</span>
+        </div>
+        <div class="attr-row d-flex justify-content-between">
+          <span class="attr-key">Centro</span>
+          <span style="font-size:.88rem; font-weight:700;">CO01</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Col derecha: Mercados ──────────────────────────────────────────── -->
+  <div class="col-xl-8 col-lg-7">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-globe2 me-2" style="color:var(--accent);"></i>Distribución por Mercado</span>
+        {% if mercados %}
+        <span class="tag t-neutral" style="font-size:.75rem;">
+          {{ mercados|length }} países &nbsp;·&nbsp; {{ total_entregas }} registros
+        </span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+
+        {% if mercados %}
+
+          <!-- Gráfico de barras horizontales -->
+          <div class="mb-4" style="position:relative; height:{{ [mercados_chart|length * 32 + 40, 260]|max }}px; max-height:480px;">
+            <canvas id="chartMercados"></canvas>
+          </div>
+
+          <hr class="divider my-3">
+
+          <!-- Tabla completa -->
+          <div class="section-label mb-2">Detalle completo</div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:.88rem;">
+              <thead>
+                <tr style="color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+                  <th style="padding:.5rem .4rem; text-align:left;">Código</th>
+                  <th style="padding:.5rem .4rem; text-align:left;">País / Mercado</th>
+                  <th style="padding:.5rem .4rem; text-align:center;">Entregas</th>
+                  <th style="padding:.5rem .4rem; text-align:left; min-width:160px;">Participación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for m in mercados %}
+                {% set pct = (m.total / total_entregas * 100) if total_entregas else 0 %}
+                <tr class="market-tr">
+                  <td style="padding:.55rem .4rem;">
+                    <code style="color:var(--accent); font-size:.82rem;">{{ m.route }}</code>
+                  </td>
+                  <td style="padding:.55rem .4rem; color:var(--text); font-weight:500;">
+                    {{ m.pais }}
+                  </td>
+                  <td style="padding:.55rem .4rem; text-align:center; font-weight:700;">
+                    {{ m.total }}
+                  </td>
+                  <td style="padding:.55rem .4rem;">
+                    <div style="display:flex; align-items:center; gap:.5rem;">
+                      <div class="pct-bar-wrap">
+                        <div class="pct-bar" style="width:{{ pct | round(1) }}%;"></div>
+                      </div>
+                      <span style="color:var(--muted); font-size:.78rem;">{{ "%.1f" | format(pct) }}%</span>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+        {% else %}
+          <div class="text-center py-5" style="color:#484f58;">
+            <i class="bi bi-box-seam" style="font-size:2.5rem; display:block; margin-bottom:.75rem;"></i>
+            <div style="font-size:1rem;">Sin datos de entregas para este ZFER</div>
+            <div style="font-size:.82rem; margin-top:.3rem;">Puede que no tenga movimientos registrados en CO01</div>
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if mercados_chart %}
+<script>
+const labels = {{ mercados_chart | map(attribute='pais') | list | tojson }};
+const data   = {{ mercados_chart | map(attribute='total') | list | tojson }};
+const total  = {{ total_entregas }};
+
+// Paleta de colores dinámica
+const palette = labels.map((_, i) => {
+  const hues = [195, 265, 145, 30, 330, 60, 180, 300, 90, 210, 15, 240, 120, 350, 165];
+  return `hsl(${hues[i % hues.length]}, 65%, 58%)`;
+});
+
+new Chart(document.getElementById('chartMercados'), {
+  type: 'bar',
+  data: {
+    labels,
+    datasets: [{
+      data,
+      backgroundColor: palette,
+      borderRadius: 6,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1c2128',
+        borderColor: '#30363d',
+        borderWidth: 1,
+        titleColor: '#e6edf3',
+        bodyColor: '#8b949e',
+        callbacks: {
+          label: ctx => ` ${ctx.raw} entregas  (${(ctx.raw/total*100).toFixed(1)}%)`
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid:  { color: '#21262d' },
+        ticks: { color: '#8b949e', font: { size: 11 } }
+      },
+      y: {
+        grid:  { display: false },
+        ticks: { color: '#e6edf3', font: { size: 11 } }
+      }
+    }
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}AGP Intelligence — Búsqueda ZFER{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column align-items-center justify-content-center" style="min-height:72vh; gap:1.5rem;">
+
+  <!-- Logo / título -->
+  <div class="text-center mb-2">
+    <div style="font-size:3rem; line-height:1; margin-bottom:.5rem;">🔬</div>
+    <h1 style="font-size:2.4rem; font-weight:900; margin:0;">
+      <span style="color:var(--accent);">ZFER</span> Intelligence
+    </h1>
+    <p style="color:var(--muted); margin-top:.5rem; font-size:1rem;">
+      Consulta características, atributos y distribución de mercados
+    </p>
+  </div>
+
+  <!-- Error -->
+  {% if error %}
+  <div class="alert-err" style="max-width:520px; width:100%;">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+  </div>
+  {% endif %}
+
+  <!-- Buscador -->
+  <form method="POST" action="/" style="max-width:520px; width:100%;">
+    <div style="display:flex;">
+      <input
+        type="text"
+        name="zfer"
+        class="search-box"
+        style="flex:1; width:100%;"
+        placeholder="Número ZFER  (ej: 700024384)"
+        autofocus
+        autocomplete="off"
+        maxlength="30"
+      >
+      <button type="submit" class="btn-go">
+        <i class="bi bi-search me-1"></i>Buscar
+      </button>
+    </div>
+  </form>
+
+  <!-- Tips -->
+  <div class="text-center" style="color:#484f58; font-size:.82rem; max-width:420px;">
+    <i class="bi bi-info-circle me-1"></i>
+    Solo muestra ZFERs activos del centro <strong style="color:#6e7681;">CO01</strong>
+    con status distinto de ZZ
+  </div>
+
+</div>
+{% endblock %}

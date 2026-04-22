@@ -209,7 +209,13 @@ def leer_excel_formulas(
         )
     perfil = PERFILES_HOJA[nombre_hoja]
 
-    wb = openpyxl.load_workbook(ruta_excel, read_only=True, data_only=True)
+    try:
+        wb = openpyxl.load_workbook(ruta_excel, read_only=True, data_only=True)
+    except PermissionError:
+        raise PermissionError(
+            f"El archivo de formulas esta abierto en Excel:\n  {ruta_excel}\n\n"
+            f"Cierra el archivo en Excel y vuelve a ejecutar."
+        )
 
     if nombre_hoja not in wb.sheetnames:
         raise ValueError(
@@ -224,7 +230,7 @@ def leer_excel_formulas(
     header_row_idx = None
 
     for row_idx, row in enumerate(ws.iter_rows(max_row=20, values_only=True)):
-        for col_idx, val in enumerate(row):
+        for val in row:
             if val and col_id in str(val):
                 header_row_idx = row_idx
                 for c_i, h_val in enumerate(row):
@@ -326,22 +332,48 @@ def leer_excel_formulas(
 
 
 
-SQL_PEDIDO_BASE = """
+# Tabla 1 — ZFER_Characteristics_Genesis
+# SpecID     = numero ZFER
+# PartID     = cod_pieza (ej: "008")
+# PartName_ES= nombre tipo pieza en español
+# FormulaCode= formula (ej: "L19-13")
+# ColorName_EN = nombre color en ingles (ej: "GRAY LIGHT PC")
+# SpecSteel  = 0=sin acero, 1=con acero (SP)
+# SpecPlantsStr = planta(s) separadas por coma (ej: "CO01")
+SQL_GENESIS = """
 SELECT TOP 1
-    Zfer,
+    CAST(SpecID AS NVARCHAR(20)) AS Zfer,
+    SpecPlantsStr               AS Plantas,
+    PartName_ES                 AS TipoPeca,
+    PartID                      AS codPieza,
+    FormulaCode                 AS Formula,
+    ColorName_EN                AS Color,
+    SpecSteel                   AS SteelPlus
+FROM dbo.ZFER_Characteristics_Genesis
+WHERE SpecID = ?
+"""
+
+# Tabla 2 — TCAL_CALENDARIO_COLOMBIA_DIRECT (fallback)
+# ZFER       = numero ZFER
+# Mercado    = mercado directo (ej: "COLOMBIA", "CentroAmerica")
+# CodTipoPieza = codigo tipo pieza (ej: "1")
+# Vehiculo   = descripcion vehiculo (se usa como tipo_peca si no hay otro)
+# Formula    = formula (ej: "L24-4")
+# Color      = color
+# SteelPlus  = 0 o 1
+SQL_CALENDARIO = """
+SELECT TOP 1
+    ZFER,
     Mercado,
-    TipoPeca,
-    codPieza,
+    CAST(CodTipoPieza AS NVARCHAR(20)) AS codPieza,
+    Vehiculo                           AS TipoPeca,
     Formula,
     Color,
-    SteelPlus,
-    ZPLA,
-    HojaRuta,
-    Plano,
-    URLPlano,
-    ArchivoCorte
-FROM VW_AppEnvolvente_LandMacro
-WHERE Zfer = ?
+    SteelPlus
+FROM dbo.TCAL_CALENDARIO_COLOMBIA_DIRECT
+WHERE ZFER = ?
+  AND ZFER IS NOT NULL
+  AND Formula IS NOT NULL
 """
 
 SQL_BLOQUEOS_ACTIVOS = """
@@ -373,38 +405,85 @@ class MotorExplosion:
         self.conn_local = conn_local
         self.ruta_excel = ruta_excel
 
+    def _normalizar_acero_steel(self, steel_raw) -> str:
+        v = str(steel_raw or "").strip().upper()
+        if "SP" in v or v in ("SIM", "YES", "1"):
+            return "SP"
+        if "SN" in v:
+            return "SN"
+        return "NO"
+
+    def _mercado_desde_planta(self, plantas: str) -> str:
+        """
+        Deriva el mercado desde el campo SpecPlantsStr de Genesis.
+        Ej: "CO01" → "COLOMBIA" | "MX01" → "MÉXICO" | "US01" → "ESTADOS UNIDOS"
+        Si no reconoce la planta, retorna "" para que hoja_para_mercado use CAM.
+        """
+        p = str(plantas or "").strip().upper()
+        if "CO" in p:
+            return "COLOMBIA"
+        if "MX" in p or "MEX" in p:
+            return "MÉXICO"
+        if "US" in p:
+            return "ESTADOS UNIDOS"
+        return ""
+
     def _leer_pedido_base(self, zfer: str) -> Optional[dict]:
+        """
+        Busca el pedido base en dos tablas en orden:
+          1. ZFER_Characteristics_Genesis  (SpecID = zfer)
+          2. TCAL_CALENDARIO_COLOMBIA_DIRECT (ZFER = zfer)
+        Retorna None si no se encuentra en ninguna.
+        """
         cursor = self.conn_prod.cursor()
-        cursor.execute(SQL_PEDIDO_BASE, (zfer,))
+
+        # ── 1. ZFER_Characteristics_Genesis ──────────────────────────────────
+        cursor.execute(SQL_GENESIS, (zfer,))
+        fila = cursor.fetchone()
+
+        if fila:
+            cursor.close()
+            mercado = self._mercado_desde_planta(fila[1])  # SpecPlantsStr
+            print(f"  [Motor] Pedido base encontrado en Genesis.")
+            return {
+                "zfer":          str(fila[0] or "").strip(),
+                "mercado":       mercado,
+                "tipo_peca":     str(fila[2] or "").strip(),  # PartName_ES
+                "cod_pieza":     str(fila[3] or "").strip(),  # PartID
+                "formula":       str(fila[4] or "").strip(),  # FormulaCode
+                "color":         str(fila[5] or "").strip(),  # ColorName_EN
+                "acero":         self._normalizar_acero_steel(fila[6]),  # SpecSteel
+                # Genesis no tiene estos campos — se dejan vacios
+                "zpla":          "",
+                "hoja_ruta":     "",
+                "plano":         "",
+                "url_plano":     "",
+                "archivo_corte": "",
+            }
+
+        # ── 2. TCAL_CALENDARIO_COLOMBIA_DIRECT (fallback) ────────────────────
+        cursor.execute(SQL_CALENDARIO, (zfer,))
         fila = cursor.fetchone()
         cursor.close()
 
-        if not fila:
-            return None
+        if fila:
+            print(f"  [Motor] Pedido base encontrado en Calendario.")
+            return {
+                "zfer":          str(fila[0] or "").strip(),  # ZFER
+                "mercado":       str(fila[1] or "").strip(),  # Mercado
+                "tipo_peca":     str(fila[3] or "").strip(),  # Vehiculo
+                "cod_pieza":     str(fila[2] or "").strip(),  # CodTipoPieza
+                "formula":       str(fila[4] or "").strip(),  # Formula
+                "color":         str(fila[5] or "").strip(),  # Color
+                "acero":         self._normalizar_acero_steel(fila[6]),  # SteelPlus
+                "zpla":          "",
+                "hoja_ruta":     "",
+                "plano":         "",
+                "url_plano":     "",
+                "archivo_corte": "",
+            }
 
-        
-        steel_raw = str(fila[6] or "").strip().upper()
-        if "SP" in steel_raw or steel_raw in ("SIM", "YES"):
-            acero_base = "SP"
-        elif "SN" in steel_raw:
-            acero_base = "SN"
-        else:
-            acero_base = "NO"
-
-        return {
-            "zfer":          str(fila[0]  or "").strip(),
-            "mercado":       str(fila[1]  or "").strip(),
-            "tipo_peca":     str(fila[2]  or "").strip(),
-            "cod_pieza":     str(fila[3]  or "").strip(),
-            "formula":       str(fila[4]  or "").strip(),
-            "color":         str(fila[5]  or "").strip(),
-            "acero":         acero_base,
-            "zpla":          str(fila[7]  or "").strip(),
-            "hoja_ruta":     str(fila[8]  or "").strip(),
-            "plano":         str(fila[9]  or "").strip(),
-            "url_plano":     str(fila[10] or "").strip(),
-            "archivo_corte": str(fila[11] or "").strip(),
-        }
+        return None
 
     def _leer_bloqueos(self, zfer: str) -> set:
         cursor = self.conn_local.cursor()
@@ -422,8 +501,11 @@ class MotorExplosion:
         pedido = self._leer_pedido_base(zfer)
         if not pedido:
             raise ValueError(
-                f"ZFER '{zfer}' no encontrado en VW_AppEnvolvente_LandMacro.\n"
-                f"Verifica que fue procesado correctamente por M3 y M4."
+                f"ZFER '{zfer}' no encontrado en ninguna tabla de referencia.\n"
+                f"Se consultaron:\n"
+                f"  1. ZFER_Characteristics_Genesis (SpecID = {zfer})\n"
+                f"  2. TCAL_CALENDARIO_COLOMBIA_DIRECT (ZFER = {zfer})\n"
+                f"Verifica que el ZFER exista en la BD de produccion."
             )
 
         print(f"  [Motor] Pedido base →  Pieza:{pedido['cod_pieza']}  "

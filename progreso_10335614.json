@@ -1,0 +1,1402 @@
+{
+  "batch_id": "10335614-0ea1-44c1-bcb8-efc867cde5c1",
+  "fecha_inicio": "2026-04-16T08:34:21.664110",
+  "fecha_fin": null,
+  "zfer_base": "700162000",
+  "formula_base": "L33-4",
+  "operador": "abotero",
+  "totales": {
+    "a_procesar_sap": 3,
+    "procesados": 3,
+    "exitosos": 0,
+    "errores": 3,
+    "solo_reporte": 148
+  },
+  "items_sap": [
+    {
+      "idx": 1,
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "zfer_base": "700162000",
+      "zfer_nuevo": "700163067",
+      "zfor_nuevo": "501142976",
+      "posiciones_bom": [],
+      "estado": "ERROR",
+      "error": "cannot access local variable 'grid' where it is not associated with a value",
+      "fecha_inicio": "2026-04-16T08:34:21.664110",
+      "fecha_fin": "2026-04-16T08:34:48.634406",
+      "duracion_seg": 27.0
+    },
+    {
+      "idx": 2,
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "zfer_base": "700162000",
+      "zfer_nuevo": "",
+      "zfor_nuevo": "",
+      "posiciones_bom": [],
+      "estado": "ERROR",
+      "error": "(-2147352567, 'Ocurrió una excepción.', (619, 'SAP Frontend Server', 'The control could not be found by id.', 'C:\\\\Program Files (x86)\\\\SAP\\\\FrontEnd\\\\SAPGUI\\\\sapfront.HLP', 393215, 0), None)",
+      "fecha_inicio": "2026-04-16T08:34:48.658571",
+      "fecha_fin": "2026-04-16T08:34:54.183294",
+      "duracion_seg": 5.5
+    },
+    {
+      "idx": 3,
+      "formula": "L33-4",
+      "acero": "SN",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "zfer_base": "700162000",
+      "zfer_nuevo": "700163068",
+      "zfor_nuevo": "501142977",
+      "posiciones_bom": [],
+      "estado": "ERROR",
+      "error": "cannot access local variable 'grid' where it is not associated with a value",
+      "fecha_inicio": "2026-04-16T08:34:54.218059",
+      "fecha_fin": "2026-04-16T08:35:20.899330",
+      "duracion_seg": 26.7
+    }
+  ],
+  "items_solo_reporte": [
+    {
+      "zfer_base": "700162000",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L23-36' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L23-36' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L23-36' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L23-36' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L23-36' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L23-36",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L23-36' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L23-36",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L23-36' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L23-36",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L23-36' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L23-36",
+      "acero": "SN",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L23-36' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L23-36",
+      "acero": "SN",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L23-36' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L24-4' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L24-4' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L24-4' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L24-4' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L24-4' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L24-4",
+      "acero": "SP",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L24-4' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L22-6' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L22-6' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L22-6' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L22-6' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L22-6",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L22-6' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L22-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L22-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L22-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L22-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L22-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L22-5",
+      "acero": "SP",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L22-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-16/L19-20",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-16/L19-20' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-32",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-32' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-32",
+      "acero": "SP",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-32' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-32",
+      "acero": "SP",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-32' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-32",
+      "acero": "SP",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-32' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-31",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-31' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-31",
+      "acero": "SP",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-31' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-31",
+      "acero": "SP",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-31' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-31",
+      "acero": "SP",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-31' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-31",
+      "acero": "SP",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-31' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "SN",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-3' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-3' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-3' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-3",
+      "acero": "SP",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-3' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-1",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L16-2",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L16-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L16-2",
+      "acero": "SP",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L16-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L16-2",
+      "acero": "SP",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L16-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "22-G2 Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "SN",
+      "color": "23-G2 Dark Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "22-G2 Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L15-5",
+      "acero": "NO",
+      "color": "23-G2 Dark Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L15-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L42-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L42-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L42-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L42-5",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L42-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L30-2",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L30-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L30-2",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L30-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L30-2",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L30-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L30-2",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L30-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L30-2",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L30-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L30-2",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L30-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L32-6",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L32-6' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L32-6",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L32-6' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-5",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-5",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-5' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-2",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-2",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-2",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-4",
+      "acero": "SP",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-4' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-4",
+      "acero": "SP",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-4' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-18",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-18' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-18",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-18' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L19-18",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L19-18' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-12",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-12' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-12",
+      "acero": "SP",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-12' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L18-12",
+      "acero": "SP",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L18-12' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-10' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-10' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-10",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-10' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-10",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-10' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-10",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-10' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L28-10",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L28-10' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-11' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-11' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-11' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-11",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-11' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-13' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-13' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-13' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-13' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-13' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-13' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-13' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L36-13",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L36-13' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "LL48-1",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'LL48-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "22-G2 Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "NO",
+      "color": "23-G2 Dark Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "SN",
+      "color": "06-Gray Light Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "SN",
+      "color": "13- Gray Dark Glass",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "SN",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "SN",
+      "color": "22-G2 Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L13-2",
+      "acero": "SN",
+      "color": "23-G2 Dark Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L13-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-1",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-1",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-1",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-1",
+      "acero": "NO",
+      "color": "21-Gray Dark Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-2",
+      "acero": "NO",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-2",
+      "acero": "NO",
+      "color": "19-Gray Light Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-2",
+      "acero": "NO",
+      "color": "20-Gray Medium Automotive",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-1",
+      "acero": "SN",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-1",
+      "acero": "SN",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-1",
+      "acero": "SN",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-1' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-2",
+      "acero": "SP",
+      "color": "01 - Green Light",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-2",
+      "acero": "SP",
+      "color": "05-Gray Light PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    },
+    {
+      "zfer_base": "700162000",
+      "formula": "L14-2",
+      "acero": "SP",
+      "color": "10 -Gray Medium PC",
+      "cod_pieza": "011",
+      "tipo_pieza": "Lateral Extendido Izquierdo",
+      "motivo": "Formula 'L14-2' difiere de la base 'L33-4' — requiere cambio de formula previo"
+    }
+  ]
+}
