@@ -211,7 +211,9 @@ def q_entregas(material: str) -> list:
     except Exception:
         return []
 
-
+#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+#necesitaba expresarme
+#sigamos 
 def _parsear_partnumber(pn: str) -> dict | None:
     """Parsea '1490_008_L23-26_12_000' → {vehiculo, version, formula, color, pieza}."""
     if not pn:
@@ -308,10 +310,10 @@ def q_zplas_compatibles(formula_code: str, piece_type: str,
     try:
         conn = get_conn()
         cur  = conn.cursor()
+        # Pre-filtra por fórmula ANTES del GROUP BY para no agrupar toda la tabla
         cur.execute("""
             SELECT
                 MATERIAL,
-                MAX(CASE WHEN ATNAM = 'Z_FORMULA_CODE'           THEN ATWRT ELSE NULL END) AS formula,
                 MAX(CASE WHEN ATNAM = 'Z_COLOR'                  THEN ATWRT ELSE NULL END) AS color,
                 MAX(CASE WHEN ATNAM = 'Z_PIECE_TYPE'             THEN ATWRT ELSE NULL END) AS piece_types,
                 MAX(CASE WHEN ATNAM = 'Z_SHADE_BAND'             THEN ATWRT ELSE NULL END) AS shade_band,
@@ -320,8 +322,12 @@ def q_zplas_compatibles(formula_code: str, piece_type: str,
             FROM dbo.ODATA_ZPLA_CLASS_001
             WHERE CENTRO   = 'CO01'
               AND TIPO_MAT = 'ZPLA'
+              AND MATERIAL IN (
+                SELECT MATERIAL FROM dbo.ODATA_ZPLA_CLASS_001
+                WHERE CENTRO = 'CO01' AND TIPO_MAT = 'ZPLA'
+                  AND ATNAM  = 'Z_FORMULA_CODE' AND ATWRT = ?
+              )
             GROUP BY MATERIAL
-            HAVING MAX(CASE WHEN ATNAM = 'Z_FORMULA_CODE' THEN ATWRT ELSE NULL END) = ?
         """, (formula_code,))
         rows = cur.fetchall()
         conn.close()
@@ -330,7 +336,8 @@ def q_zplas_compatibles(formula_code: str, piece_type: str,
         base_diffs = {d.strip() for d in differentials_base.split(",") if d.strip()}
 
         resultado = []
-        for mat, formula, color, piece_types_str, zpla_shade, differentials, level in rows:
+        # Query devuelve 6 cols: MATERIAL, color, piece_types, shade_band, differentials, level
+        for mat, color, piece_types_str, zpla_shade, differentials, level in rows:
             if not color:
                 continue
             # Z_PIECE_TYPE multi-valor: verificar que el tipo de pieza base esté incluido
@@ -341,10 +348,11 @@ def q_zplas_compatibles(formula_code: str, piece_type: str,
             if shade_band and shade_band not in ("00", ""):
                 if (zpla_shade or "00") not in (shade_band, "00"):
                     continue
-            # Diferencial: si el ZFER base tiene diferencial definido, el ZPLA debe contenerlo
+            # Diferencial: el ZPLA debe contener AL MENOS UNO de los diferenciales del ZFER base
+            # Si el ZFER base no tiene diferencial definido, no filtrar
             if base_diffs:
                 zpla_diffs = {d.strip() for d in (differentials or "").split(",") if d.strip()}
-                if not base_diffs.intersection(zpla_diffs):
+                if zpla_diffs and not base_diffs.intersection(zpla_diffs):
                     continue
             resultado.append({
                 "material":      mat,
@@ -385,15 +393,198 @@ def q_mercados(entregas: list) -> list:
         return []
 
 
+def q_explorar(vehiculo="", formula="", pieza="", color="", version="",
+               zfers_lista: list = None) -> list:
+    """
+    Busca ZFERs activos (no ZZ) en CO01 según filtros opcionales (LIKE parcial).
+    Si se pasa zfers_lista, busca exactamente esos ZFERs y los enriquece con atributos.
+    Retorna lista de dicts con los atributos clave de cada ZFER.
+    Máximo 300 resultados.
+    """
+    def _esc(s):
+        return s.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+
+    try:
+        conn = get_conn()
+        cur  = conn.cursor()
+
+        if zfers_lista:
+            # Búsqueda directa por lista de materiales
+            ph = ",".join(["?"] * len(zfers_lista))
+            cur.execute(f"""
+                SELECT MATERIAL FROM dbo.ODATA_ZFER_HEAD
+                WHERE  MATERIAL IN ({ph}) AND CENTRO = 'CO01'
+                  AND  UPPER(ISNULL(STATUS,'')) != 'ZZ'
+            """, zfers_lista)
+            materiales = [r[0] for r in cur.fetchall()]
+        else:
+            # Búsqueda por filtros con INTERSECT dinámico
+            filtros = [
+                ("Z_VEHICLE_MODEL", vehiculo.strip()),
+                ("Z_FORMULA_CODE",  formula.strip()),
+                ("Z_PIECE_TYPE",    pieza.strip()),
+                ("Z_COLOR",         color.strip()),
+                ("Z_AGP_VERSION",   version.strip()),
+            ]
+            activos = [(a, v) for a, v in filtros if v]
+            if not activos:
+                conn.close()
+                return []
+
+            partes, params = [], []
+            for atnam, val in activos:
+                partes.append("""
+                    SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001
+                    WHERE CENTRO='CO01' AND ATNAM=? AND ATWRT LIKE ? ESCAPE '!'
+                """)
+                params.extend([atnam, f"%{_esc(val)}%"])
+
+            sql = "\nINTERSECT\n".join(partes)
+            cur.execute(f"""
+                SELECT TOP 300 m.MATERIAL
+                FROM ({sql}) m
+                JOIN dbo.ODATA_ZFER_HEAD h ON h.MATERIAL = m.MATERIAL AND h.CENTRO = 'CO01'
+                WHERE UPPER(ISNULL(h.STATUS,'')) != 'ZZ'
+                ORDER BY m.MATERIAL
+            """, params)
+            materiales = [r[0] for r in cur.fetchall()]
+
+        if not materiales:
+            conn.close()
+            return []
+
+        ph = ",".join(["?"] * len(materiales))
+
+        # Atributos clave para mostrar en tabla
+        cur.execute(f"""
+            SELECT MATERIAL, ATNAM, ATWRT
+            FROM   dbo.ODATA_ZFER_CLASS_001
+            WHERE  CENTRO = 'CO01' AND MATERIAL IN ({ph})
+              AND  ATNAM IN (
+                'Z_VEHICLE_MODEL','Z_FORMULA_CODE','Z_COLOR',
+                'Z_PIECE_TYPE','Z_AGP_VERSION','Z_AGP_PARTNUMBER',
+                'Z_SHADE_BAND','Z_BEHAVIOR_DIFFERENTIALS'
+              )
+        """, materiales)
+        pivot = {}
+        for mat, atnam, atwrt in cur.fetchall():
+            pivot.setdefault(mat, {})[atnam] = (atwrt or "").strip()
+
+        # Cabecera (status, descripción, ZFOR)
+        cur.execute(f"""
+            SELECT MATERIAL, STATUS, TEXTO_BREVE_MATERIAL, ZFOR
+            FROM   dbo.ODATA_ZFER_HEAD
+            WHERE  CENTRO = 'CO01' AND MATERIAL IN ({ph})
+        """, materiales)
+        head_d = {r[0]: {"status": (r[1] or "").strip(),
+                          "texto":  (r[2] or "").strip(),
+                          "zfor":   (r[3] or "").strip()}
+                  for r in cur.fetchall()}
+        conn.close()
+
+        resultado = []
+        for mat in sorted(materiales):
+            d = pivot.get(mat, {})
+            h = head_d.get(mat, {})
+            color_raw  = d.get("Z_COLOR", "")
+            pieza_raw  = d.get("Z_PIECE_TYPE", "")
+            resultado.append({
+                "material":      mat,
+                "texto":         h.get("texto", ""),
+                "status":        h.get("status", ""),
+                "zfor":          h.get("zfor", ""),
+                "vehiculo":      d.get("Z_VEHICLE_MODEL", ""),
+                "formula":       d.get("Z_FORMULA_CODE", ""),
+                "color_raw":     color_raw,
+                "color_nombre":  COLORES.get(color_raw, color_raw),
+                "pieza_raw":     pieza_raw,
+                "pieza_nombre":  PIEZAS.get(pieza_raw, pieza_raw),
+                "version":       d.get("Z_AGP_VERSION", ""),
+                "partnumber":    d.get("Z_AGP_PARTNUMBER", ""),
+                "shade_band":    d.get("Z_SHADE_BAND", ""),
+                "differentials": d.get("Z_BEHAVIOR_DIFFERENTIALS", ""),
+            })
+        return resultado
+    except Exception as e:
+        return [{"_error": str(e)}]
+
+
+def q_valores_distintos(atnam: str) -> list:
+    """Devuelve los 200 valores ATWRT distintos más frecuentes para un ATNAM en CO01."""
+    try:
+        conn = get_conn()
+        cur  = conn.cursor()
+        cur.execute("""
+            SELECT TOP 200 ATWRT, COUNT(*) AS n
+            FROM   dbo.ODATA_ZFER_CLASS_001
+            WHERE  CENTRO = 'CO01' AND ATNAM = ?
+              AND  ISNULL(ATWRT,'') != ''
+            GROUP BY ATWRT
+            ORDER BY n DESC
+        """, (atnam,))
+        rows = cur.fetchall()
+        conn.close()
+        return [r[0] for r in rows]
+    except Exception:
+        return []
+
+
 # ── Rutas Flask ───────────────────────────────────────────────────────────────
 
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        zfer = request.form.get("zfer", "").strip()
-        if zfer:
-            return redirect(url_for("detalle_zfer", material=zfer))
+        raw = request.form.get("zfer", "").strip()
+        if not raw:
+            return render_template("index.html", error=None)
+        # Si hay comas → multi-ZFER → explorar
+        zfers = [z.strip() for z in raw.replace(";", ",").split(",") if z.strip()]
+        if len(zfers) > 1:
+            return redirect(url_for("explorar") + "?zfers=" + ",".join(zfers))
+        return redirect(url_for("detalle_zfer", material=zfers[0]))
     return render_template("index.html", error=None)
+
+
+@app.route("/explorar")
+def explorar():
+    vehiculo = request.args.get("vehiculo", "").strip()
+    formula  = request.args.get("formula",  "").strip()
+    pieza    = request.args.get("pieza",    "").strip()
+    color    = request.args.get("color",    "").strip()
+    version  = request.args.get("version",  "").strip()
+    zfers_qs = request.args.get("zfers",    "").strip()
+
+    zfers_lista = [z.strip() for z in zfers_qs.split(",") if z.strip()] if zfers_qs else []
+
+    hay_filtros = any([vehiculo, formula, pieza, color, version]) or bool(zfers_lista)
+    resultados  = []
+    error       = None
+
+    if hay_filtros:
+        resultados = q_explorar(vehiculo, formula, pieza, color, version, zfers_lista or None)
+        if resultados and "_error" in resultados[0]:
+            error      = resultados[0]["_error"]
+            resultados = []
+
+    # Autocomplete: solo carga hints cuando el usuario ya busca (evita 2 queries extra en carga inicial)
+    vehiculos_hints = q_valores_distintos("Z_VEHICLE_MODEL") if hay_filtros else []
+    formulas_hints  = q_valores_distintos("Z_FORMULA_CODE")  if hay_filtros else []
+
+    return render_template("explorar.html",
+        vehiculo        = vehiculo,
+        formula         = formula,
+        pieza           = pieza,
+        color           = color,
+        version         = version,
+        zfers_qs        = zfers_qs,
+        resultados      = resultados,
+        error           = error,
+        hay_filtros     = hay_filtros,
+        vehiculos_hints = vehiculos_hints,
+        formulas_hints  = formulas_hints,
+        COLORES         = COLORES,
+        PIEZAS          = PIEZAS,
+    )
 
 
 @app.route("/zfer/<material>")
@@ -445,7 +636,6 @@ def detalle_zfer(material: str):
         mercados_chart = mercados_chart,
         total_entregas = total_entregas,
     )
-
 
 @app.route("/combinaciones/<material>")
 def combinaciones(material: str):

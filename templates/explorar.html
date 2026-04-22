@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% block title %}Explorador ZFER — AGP Intelligence{% endblock %}
+
+{% block content %}
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<div class="mb-4">
+  <div style="font-size:.75rem; text-transform:uppercase; letter-spacing:1.5px; color:var(--muted); margin-bottom:.3rem;">
+    <i class="bi bi-funnel-fill me-1" style="color:var(--accent);"></i>Explorador de ZFERs
+  </div>
+  <h1 style="font-size:1.8rem; font-weight:900; margin:0;">Búsqueda por filtros</h1>
+  <p style="color:var(--muted); margin-top:.4rem; font-size:.9rem;">
+    Filtra ZFERs activos de CO01 por vehículo, fórmula, pieza, color o versión. Combina varios filtros a la vez.
+  </p>
+</div>
+
+<!-- ── Formulario de filtros ────────────────────────────────────────────────── -->
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="bi bi-sliders me-2" style="color:var(--accent);"></i>Filtros de búsqueda
+  </div>
+  <div class="card-body">
+    <form method="GET" action="/explorar" id="formExplorar">
+      <div class="row g-3">
+
+        <!-- Vehículo -->
+        <div class="col-md-4 col-lg-3">
+          <label style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; display:block; margin-bottom:.4rem;">
+            <i class="bi bi-car-front me-1"></i>Modelo Vehículo
+          </label>
+          <input type="text" name="vehiculo" value="{{ vehiculo }}"
+                 class="search-box" style="border-radius:8px; width:100%; font-size:.9rem; padding:.55rem .9rem;"
+                 placeholder="ej: CHEVROLET SUBURBAN"
+                 list="list-vehiculos" autocomplete="off">
+          <datalist id="list-vehiculos">
+            {% for v in vehiculos_hints %}<option value="{{ v }}">{% endfor %}
+          </datalist>
+        </div>
+
+        <!-- Fórmula -->
+        <div class="col-md-3 col-lg-2">
+          <label style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; display:block; margin-bottom:.4rem;">
+            <i class="bi bi-flask me-1"></i>Fórmula
+          </label>
+          <input type="text" name="formula" value="{{ formula }}"
+                 class="search-box" style="border-radius:8px; width:100%; font-size:.9rem; padding:.55rem .9rem;"
+                 placeholder="ej: L23-26"
+                 list="list-formulas" autocomplete="off">
+          <datalist id="list-formulas">
+            {% for f in formulas_hints %}<option value="{{ f }}">{% endfor %}
+          </datalist>
+        </div>
+
+        <!-- Tipo de pieza -->
+        <div class="col-md-3 col-lg-2">
+          <label style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; display:block; margin-bottom:.4rem;">
+            <i class="bi bi-puzzle me-1"></i>Tipo de pieza
+          </label>
+          <input type="text" name="pieza" value="{{ pieza }}"
+                 class="search-box" style="border-radius:8px; width:100%; font-size:.9rem; padding:.55rem .9rem;"
+                 placeholder="ej: 001"
+                 list="list-piezas" autocomplete="off">
+          <datalist id="list-piezas">
+            {% for cod, nombre in PIEZAS.items() %}<option value="{{ cod }}">{{ nombre }}</option>{% endfor %}
+          </datalist>
+        </div>
+
+        <!-- Color -->
+        <div class="col-md-2 col-lg-2">
+          <label style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; display:block; margin-bottom:.4rem;">
+            <i class="bi bi-palette me-1"></i>Color
+          </label>
+          <select name="color" class="search-box" style="border-radius:8px; width:100%; font-size:.9rem; padding:.55rem .9rem; cursor:pointer;">
+            <option value="">— Todos —</option>
+            {% for cod, nombre in COLORES.items() %}
+            {% if cod != 'NA' %}
+            <option value="{{ cod }}" {% if color == cod %}selected{% endif %}>{{ cod }} — {{ nombre }}</option>
+            {% endif %}
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Versión -->
+        <div class="col-md-2 col-lg-1">
+          <label style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; display:block; margin-bottom:.4rem;">
+            <i class="bi bi-layers me-1"></i>Versión
+          </label>
+          <input type="text" name="version" value="{{ version }}"
+                 class="search-box" style="border-radius:8px; width:100%; font-size:.9rem; padding:.55rem .9rem;"
+                 placeholder="ej: 008">
+        </div>
+
+        <!-- Botón buscar -->
+        <div class="col-12 col-lg-2 d-flex align-items-end">
+          <button type="submit" class="btn-go" style="border-radius:8px; width:100%; padding:.6rem 1rem; font-size:.92rem;">
+            <i class="bi bi-search me-1"></i>Buscar
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Búsqueda rápida por lista de ZFERs -->
+      <div class="mt-3" style="border-top:1px solid #21262d; padding-top:1rem;">
+        <label style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; display:block; margin-bottom:.4rem;">
+          <i class="bi bi-list-ol me-1"></i>O buscar por ZFERs específicos (separa con comas)
+        </label>
+        <div style="display:flex; gap:.5rem;">
+          <input type="text" name="zfers" value="{{ zfers_qs }}"
+                 class="search-box" style="flex:1; border-radius:8px; font-size:.88rem; padding:.5rem .9rem;"
+                 placeholder="700001234, 700001235, 700001236 …" autocomplete="off">
+          <button type="submit" class="btn-go" style="border-radius:8px; padding:.5rem 1.2rem; font-size:.88rem;">
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+{% if error %}
+<div class="alert-err mb-4">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+</div>
+{% endif %}
+
+<!-- ── Resultados ──────────────────────────────────────────────────────────── -->
+{% if hay_filtros %}
+  {% if resultados %}
+  <div class="card">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <span><i class="bi bi-table me-2" style="color:var(--accent);"></i>Resultados</span>
+      <div class="d-flex gap-2 align-items-center">
+        <span class="tag t-neutral" style="font-size:.75rem;">
+          {{ resultados | length }} ZFERs encontrados
+        </span>
+        <button onclick="irACombinaciones()" class="btn-go"
+                style="border-radius:8px; padding:.35rem .9rem; font-size:.8rem; display:none;"
+                id="btnMulti">
+          <i class="bi bi-diagram-3-fill me-1"></i>Ver combinaciones del seleccionado
+        </button>
+        <button onclick="abrirSeleccionados()" class="btn-go"
+                style="border-radius:8px; padding:.35rem .9rem; font-size:.8rem; display:none;
+                       background:#7c3aed;"
+                id="btnAbrirTodos">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Abrir seleccionados (<span id="cntSel">0</span>)
+        </button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:.87rem;">
+        <thead>
+          <tr style="color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.8px;
+                     border-bottom:1px solid #21262d; background:rgba(255,255,255,.02);">
+            <th style="padding:.6rem .8rem; width:32px;">
+              <input type="checkbox" id="chkTodos" onchange="toggleTodos(this)"
+                     style="cursor:pointer; accent-color:var(--accent);">
+            </th>
+            <th style="padding:.6rem .8rem;">ZFER</th>
+            <th style="padding:.6rem .5rem;">Descripción</th>
+            <th style="padding:.6rem .5rem;">Vehículo</th>
+            <th style="padding:.6rem .5rem;">Fórmula</th>
+            <th style="padding:.6rem .5rem;">Pieza</th>
+            <th style="padding:.6rem .5rem;">Color</th>
+            <th style="padding:.6rem .5rem;">Versión</th>
+            <th style="padding:.6rem .5rem;">Partnumber</th>
+            <th style="padding:.6rem .5rem;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in resultados %}
+          <tr class="market-tr" id="row-{{ r.material }}"
+              style="cursor:pointer;" onclick="toggleRow('{{ r.material }}', event)">
+            <td style="padding:.55rem .8rem;" onclick="event.stopPropagation()">
+              <input type="checkbox" class="chk-zfer" value="{{ r.material }}"
+                     onchange="actualizarConteo()"
+                     style="cursor:pointer; accent-color:var(--accent);">
+            </td>
+            <td style="padding:.55rem .8rem;">
+              <a href="/zfer/{{ r.material }}" target="_blank"
+                 style="color:var(--accent); font-weight:700; text-decoration:none; font-size:.9rem;"
+                 onclick="event.stopPropagation()">
+                {{ r.material }}
+              </a>
+            </td>
+            <td style="padding:.55rem .5rem; color:var(--text); max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              {{ r.texto or '—' }}
+            </td>
+            <td style="padding:.55rem .5rem; color:var(--muted); font-size:.82rem; max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              {{ r.vehiculo or '—' }}
+            </td>
+            <td style="padding:.55rem .5rem;">
+              {% if r.formula %}
+              <span class="tag t-formula" style="font-size:.75rem;">{{ r.formula }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td style="padding:.55rem .5rem;">
+              {% if r.pieza_raw %}
+              <span class="tag t-pieza" style="font-size:.73rem;">{{ r.pieza_raw }}</span>
+              <span style="color:#484f58; font-size:.72rem; margin-left:.2rem;">{{ r.pieza_nombre[:18] }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td style="padding:.55rem .5rem;">
+              {% if r.color_raw %}
+              <span class="tag t-color" style="font-size:.75rem;">{{ r.color_raw }}</span>
+              <span style="color:var(--muted); font-size:.75rem; margin-left:.2rem;">{{ r.color_nombre }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td style="padding:.55rem .5rem; color:var(--muted); font-size:.82rem;">{{ r.version or '—' }}</td>
+            <td style="padding:.55rem .5rem;">
+              <code style="color:#e3b341; font-size:.75rem;">{{ r.partnumber or '—' }}</code>
+            </td>
+            <td style="padding:.55rem .5rem; white-space:nowrap;" onclick="event.stopPropagation()">
+              <a href="/zfer/{{ r.material }}" target="_blank"
+                 style="color:var(--muted); font-size:.8rem; text-decoration:none; margin-right:.5rem;"
+                 title="Ver detalle">
+                <i class="bi bi-box-arrow-up-right"></i>
+              </a>
+              <a href="/combinaciones/{{ r.material }}" target="_blank"
+                 style="color:var(--accent2); font-size:.8rem; text-decoration:none;"
+                 title="Ver combinaciones">
+                <i class="bi bi-diagram-3-fill"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% else %}
+  <div class="card">
+    <div class="card-body text-center py-5" style="color:#484f58;">
+      <i class="bi bi-search" style="font-size:2.5rem; display:block; margin-bottom:.75rem;"></i>
+      <div style="font-size:1rem;">Sin resultados para los filtros ingresados</div>
+      <div style="font-size:.82rem; margin-top:.3rem;">Intenta con términos más cortos o menos filtros a la vez</div>
+    </div>
+  </div>
+  {% endif %}
+
+{% else %}
+<!-- Estado inicial: sin búsqueda -->
+<div style="text-align:center; padding:3rem 0; color:#484f58;">
+  <i class="bi bi-funnel" style="font-size:3rem; display:block; margin-bottom:1rem; color:#30363d;"></i>
+  <div style="font-size:1rem; color:#6e7681;">Ingresa al menos un filtro para buscar</div>
+  <div style="font-size:.82rem; margin-top:.5rem;">
+    Puedes combinar vehículo + fórmula, o solo fórmula, o solo tipo de pieza, etc.
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function actualizarConteo() {
+  const checks = document.querySelectorAll('.chk-zfer:checked');
+  const n = checks.length;
+  document.getElementById('cntSel').textContent = n;
+  document.getElementById('btnMulti').style.display    = n === 1 ? 'inline-flex' : 'none';
+  document.getElementById('btnAbrirTodos').style.display = n > 0 ? 'inline-flex' : 'none';
+  // Highlight filas seleccionadas
+  document.querySelectorAll('.chk-zfer').forEach(chk => {
+    const row = document.getElementById('row-' + chk.value);
+    if (row) row.style.background = chk.checked ? 'rgba(124,58,237,.1)' : '';
+  });
+}
+
+function toggleRow(mat, e) {
+  if (e && e.target && (e.target.tagName === 'A' || e.target.tagName === 'INPUT')) return;
+  const chk = document.querySelector(`.chk-zfer[value="${mat}"]`);
+  if (chk) { chk.checked = !chk.checked; actualizarConteo(); }
+}
+
+function toggleTodos(master) {
+  document.querySelectorAll('.chk-zfer').forEach(c => c.checked = master.checked);
+  actualizarConteo();
+}
+
+function irACombinaciones() {
+  const checks = document.querySelectorAll('.chk-zfer:checked');
+  if (checks.length === 1) {
+    window.open('/combinaciones/' + checks[0].value, '_blank');
+  }
+}
+
+function abrirSeleccionados() {
+  document.querySelectorAll('.chk-zfer:checked').forEach(chk => {
+    window.open('/zfer/' + chk.value, '_blank');
+  });
+}
+</script>
+{% endblock %}
