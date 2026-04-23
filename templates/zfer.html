@@ -83,6 +83,14 @@
                 <span class="tag t-franja">{{ a.decoded }}</span>
               {% elif a.atnam == 'Z_AGP_PARTNUMBER' %}
                 <code style="color:#e3b341; font-size:.82rem;">{{ a.raw }}</code>
+              {% elif a.atnam == 'Z_SUBPRODUCT' %}
+                {% set nombre_sub = SUBPRODUCTOS.get(a.raw, '') %}
+                {% if nombre_sub %}
+                <span class="tag t-neutral" style="font-size:.82rem; cursor:default;"
+                      title="{{ nombre_sub }}">{{ a.raw }}</span>
+                {% else %}
+                <span style="font-weight:600; font-size:.9rem;">{{ a.raw }}</span>
+                {% endif %}
               {% elif a.atnam == 'Z_BEHAVIOR_DIFFERENTIALS' %}
                 <span style="font-weight:600; font-size:.9rem;">
                   {% for cod in a.raw.split(',') %}
