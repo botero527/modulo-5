@@ -189,7 +189,7 @@ def q_atributos(material: str) -> dict:
         """, (material,))
         rows = cur.fetchall()
         conn.close()
-        return {r[0]: (r[1] or "").strip() for r in rows}
+        return {r[0]: str(r[1]).strip() if r[1] is not None else "" for r in rows}
     except Exception as e:
         return {"_error": str(e)}
 
@@ -267,7 +267,7 @@ def q_variantes_por_pn(vehiculo: str, version: str, formula: str, pieza: str) ->
         """, mats)
         pivot = {}
         for mat, atnam, atwrt in cur.fetchall():
-            pivot.setdefault(mat, {})[atnam] = (atwrt or "").strip()
+            pivot.setdefault(mat, {})[atnam] = str(atwrt).strip() if atwrt is not None else ""
 
         # Status y descripción
         cur.execute(f"""
@@ -275,7 +275,8 @@ def q_variantes_por_pn(vehiculo: str, version: str, formula: str, pieza: str) ->
             FROM   dbo.ODATA_ZFER_HEAD
             WHERE  CENTRO = 'CO01' AND MATERIAL IN ({ph})
         """, mats)
-        head_d = {r[0]: {"status": (r[1] or "").strip(), "texto": (r[2] or "").strip()}
+        head_d = {r[0]: {"status": str(r[1]).strip() if r[1] is not None else "",
+                          "texto":  str(r[2]).strip() if r[2] is not None else ""}
                   for r in cur.fetchall()}
         conn.close()
 
@@ -313,21 +314,24 @@ def q_zplas_compatibles(formula_code: str, piece_type: str,
         # Pre-filtra por fórmula ANTES del GROUP BY para no agrupar toda la tabla
         cur.execute("""
             SELECT
-                MATERIAL,
-                MAX(CASE WHEN ATNAM = 'Z_COLOR'                  THEN ATWRT ELSE NULL END) AS color,
-                MAX(CASE WHEN ATNAM = 'Z_PIECE_TYPE'             THEN ATWRT ELSE NULL END) AS piece_types,
-                MAX(CASE WHEN ATNAM = 'Z_SHADE_BAND'             THEN ATWRT ELSE NULL END) AS shade_band,
-                MAX(CASE WHEN ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS' THEN ATWRT ELSE NULL END) AS differentials,
-                MAX(CASE WHEN ATNAM = 'Z_AGP_LEVEL'              THEN ATWRT ELSE NULL END) AS level
-            FROM dbo.ODATA_ZPLA_CLASS_001
-            WHERE CENTRO   = 'CO01'
-              AND TIPO_MAT = 'ZPLA'
-              AND MATERIAL IN (
+                c.MATERIAL,
+                MAX(CASE WHEN c.ATNAM = 'Z_COLOR'                  THEN c.ATWRT ELSE NULL END) AS color,
+                MAX(CASE WHEN c.ATNAM = 'Z_PIECE_TYPE'             THEN c.ATWRT ELSE NULL END) AS piece_types,
+                MAX(CASE WHEN c.ATNAM = 'Z_SHADE_BAND'             THEN c.ATWRT ELSE NULL END) AS shade_band,
+                MAX(CASE WHEN c.ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS' THEN c.ATWRT ELSE NULL END) AS differentials,
+                MAX(CASE WHEN c.ATNAM = 'Z_AGP_LEVEL'              THEN c.ATWRT ELSE NULL END) AS level
+            FROM dbo.ODATA_ZPLA_CLASS_001 c
+            JOIN dbo.ODATA_ZPLA_HEAD h
+              ON h.MATERIAL = c.MATERIAL AND h.CENTRO = 'CO01'
+            WHERE c.CENTRO   = 'CO01'
+              AND c.TIPO_MAT = 'ZPLA'
+              AND UPPER(ISNULL(h.STATUS, '')) != 'ZZ'
+              AND c.MATERIAL IN (
                 SELECT MATERIAL FROM dbo.ODATA_ZPLA_CLASS_001
                 WHERE CENTRO = 'CO01' AND TIPO_MAT = 'ZPLA'
                   AND ATNAM  = 'Z_FORMULA_CODE' AND ATWRT = ?
               )
-            GROUP BY MATERIAL
+            GROUP BY c.MATERIAL
         """, (formula_code,))
         rows = cur.fetchall()
         conn.close()
@@ -416,7 +420,7 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="",
                 WHERE  MATERIAL IN ({ph}) AND CENTRO = 'CO01'
                   AND  UPPER(ISNULL(STATUS,'')) != 'ZZ'
             """, zfers_lista)
-            materiales = [r[0] for r in cur.fetchall()]
+            materiales = [str(r[0]) for r in cur.fetchall()]
         else:
             # Búsqueda por filtros con INTERSECT dinámico
             filtros = [
@@ -447,7 +451,7 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="",
                 WHERE UPPER(ISNULL(h.STATUS,'')) != 'ZZ'
                 ORDER BY m.MATERIAL
             """, params)
-            materiales = [r[0] for r in cur.fetchall()]
+            materiales = [str(r[0]) for r in cur.fetchall()]
 
         if not materiales:
             conn.close()
@@ -468,7 +472,7 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="",
         """, materiales)
         pivot = {}
         for mat, atnam, atwrt in cur.fetchall():
-            pivot.setdefault(mat, {})[atnam] = (atwrt or "").strip()
+            pivot.setdefault(str(mat), {})[atnam] = str(atwrt).strip() if atwrt is not None else ""
 
         # Cabecera (status, descripción, ZFOR)
         cur.execute(f"""
@@ -476,9 +480,9 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="",
             FROM   dbo.ODATA_ZFER_HEAD
             WHERE  CENTRO = 'CO01' AND MATERIAL IN ({ph})
         """, materiales)
-        head_d = {r[0]: {"status": (r[1] or "").strip(),
-                          "texto":  (r[2] or "").strip(),
-                          "zfor":   (r[3] or "").strip()}
+        head_d = {str(r[0]): {"status": str(r[1]).strip() if r[1] is not None else "",
+                          "texto":  str(r[2]).strip() if r[2] is not None else "",
+                          "zfor":   str(r[3]).strip() if r[3] is not None else ""}
                   for r in cur.fetchall()}
         conn.close()
 
@@ -580,10 +584,12 @@ def explorar():
         resultados      = resultados,
         error           = error,
         hay_filtros     = hay_filtros,
+        modo_lista      = bool(zfers_lista),
         vehiculos_hints = vehiculos_hints,
         formulas_hints  = formulas_hints,
         COLORES         = COLORES,
         PIEZAS          = PIEZAS,
+        FRANJAS         = FRANJAS,
     )
 
 

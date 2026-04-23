@@ -127,6 +127,74 @@
 <!-- ── Resultados ──────────────────────────────────────────────────────────── -->
 {% if hay_filtros %}
   {% if resultados %}
+
+  {# ── MODO LISTA: tarjetas individuales por ZFER ── #}
+  {% if modo_lista %}
+  <div class="mb-3 d-flex align-items-center gap-2">
+    <span style="font-size:.75rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted);">
+      <i class="bi bi-list-ol me-1"></i>{{ resultados | length }} ZFER{% if resultados|length != 1 %}s{% endif %} encontrados
+    </span>
+  </div>
+  <div class="d-flex flex-column gap-3">
+    {% for r in resultados %}
+    <div class="card" style="border-left:3px solid var(--accent);">
+      <div class="card-body" style="padding:1.1rem 1.4rem;">
+        <!-- Fila superior: ZFER + descripción + botones -->
+        <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-2">
+          <div>
+            <a href="/zfer/{{ r.material }}" target="_blank"
+               style="color:var(--accent); font-size:1.35rem; font-weight:900; text-decoration:none; letter-spacing:.5px;">
+              {{ r.material }}
+            </a>
+            {% if r.texto %}
+            <div style="color:var(--text); font-size:.9rem; font-weight:600; margin-top:.1rem;">{{ r.texto }}</div>
+            {% endif %}
+          </div>
+          <div class="d-flex gap-2 flex-shrink-0">
+            <a href="/zfer/{{ r.material }}" target="_blank"
+               class="btn-go" style="border-radius:8px; padding:.35rem .9rem; font-size:.8rem; display:inline-flex; align-items:center; gap:.3rem; text-decoration:none;">
+              <i class="bi bi-box-arrow-up-right"></i>Detalle
+            </a>
+            <a href="/combinaciones/{{ r.material }}" target="_blank"
+               class="btn-go" style="border-radius:8px; padding:.35rem .9rem; font-size:.8rem; background:#7c3aed; display:inline-flex; align-items:center; gap:.3rem; text-decoration:none;">
+              <i class="bi bi-diagram-3-fill"></i>Combinaciones
+            </a>
+          </div>
+        </div>
+        <!-- Atributos en chips -->
+        <div class="d-flex flex-wrap gap-2" style="font-size:.8rem;">
+          {% if r.vehiculo %}
+          <span style="color:var(--muted);"><i class="bi bi-car-front me-1"></i>{{ r.vehiculo }}</span>
+          {% endif %}
+          {% if r.formula %}
+          <span class="tag t-formula" style="font-size:.75rem;">{{ r.formula }}</span>
+          {% endif %}
+          {% if r.pieza_raw %}
+          <span class="tag t-pieza" style="font-size:.75rem;">{{ r.pieza_raw }} — {{ r.pieza_nombre }}</span>
+          {% endif %}
+          {% if r.color_raw %}
+          <span class="tag t-color" style="font-size:.75rem;">{{ r.color_raw }} — {{ r.color_nombre }}</span>
+          {% endif %}
+          {% if r.shade_band and r.shade_band not in ('00','') %}
+          <span class="tag t-franja" style="font-size:.75rem;">Franja {{ FRANJAS.get(r.shade_band, r.shade_band) }}</span>
+          {% endif %}
+          {% if r.version %}
+          <span class="tag t-neutral" style="font-size:.75rem;">v{{ r.version }}</span>
+          {% endif %}
+          {% if r.partnumber %}
+          <code style="color:#e3b341; font-size:.75rem; background:#1c1a0f; padding:.15rem .45rem; border-radius:4px;">{{ r.partnumber }}</code>
+          {% endif %}
+          {% if r.differentials %}
+          <span style="color:#484f58; font-size:.75rem;"><i class="bi bi-sliders me-1"></i>{{ r.differentials }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ── MODO FILTROS: tabla compacta con checkboxes ── #}
+  {% else %}
   <div class="card">
     <div class="card-header d-flex align-items-center justify-content-between">
       <span><i class="bi bi-table me-2" style="color:var(--accent);"></i>Resultados</span>
@@ -228,6 +296,7 @@
       </table>
     </div>
   </div>
+  {% endif %}{# fin modo_lista #}
 
   {% else %}
   <div class="card">
