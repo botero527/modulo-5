@@ -177,7 +177,8 @@ def q_atributos(material: str) -> dict:
         conn = get_conn()
         cur  = conn.cursor()
         cur.execute("""
-            SELECT ATNAM, ATWRT
+            SELECT ATNAM,
+                   CASE WHEN ATNAM = 'Z_COMMERCIAL_THICKNESS' THEN CAST(ATFLV AS VARCHAR(50)) ELSE ATWRT END AS valor
             FROM   dbo.ODATA_ZFER_CLASS_001
             WHERE  MATERIAL = ?
               AND  CENTRO   = 'CO01'
@@ -397,7 +398,7 @@ def q_mercados(entregas: list) -> list:
         return []
 
 
-def q_explorar(vehiculo="", formula="", pieza="", color="", version="",
+def q_explorar(vehiculo="", formula="", pieza="", color="", version="", nivel="",
                zfers_lista: list = None) -> list:
     """
     Busca ZFERs activos (no ZZ) en CO01 según filtros opcionales (LIKE parcial).
@@ -429,27 +430,31 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="",
                 ("Z_PIECE_TYPE",    pieza.strip()),
                 ("Z_COLOR",         color.strip()),
                 ("Z_AGP_VERSION",   version.strip()),
+                ("Z_AGP_LEVEL",     nivel.strip()),
             ]
             activos = [(a, v) for a, v in filtros if v]
             if not activos:
                 conn.close()
                 return []
 
-            partes, params = [], []
+            # Un solo scan con OR + GROUP BY/HAVING en lugar de N INTERSECTs
+            or_parts, params = [], []
             for atnam, val in activos:
-                partes.append("""
-                    SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001
-                    WHERE CENTRO='CO01' AND ATNAM=? AND ATWRT LIKE ? ESCAPE '!'
-                """)
+                or_parts.append("(c.ATNAM=? AND c.ATWRT LIKE ? ESCAPE '!')")
                 params.extend([atnam, f"%{_esc(val)}%"])
 
-            sql = "\nINTERSECT\n".join(partes)
+            n = len(activos)
             cur.execute(f"""
-                SELECT TOP 300 m.MATERIAL
-                FROM ({sql}) m
-                JOIN dbo.ODATA_ZFER_HEAD h ON h.MATERIAL = m.MATERIAL AND h.CENTRO = 'CO01'
-                WHERE UPPER(ISNULL(h.STATUS,'')) != 'ZZ'
-                ORDER BY m.MATERIAL
+                SELECT TOP 300 c.MATERIAL
+                FROM dbo.ODATA_ZFER_CLASS_001 c
+                JOIN dbo.ODATA_ZFER_HEAD h
+                  ON h.MATERIAL = c.MATERIAL AND h.CENTRO = 'CO01'
+                WHERE c.CENTRO = 'CO01'
+                  AND UPPER(ISNULL(h.STATUS,'')) != 'ZZ'
+                  AND ({" OR ".join(or_parts)})
+                GROUP BY c.MATERIAL
+                HAVING COUNT(DISTINCT c.ATNAM) >= {n}
+                ORDER BY c.MATERIAL
             """, params)
             materiales = [str(r[0]) for r in cur.fetchall()]
 
@@ -467,7 +472,7 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="",
               AND  ATNAM IN (
                 'Z_VEHICLE_MODEL','Z_FORMULA_CODE','Z_COLOR',
                 'Z_PIECE_TYPE','Z_AGP_VERSION','Z_AGP_PARTNUMBER',
-                'Z_SHADE_BAND','Z_BEHAVIOR_DIFFERENTIALS'
+                'Z_SHADE_BAND','Z_BEHAVIOR_DIFFERENTIALS','Z_AGP_LEVEL'
               )
         """, materiales)
         pivot = {}
@@ -507,6 +512,7 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="",
                 "partnumber":    d.get("Z_AGP_PARTNUMBER", ""),
                 "shade_band":    d.get("Z_SHADE_BAND", ""),
                 "differentials": d.get("Z_BEHAVIOR_DIFFERENTIALS", ""),
+                "nivel":         d.get("Z_AGP_LEVEL", ""),
             })
         return resultado
     except Exception as e:
@@ -556,16 +562,17 @@ def explorar():
     pieza    = request.args.get("pieza",    "").strip()
     color    = request.args.get("color",    "").strip()
     version  = request.args.get("version",  "").strip()
+    nivel    = request.args.get("nivel",    "").strip()
     zfers_qs = request.args.get("zfers",    "").strip()
 
     zfers_lista = [z.strip() for z in zfers_qs.split(",") if z.strip()] if zfers_qs else []
 
-    hay_filtros = any([vehiculo, formula, pieza, color, version]) or bool(zfers_lista)
+    hay_filtros = any([vehiculo, formula, pieza, color, version, nivel]) or bool(zfers_lista)
     resultados  = []
     error       = None
 
     if hay_filtros:
-        resultados = q_explorar(vehiculo, formula, pieza, color, version, zfers_lista or None)
+        resultados = q_explorar(vehiculo, formula, pieza, color, version, nivel, zfers_lista or None)
         if resultados and "_error" in resultados[0]:
             error      = resultados[0]["_error"]
             resultados = []
@@ -580,6 +587,7 @@ def explorar():
         pieza           = pieza,
         color           = color,
         version         = version,
+        nivel           = nivel,
         zfers_qs        = zfers_qs,
         resultados      = resultados,
         error           = error,
@@ -685,14 +693,12 @@ def combinaciones(material: str):
     zplas = q_zplas_compatibles(formula_code, piece_type, shade_band, differentials)
     if zplas and "_error" in zplas[0]:
         zplas = []
-
     # Mapa color → ZFER existente
     colores_con_zfer = {v["color_raw"]: v for v in variantes if v.get("color_raw")}
     # Mapa color → lista de ZPLAs (puede haber varios por color con distintos diferenciales)
     colores_con_zpla: dict = {}
     for z in zplas:
         colores_con_zpla.setdefault(z["color"], []).append(z)
-
     # Matriz completa: un item por color del catálogo (excepto NA)
     matrix = []
     for cod, nombre in COLORES.items():
@@ -731,7 +737,6 @@ def combinaciones(material: str):
         ])
     else:
         pn_pattern_ui = ""
-
     return render_template("combinaciones.html",
         material       = material,
         head           = head,

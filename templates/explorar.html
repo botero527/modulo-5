@@ -90,6 +90,19 @@
                  placeholder="ej: 008">
         </div>
 
+        <!-- Nivel AGP -->
+        <div class="col-md-2 col-lg-1">
+          <label style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; display:block; margin-bottom:.4rem;">
+            <i class="bi bi-shield-check me-1"></i>Nivel AGP
+          </label>
+          <select name="nivel" class="search-box" style="border-radius:8px; width:100%; font-size:.9rem; padding:.55rem .9rem; cursor:pointer;">
+            <option value="">— Todos —</option>
+            {% for n in ['00','01','02','03','04','05','06','07','08','09','10'] %}
+            <option value="{{ n }}" {% if nivel == n %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
         <!-- Botón buscar -->
         <div class="col-12 col-lg-2 d-flex align-items-end">
           <button type="submit" class="btn-go" style="border-radius:8px; width:100%; padding:.6rem 1rem; font-size:.92rem;">
@@ -231,6 +244,7 @@
             <th style="padding:.6rem .5rem;">Pieza</th>
             <th style="padding:.6rem .5rem;">Color</th>
             <th style="padding:.6rem .5rem;">Versión</th>
+            <th style="padding:.6rem .5rem;">Nivel</th>
             <th style="padding:.6rem .5rem;">Partnumber</th>
             <th style="padding:.6rem .5rem;">Acciones</th>
           </tr>
@@ -275,6 +289,11 @@
               {% else %}—{% endif %}
             </td>
             <td style="padding:.55rem .5rem; color:var(--muted); font-size:.82rem;">{{ r.version or '—' }}</td>
+            <td style="padding:.55rem .5rem;">
+              {% if r.nivel %}
+              <span class="tag t-neutral" style="font-size:.73rem;">{{ r.nivel }}</span>
+              {% else %}—{% endif %}
+            </td>
             <td style="padding:.55rem .5rem;">
               <code style="color:#e3b341; font-size:.75rem;">{{ r.partnumber or '—' }}</code>
             </td>
