@@ -83,6 +83,20 @@
                 <span class="tag t-franja">{{ a.decoded }}</span>
               {% elif a.atnam == 'Z_AGP_PARTNUMBER' %}
                 <code style="color:#e3b341; font-size:.82rem;">{{ a.raw }}</code>
+              {% elif a.atnam == 'Z_BEHAVIOR_DIFFERENTIALS' %}
+                <span style="font-weight:600; font-size:.9rem;">
+                  {% for cod in a.raw.split(',') %}
+                    {% set cod = cod.strip() %}
+                    {% if cod %}
+                      {% if cod in DIFERENCIALES %}
+                      <span class="tag t-neutral" style="font-size:.75rem; cursor:default;"
+                            title="{{ DIFERENCIALES[cod] }}">{{ cod }}</span>
+                      {% else %}
+                      <span class="tag t-neutral" style="font-size:.75rem;">{{ cod }}</span>
+                      {% endif %}
+                    {% endif %}
+                  {% endfor %}
+                </span>
               {% else %}
                 <span style="font-weight:600; font-size:.9rem;">{{ a.decoded }}</span>
               {% endif %}
@@ -95,28 +109,6 @@
             Sin atributos de clasificación
           </div>
         {% endif %}
-      </div>
-    </div>
-
-    <!-- Card info BD -->
-    <div class="card">
-      <div class="card-header">
-        <i class="bi bi-info-circle me-2" style="color:var(--muted);"></i>
-        Información del Registro
-      </div>
-      <div class="card-body" style="padding:1rem 1.5rem;">
-        <div class="attr-row d-flex justify-content-between">
-          <span class="attr-key">Creado el</span>
-          <span style="font-size:.88rem;">{{ head.CREADO_EL or '—' }}</span>
-        </div>
-        <div class="attr-row d-flex justify-content-between">
-          <span class="attr-key">Última mod.</span>
-          <span style="font-size:.88rem;">{{ head.ULTIMA_MOD or '—' }}</span>
-        </div>
-        <div class="attr-row d-flex justify-content-between">
-          <span class="attr-key">Centro</span>
-          <span style="font-size:.88rem; font-weight:700;">CO01</span>
-        </div>
       </div>
     </div>
 
@@ -193,6 +185,29 @@
 
       </div>
     </div>
+
+    <!-- Card info BD (debajo de mercados) -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <i class="bi bi-info-circle me-2" style="color:var(--muted);"></i>
+        Información del Registro
+      </div>
+      <div class="card-body" style="padding:1rem 1.5rem;">
+        <div class="attr-row d-flex justify-content-between">
+          <span class="attr-key">Creado el</span>
+          <span style="font-size:.88rem;">{{ head.CREADO_EL or '—' }}</span>
+        </div>
+        <div class="attr-row d-flex justify-content-between">
+          <span class="attr-key">Última mod.</span>
+          <span style="font-size:.88rem;">{{ head.ULTIMA_MOD or '—' }}</span>
+        </div>
+        <div class="attr-row d-flex justify-content-between">
+          <span class="attr-key">Centro</span>
+          <span style="font-size:.88rem; font-weight:700;">CO01</span>
+        </div>
+      </div>
+    </div>
+
   </div>
 
 </div>

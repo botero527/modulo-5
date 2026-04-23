@@ -92,6 +92,33 @@ FRANJAS = {
     "NA": "No Aplica",
 }
 
+DIFERENCIALES = {
+    "01": "SOLAR PLUS",
+    "02": "LIGHT WEIGHT",
+    "03": "MULTI HIT",
+    "04": "SUN ADVANCED",
+    "05": "EXTREME PROTECT",
+    "06": "STEEL PLUS",
+    "07": "TNT",
+    "08": "TNT FLEX",
+    "09": "SUN BAND",
+    "10": "GUNPORT",
+    "11": "VARIO PLUS",
+    "12": "AGP DURA P",
+    "13": "AGP DURA NPC",
+    "14": "AGP DURA G",
+    "15": "HIGH PERFORMANCE",
+    "16": "FRAMES",
+    "17": "CLAMP",
+    "18": "METALLIC SUPPORT FOR MIRROR",
+    "19": "HEATING - METALLIC COATING",
+    "20": "HEATING - WIRED - HEATPLEX",
+    "21": "ANTIREFLECTIVE",
+    "22": "SILVER PASTE",
+    "23": "N.A",
+    "24": "ENCAPSULATED - FRAMES",
+}
+
 PAISES = {
     "AE":"Emiratos Árabes Unidos","AF":"Afganistán","AR":"Argentina",
     "AT":"Austria","AU":"Australia","AX":"Islas de Åland","BE":"Bélgica",
@@ -399,7 +426,7 @@ def q_mercados(entregas: list) -> list:
 
 
 def q_explorar(vehiculo="", formula="", pieza="", color="", version="", nivel="",
-               zfers_lista: list = None) -> list:
+               cod_vehiculo="", zfers_lista: list = None) -> list:
     """
     Busca ZFERs activos (no ZZ) en CO01 según filtros opcionales (LIKE parcial).
     Si se pasa zfers_lista, busca exactamente esos ZFERs y los enriquece con atributos.
@@ -433,17 +460,22 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="", nivel=""
                 ("Z_AGP_LEVEL",     nivel.strip()),
             ]
             activos = [(a, v) for a, v in filtros if v]
-            if not activos:
-                conn.close()
-                return []
 
             # Un solo scan con OR + GROUP BY/HAVING en lugar de N INTERSECTs
             or_parts, params = [], []
             for atnam, val in activos:
                 or_parts.append("(c.ATNAM=? AND c.ATWRT LIKE ? ESCAPE '!')")
                 params.extend([atnam, f"%{_esc(val)}%"])
+            # Código vehículo: prefijo del PARTNUMBER (ej: "1715" → "1715_...")
+            if cod_vehiculo.strip():
+                or_parts.append("(c.ATNAM='Z_AGP_PARTNUMBER' AND c.ATWRT LIKE ? ESCAPE '!')")
+                params.append(f"{_esc(cod_vehiculo.strip())}!_%")
 
-            n = len(activos)
+            if not or_parts:
+                conn.close()
+                return []
+
+            n = len(activos) + (1 if cod_vehiculo.strip() else 0)
             cur.execute(f"""
                 SELECT TOP 300 c.MATERIAL
                 FROM dbo.ODATA_ZFER_CLASS_001 c
@@ -562,17 +594,18 @@ def explorar():
     pieza    = request.args.get("pieza",    "").strip()
     color    = request.args.get("color",    "").strip()
     version  = request.args.get("version",  "").strip()
-    nivel    = request.args.get("nivel",    "").strip()
-    zfers_qs = request.args.get("zfers",    "").strip()
+    nivel        = request.args.get("nivel",        "").strip()
+    cod_vehiculo = request.args.get("cod_vehiculo", "").strip()
+    zfers_qs     = request.args.get("zfers",        "").strip()
 
     zfers_lista = [z.strip() for z in zfers_qs.split(",") if z.strip()] if zfers_qs else []
 
-    hay_filtros = any([vehiculo, formula, pieza, color, version, nivel]) or bool(zfers_lista)
+    hay_filtros = any([vehiculo, formula, pieza, color, version, nivel, cod_vehiculo]) or bool(zfers_lista)
     resultados  = []
     error       = None
 
     if hay_filtros:
-        resultados = q_explorar(vehiculo, formula, pieza, color, version, nivel, zfers_lista or None)
+        resultados = q_explorar(vehiculo, formula, pieza, color, version, nivel, cod_vehiculo, zfers_lista or None)
         if resultados and "_error" in resultados[0]:
             error      = resultados[0]["_error"]
             resultados = []
@@ -588,6 +621,7 @@ def explorar():
         color           = color,
         version         = version,
         nivel           = nivel,
+        cod_vehiculo    = cod_vehiculo,
         zfers_qs        = zfers_qs,
         resultados      = resultados,
         error           = error,
@@ -649,6 +683,7 @@ def detalle_zfer(material: str):
         mercados       = mercados,
         mercados_chart = mercados_chart,
         total_entregas = total_entregas,
+        DIFERENCIALES  = DIFERENCIALES,
     )
 
 @app.route("/combinaciones/<material>")
@@ -724,7 +759,6 @@ def combinaciones(material: str):
             "zpla_list":     [z["material"] for z in zpla_list],
             "es_base":       cod == color_base,
         })
-
     n_existe     = sum(1 for c in matrix if c["estado"] == "EXISTE")
     n_disponible = sum(1 for c in matrix if c["estado"] == "DISPONIBLE")
     n_sin_zpla   = sum(1 for c in matrix if c["estado"] == "SIN_ZPLA")
