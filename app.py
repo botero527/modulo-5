@@ -2,10 +2,14 @@
 app.py — MODULO 5 AGP Glass
 Sistema de consulta y reporte de ZFERs (Colombia CO01)
 """
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 import pyodbc
+import threading
 
 app = Flask(__name__)
+
+# Estado en memoria de jobs SAP activos  {batch_id: ResultadoItem}
+_sap_jobs: dict = {}
 
 # ── Configuración BD ──────────────────────────────────────────────────────────
 DB_SAP = {
@@ -272,7 +276,6 @@ ATNAM_LABELS = {
     "Z_AGP_PARTNUMBER":         "Partnumber AGP",
 }
 
-
 def _decode_route(route: str) -> str:
     """Intenta decodificar código de ruta SAP a nombre de país."""
     if not route:
@@ -515,7 +518,6 @@ def q_zplas_compatibles(formula_code: str, piece_type: str,
     except Exception as e:
         return [{"_error": str(e)}]
 
-
 def q_mercados(entregas: list) -> list:
     """Tabla 4: ODATA_ZCDS_Entregas_Head_CO — conteo por route/mercado."""
     if not entregas:
@@ -540,7 +542,6 @@ def q_mercados(entregas: list) -> list:
         ]
     except Exception:
         return []
-
 
 def q_explorar(vehiculo="", formula="", pieza="", color="", version="", nivel="",
                cod_vehiculo="", zfers_lista: list = None) -> list:
@@ -697,7 +698,7 @@ def index():
         if not raw:
             return render_template("index.html", error=None)
         # Si hay comas → multi-ZFER → explorar
-        zfers = [z.strip() for z in raw.replace(";", ",").split(",") if z.strip()]
+        zfers = [z.strip() for z in raw.replace(";", ",").split(",") if z.strip()][:12]
         if len(zfers) > 1:
             return redirect(url_for("explorar") + "?zfers=" + ",".join(zfers))
         return redirect(url_for("detalle_zfer", material=zfers[0]))
@@ -715,7 +716,7 @@ def explorar():
     cod_vehiculo = request.args.get("cod_vehiculo", "").strip()
     zfers_qs     = request.args.get("zfers",        "").strip()
 
-    zfers_lista = [z.strip() for z in zfers_qs.split(",") if z.strip()] if zfers_qs else []
+    zfers_lista = [z.strip() for z in zfers_qs.split(",") if z.strip()][:12] if zfers_qs else []
 
     hay_filtros = any([vehiculo, formula, pieza, color, version, nivel, cod_vehiculo]) or bool(zfers_lista)
     resultados  = []
@@ -911,6 +912,106 @@ def combinaciones(material: str):
         n_disponible   = n_disponible,
         n_sin_zpla     = n_sin_zpla,
     )
+
+
+# ── API Bloqueos ───────────────────────────────────────────────────────────────
+
+@app.route("/api/bloquear", methods=["POST"])
+def api_bloquear():
+    try:
+        from db_local import bloquear
+        data = request.get_json(force=True)
+        ok = bloquear(
+            zfer         = data.get("zfer", ""),
+            color_codigo = data.get("color", ""),
+            formula      = data.get("formula", ""),
+            tipo_pieza   = data.get("tipo_pieza", ""),
+            acero_variante = data.get("acero", ""),
+            motivo       = data.get("motivo", "Sin motivo"),
+            bloqueado_por = data.get("usuario", "web"),
+        )
+        return jsonify({"ok": ok})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/desbloquear", methods=["POST"])
+def api_desbloquear():
+    try:
+        from db_local import desbloquear
+        data = request.get_json(force=True)
+        ok = desbloquear(data.get("zfer", ""), data.get("color", ""))
+        return jsonify({"ok": ok})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/bloqueos/<material>")
+def api_bloqueos(material: str):
+    try:
+        from db_local import bloqueos_para_zfer
+        return jsonify(bloqueos_para_zfer(material.strip()))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── API SAP ────────────────────────────────────────────────────────────────────
+
+@app.route("/api/sap/ejecutar", methods=["POST"])
+def api_sap_ejecutar():
+    """Lanza la automatización SAP en hilo separado para una combinación."""
+    try:
+        data        = request.get_json(force=True)
+        zfer_base    = data.get("zfer", "").strip()
+        color_cod    = data.get("color", "").strip()
+        color_nombre = data.get("color_nombre", color_cod)
+        franja       = data.get("franja", "00") or "00"
+        pn_base      = data.get("pn_base", "")
+        zpla         = data.get("zpla", "").strip()
+
+        if not zfer_base or not color_cod:
+            return jsonify({"ok": False, "error": "Faltan parámetros zfer y color"}), 400
+
+        from sap_auto import procesar_combinacion, ResultadoItem
+        import uuid as _uuid
+
+        batch_id = str(_uuid.uuid4())[:8]
+        placeholder = ResultadoItem(batch_id=batch_id, zfer_base=zfer_base,
+                                    color_codigo=color_cod, estado="EN_PROCESO")
+        _sap_jobs[batch_id] = placeholder
+
+        def _run():
+            res = procesar_combinacion(zfer_base, color_cod, color_nombre, franja, pn_base, zpla)
+            res.batch_id = batch_id
+            _sap_jobs[batch_id] = res
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+
+        return jsonify({"ok": True, "batch_id": batch_id})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/sap/estado/<batch_id>")
+def api_sap_estado(batch_id: str):
+    """Consulta el estado de un job SAP."""
+    job = _sap_jobs.get(batch_id)
+    if not job:
+        return jsonify({"error": "batch_id no encontrado"}), 404
+    return jsonify({
+        "batch_id":     job.batch_id,
+        "estado":       job.estado,
+        "zfer_base":    job.zfer_base,
+        "color":        job.color_codigo,
+        "zfer_nuevo":   job.zfer_nuevo,
+        "zfor_nuevo":   job.zfor_nuevo,
+        "zpla":         job.zpla,
+        "posiciones":   job.posiciones_bom,
+        "error":        job.error,
+        "duracion_seg": job.duracion_seg,
+        "log":          job.log[-20:],   # últimas 20 líneas
+    })
 
 
 if __name__ == "__main__":

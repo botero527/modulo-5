@@ -377,4 +377,228 @@
 </details>
 {% endif %}
 
+<!-- ── Panel SAP ────────────────────────────────────────────────────────────── -->
+{% if pn_parsed %}
+<div class="card mt-4" id="sap-panel">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-robot me-2" style="color:var(--accent);"></i>Automatización SAP</span>
+    <span style="font-size:.75rem; color:var(--muted);">Solo colores con estado <strong style="color:#e3b341;">DISPONIBLE</strong></span>
+  </div>
+  <div class="card-body">
+    <div style="overflow-x:auto; margin-bottom:1rem;">
+      <table style="width:100%; border-collapse:collapse; font-size:.87rem;" id="sap-table">
+        <thead>
+          <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+            <th style="padding:.45rem .7rem; width:36px;"></th>
+            <th style="padding:.45rem .7rem;">Color</th>
+            <th style="padding:.45rem .7rem;">Nombre</th>
+            <th style="padding:.45rem .7rem;">ZPLA</th>
+            <th style="padding:.45rem .7rem;">Bloqueo</th>
+            <th style="padding:.45rem .7rem;">Estado SAP</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for c in matrix %}
+        {% if c.estado == 'DISPONIBLE' %}
+        <tr class="market-tr" data-color="{{ c.color_codigo }}" data-color-nombre="{{ c.color_nombre }}" data-zpla="{{ c.zpla }}">
+          <td style="padding:.45rem .7rem; text-align:center;">
+            <input type="checkbox" class="sap-check" value="{{ c.color_codigo }}"
+                   style="width:16px; height:16px; accent-color:var(--accent); cursor:pointer;">
+          </td>
+          <td style="padding:.45rem .7rem;"><span class="tag t-color">{{ c.color_codigo }}</span></td>
+          <td style="padding:.45rem .7rem; font-weight:600; color:var(--text);">{{ c.color_nombre }}</td>
+          <td style="padding:.45rem .7rem; color:var(--muted); font-size:.82rem; font-weight:600;">{{ c.zpla }}</td>
+          <td style="padding:.45rem .7rem;" class="td-bloqueo-{{ c.color_codigo }}">
+            <button class="btn-bloquear" data-color="{{ c.color_codigo }}" data-color-nombre="{{ c.color_nombre }}"
+                    style="background:#2d1f1f; border:1px solid #f85149; color:#ffa198; border-radius:8px; padding:.2rem .6rem; font-size:.75rem; cursor:pointer;"
+                    onmouseover="this.style.background='#4a1f1f'" onmouseout="this.style.background='#2d1f1f'">
+              <i class="bi bi-lock me-1"></i>Bloquear
+            </button>
+          </td>
+          <td style="padding:.45rem .7rem;" class="td-sap-{{ c.color_codigo }}">
+            <span style="color:#484f58; font-size:.78rem;">—</span>
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% set n_disp = matrix | selectattr('estado', 'eq', 'DISPONIBLE') | list | length %}
+    {% if n_disp == 0 %}
+    <p style="color:var(--muted); font-size:.87rem; text-align:center; padding:1rem 0;">
+      No hay colores en estado DISPONIBLE para este ZFER.
+    </p>
+    {% else %}
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <button id="btn-selec-all" style="background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:8px; padding:.35rem .8rem; font-size:.82rem; cursor:pointer;">
+        <i class="bi bi-check-all me-1"></i>Seleccionar todo
+      </button>
+      <button id="btn-ejecutar-sap"
+              style="background:var(--accent); color:#000; font-weight:700; border:none; border-radius:8px; padding:.45rem 1.2rem; font-size:.88rem; cursor:pointer; transition:.15s;"
+              onmouseover="this.style.background='#00a8d8'" onmouseout="this.style.background='var(--accent)'">
+        <i class="bi bi-play-circle-fill me-1"></i>Ejecutar en SAP
+      </button>
+      <span id="sap-status-global" style="font-size:.82rem; color:var(--muted);"></span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Modal Bloquear ────────────────────────────────────────────────────────── -->
+<div id="modal-bloqueo" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:16px; padding:1.8rem; max-width:440px; width:90%;">
+    <h5 style="margin:0 0 1rem; font-weight:800;">Bloquear color <span id="modal-color-lbl" style="color:#ffa198;"></span></h5>
+    <label style="font-size:.82rem; color:var(--muted);">Motivo del bloqueo</label>
+    <textarea id="modal-motivo" rows="3" style="width:100%; margin-top:.4rem; margin-bottom:1rem;
+              background:var(--card-bg); border:1px solid var(--border); color:var(--text);
+              border-radius:8px; padding:.6rem .8rem; font-size:.9rem; resize:vertical;"
+              placeholder="Ej: No aplica para este mercado, cliente no requiere…"></textarea>
+    <div class="d-flex gap-2 justify-content-end">
+      <button id="modal-cancel"
+              style="background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:8px; padding:.4rem 1rem; cursor:pointer;">
+        Cancelar
+      </button>
+      <button id="modal-confirm"
+              style="background:#f85149; color:#fff; font-weight:700; border:none; border-radius:8px; padding:.4rem 1.1rem; cursor:pointer;">
+        <i class="bi bi-lock-fill me-1"></i>Bloquear
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ZFER_BASE    = "{{ material }}";
+const FORMULA_CODE = "{{ formula_code }}";
+const PIECE_TYPE   = "{{ piece_type }}";
+const FRANJA_BASE  = "{{ shade_band }}";
+const PN_BASE      = "{{ partnumber }}";
+
+// ── Bloqueos ──────────────────────────────────────────────────────────────────
+let _modalColor = "";
+const modal       = document.getElementById("modal-bloqueo");
+const modalLbl    = document.getElementById("modal-color-lbl");
+const modalMotivo = document.getElementById("modal-motivo");
+
+document.querySelectorAll(".btn-bloquear").forEach(btn => {
+  btn.addEventListener("click", () => {
+    _modalColor = btn.dataset.color;
+    modalLbl.textContent = `${btn.dataset.color} — ${btn.dataset.colorNombre}`;
+    modalMotivo.value = "";
+    modal.style.display = "flex";
+  });
+});
+
+document.getElementById("modal-cancel").addEventListener("click", () => {
+  modal.style.display = "none";
+});
+
+document.getElementById("modal-confirm").addEventListener("click", async () => {
+  const motivo = modalMotivo.value.trim();
+  if (!motivo) { alert("Escribe un motivo para el bloqueo."); return; }
+  modal.style.display = "none";
+  const resp = await fetch("/api/bloquear", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ zfer: ZFER_BASE, color: _modalColor, motivo,
+                           formula: FORMULA_CODE, tipo_pieza: PIECE_TYPE, acero: "" }),
+  });
+  const data = await resp.json();
+  if (data.ok) {
+    const td = document.querySelector(`.td-bloqueo-${_modalColor}`);
+    if (td) td.innerHTML = `<span class="tag" style="background:#2d1f1f; color:#ffa198; border:1px solid #f85149; font-size:.73rem;"><i class="bi bi-lock-fill me-1"></i>Bloqueado</span>`;
+    const cb = document.querySelector(`.sap-check[value="${_modalColor}"]`);
+    if (cb) { cb.checked = false; cb.disabled = true; }
+  } else {
+    alert("Error al bloquear: " + (data.error || "desconocido"));
+  }
+});
+
+// ── Seleccionar todo ──────────────────────────────────────────────────────────
+const btnSelAll = document.getElementById("btn-selec-all");
+if (btnSelAll) {
+  let selAll = false;
+  btnSelAll.addEventListener("click", () => {
+    selAll = !selAll;
+    document.querySelectorAll(".sap-check:not(:disabled)").forEach(cb => cb.checked = selAll);
+    btnSelAll.innerHTML = selAll
+      ? '<i class="bi bi-x-circle me-1"></i>Deseleccionar todo'
+      : '<i class="bi bi-check-all me-1"></i>Seleccionar todo';
+  });
+}
+
+// ── Ejecutar SAP ──────────────────────────────────────────────────────────────
+const btnEjec   = document.getElementById("btn-ejecutar-sap");
+const statusGlb = document.getElementById("sap-status-global");
+
+if (btnEjec) {
+  btnEjec.addEventListener("click", async () => {
+    const seleccionados = [...document.querySelectorAll(".sap-check:checked")];
+    if (seleccionados.length === 0) {
+      statusGlb.textContent = "Selecciona al menos un color.";
+      return;
+    }
+    btnEjec.disabled = true;
+    statusGlb.textContent = `Lanzando ${seleccionados.length} job(s)…`;
+
+    for (const cb of seleccionados) {
+      const color       = cb.value;
+      const row         = cb.closest("tr");
+      const colorNombre = row.dataset.colorNombre;
+      const zpla        = row.dataset.zpla;
+      const tdSap       = document.querySelector(`.td-sap-${color}`);
+
+      if (tdSap) tdSap.innerHTML = '<span style="color:#79c0ff; font-size:.78rem;"><i class="bi bi-arrow-repeat me-1"></i>En proceso…</span>';
+
+      try {
+        const resp = await fetch("/api/sap/ejecutar", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ zfer: ZFER_BASE, color, color_nombre: colorNombre, zpla, franja: FRANJA_BASE, pn_base: PN_BASE }),
+        });
+        const data = await resp.json();
+        if (!data.ok) {
+          if (tdSap) tdSap.innerHTML = `<span style="color:#ffa198; font-size:.75rem;"><i class="bi bi-x-circle me-1"></i>${data.error||'Error'}</span>`;
+          continue;
+        }
+        _pollSap(data.batch_id, color, tdSap);
+      } catch (e) {
+        if (tdSap) tdSap.innerHTML = `<span style="color:#ffa198; font-size:.75rem;"><i class="bi bi-x-circle me-1"></i>${e.message}</span>`;
+      }
+    }
+
+    statusGlb.textContent = "Jobs lanzados — monitoreando…";
+    btnEjec.disabled = false;
+  });
+}
+
+function _pollSap(batchId, color, tdSap) {
+  const iv = setInterval(async () => {
+    try {
+      const resp = await fetch(`/api/sap/estado/${batchId}`);
+      const data = await resp.json();
+      if (data.estado === "EN_PROCESO") return;
+      clearInterval(iv);
+      if (data.estado === "OK") {
+        if (tdSap) tdSap.innerHTML = `
+          <span style="color:#56d364; font-size:.78rem; font-weight:700;">
+            <i class="bi bi-check-circle-fill me-1"></i>OK
+          </span>
+          <a href="/zfer/${data.zfer_nuevo}" style="color:var(--accent); font-size:.75rem; margin-left:.4rem; text-decoration:none;">${data.zfer_nuevo}</a>`;
+      } else {
+        if (tdSap) tdSap.innerHTML = `
+          <span style="color:#ffa198; font-size:.75rem;" title="${data.error}">
+            <i class="bi bi-x-circle-fill me-1"></i>Error
+          </span>
+          <span style="color:#484f58; font-size:.7rem; margin-left:.3rem; display:block;">${(data.error||'').substring(0,80)}</span>`;
+      }
+    } catch (e) { clearInterval(iv); }
+  }, 5000);
+}
+</script>
 {% endblock %}
