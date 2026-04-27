@@ -221,10 +221,12 @@ class AutomatizadorSAP:
 
     # ── ZMME0001 — ejecutar ───────────────────────────────────────────────────
 
-    def zmme0001_ejecutar(self, zfer_base: str, p_color: str, p_franj: str, zpla: str) -> tuple:
+    def zmme0001_ejecutar(self, zfer_base: str, p_color: str, p_franj: str,
+                          zplas_validos: list) -> tuple:
         """
-        ZMME0001 → Homologar → Cambio de Color → escribe ZPLA directo → F8.
-        Retorna (zfer_nuevo, zfor_nuevo, zpla).
+        ZMME0001 → Homologar → Cambio de Color → F4 en ZPLA (SAP sugiere) →
+        valida contra zplas_validos del combinador → doble clic → F8.
+        Retorna (zfer_nuevo, zfor_nuevo, zpla_seleccionado).
         """
         self._cerrar_dialogs_abiertos()
         self._navegar("ZMME0001")
@@ -252,19 +254,67 @@ class AutomatizadorSAP:
         self.session.findById(self._ID_CTX_P_COLOR).text = p_color
         self.session.findById(self._ID_CTX_P_FRANJ).text = p_franj
 
-        # 6. ZPLA con espacio al inicio (así lo graba el SAP recorder)
-        self.session.findById(self._ID_CTX_P_ZPLA).text = f" {zpla.strip()}"
+        # 6. F4 en ZPLA → SAP abre popup con sugerencias
+        self.session.findById(self._ID_CTX_P_ZPLA).setFocus()
+        self.session.findById(self._ID_CTX_P_ZPLA).caretPosition = 0
+        self.session.findById("wnd[0]").sendVKey(4)   # F4
+        self._esperar(T_MEDIO)
 
-        # 7. Foco en FRANJ + caretPosition (exactamente como graba SAP recorder)
+        # 7. Leer popup y seleccionar ZPLA que coincida con los del combinador
+        _ID_POPUP_GRID = "wnd[1]/usr/cntlLO_CONTAINER0500/shellcont/shell"
+        zpla_seleccionado = ""
+        fila_seleccionada = 0
+
+        try:
+            grid_popup = self.session.findById(_ID_POPUP_GRID)
+            n_filas    = grid_popup.RowCount
+            print(f"    F4 ZPLA popup: {n_filas} sugerencias SAP")
+
+            # Leer todos los ZPLAs que sugiere SAP
+            zplas_sap = []
+            for i in range(n_filas):
+                val = ""
+                for col in ("MATNR", "ZPLA", "ZPLARF", "MATERIAL"):
+                    try:
+                        val = str(grid_popup.GetCellValue(i, col) or "").strip()
+                        if val:
+                            break
+                    except Exception:
+                        pass
+                zplas_sap.append(val)
+                print(f"      Sugerencia SAP fila {i}: {val}")
+
+            # Buscar la primera sugerencia de SAP que esté en nuestros ZPLAs válidos
+            zplas_set = {z.strip() for z in zplas_validos if z.strip()}
+            fila_seleccionada = 0   # por defecto tomar la primera sugerencia de SAP
+            for i, z in enumerate(zplas_sap):
+                if z in zplas_set:
+                    fila_seleccionada = i
+                    print(f"    ZPLA validado: fila {i} = {z} (coincide con combinador)")
+                    break
+            else:
+                print(f"    [WARN] Ningún ZPLA del popup coincide con el combinador {zplas_validos} — tomando fila 0: {zplas_sap[0] if zplas_sap else '?'}")
+
+            zpla_seleccionado = zplas_sap[fila_seleccionada] if zplas_sap else ""
+
+            # Seleccionar y doble clic (igual que VBS grabado)
+            grid_popup.selectedRows = str(fila_seleccionada)
+            grid_popup.doubleClickCurrentCell()
+            self._esperar(T_RAPIDO)
+
+        except Exception as e:
+            raise RuntimeError(f"F4 ZPLA popup falló: {e}")
+
+        # 8. Foco en FRANJ + caretPosition antes de F8 (confirmado por VBS)
         self.session.findById(self._ID_CTX_P_FRANJ).setFocus()
         self.session.findById(self._ID_CTX_P_FRANJ).caretPosition = 2
         self._esperar(T_RAPIDO)
 
-        # 8. F8 Ejecutar
+        # 9. F8 Ejecutar
         self.session.findById(self._ID_BTN_EXEC).press()
         self._esperar(T_LENTO)
 
-        # 9. Leer grid resultado
+        # 10. Leer grid resultado
         msg_sap = self._estado_sap()
         try:
             grid       = self.session.findById(self._ID_GRID_RESULT)
@@ -278,13 +328,13 @@ class AutomatizadorSAP:
         if not zfer_nuevo:
             raise RuntimeError(f"ZFER_NUEVO vacío tras ejecutar ZMME0001. SAP: '{msg_sap}'")
 
-        print(f"    ZMME0001 OK: ZFER_NUEVO={zfer_nuevo} | ZFOR={zfor_nuevo} | ZPLA={zpla}")
+        print(f"    ZMME0001 OK: ZFER_NUEVO={zfer_nuevo} | ZFOR={zfor_nuevo} | ZPLA={zpla_seleccionado}")
 
         # F3 para volver a pantalla de selección (necesario para el paso 4)
         self.session.findById("wnd[0]").sendVKey(3)
         self._esperar(T_RAPIDO)
 
-        return zfer_nuevo, zfor_nuevo, zpla.strip()
+        return zfer_nuevo, zfor_nuevo, zpla_seleccionado
 
     # ── ZPPR0020 — Esperar fases en sesión auxiliar ───────────────────────────
 
@@ -536,9 +586,11 @@ class AutomatizadorSAP:
         for idx, pos in enumerate(posiciones):
             self.session.findById(self._ID_BTN_INSERT).press()
             self._esperar(T_RAPIDO)
+            # SAP espera la posición sin ceros a la izquierda (0205 → 205)
+            pos_sin_ceros = str(int(pos)) if pos.isdigit() else pos
             self.session.findById(
                 f"{self._ID_TBL_LISTA}/txtWA_LISTA-POSNR[0,{idx}]"
-            ).text = pos
+            ).text = pos_sin_ceros
             self._esperar(T_RAPIDO)
             # Buscar clase con o sin padding
             clase = clases_dict.get(pos.zfill(4), clases_dict.get(pos, ""))
@@ -547,7 +599,7 @@ class AutomatizadorSAP:
                     f"{self._ID_TBL_LISTA}/ctxtWA_LISTA-CLASE_DESTINO[3,{idx}]"
                 ).text = clase
                 self._esperar(T_RAPIDO)
-            print(f"    Fila {idx}: POS={pos} CLASE={clase or '(sin clase)'}")
+            print(f"    Fila {idx}: POS={pos_sin_ceros} CLASE={clase or '(sin clase)'}")
 
     def zmme0001_segunda_comparar_y_copy(self) -> bool:
         self.session.findById(self._ID_BTN_COMP).press()
@@ -568,7 +620,6 @@ class AutomatizadorSAP:
                         pass
             except Exception:
                 pass
-
             try:
                 self.session.findById("wnd[1]").close()
             except Exception:
@@ -579,7 +630,6 @@ class AutomatizadorSAP:
             self._esperar(T_RAPIDO)
         except Exception:
             pass
-
         if ok:
             try:
                 self.session.findById(self._ID_BTN_COPY_ITEM).press()
@@ -595,42 +645,68 @@ class AutomatizadorSAP:
 
     # ── MM02 — Actualizar PARTNUMBER ─────────────────────────────────────────
 
+    def _primera_opcion_si_popup(self, ses=None):
+        """Acepta wnd[1] con OPTION1 si existe (cualquier popup SAP)."""
+        s = ses or self.session
+        try:
+            s.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+            self._esperar(T_RAPIDO)
+            return True
+        except Exception:
+            pass
+        try:
+            s.findById("wnd[1]").sendVKey(0)
+            self._esperar(T_RAPIDO)
+            return True
+        except Exception:
+            return False
+
     def mm02_actualizar_partnumber(self, material: str, nuevo_pn: str):
+        """
+        MM02 → Clasificación → PIEZA → actualiza PARTNUMBER AGP.
+        Flujo confirmado por VBS: Enter tras llenar campo → F3 → OPTION1 → F3.
+        Cualquier popup intermedio se acepta con primera opción.
+        """
         self._cerrar_dialogs_abiertos()
-        self._navegar("MM02")
-        self.session.findById(self._ID_MM02_MATNR).text = material
+
+        self.session.findById(self._ID_TCODE_BOX).text = "MM02"
         self.session.findById("wnd[0]").sendVKey(0)
         self._esperar(T_MEDIO)
-        for _ in range(2):
-            try:
-                self.session.findById("wnd[1]").sendVKey(0)
-                self._esperar(T_RAPIDO)
-            except Exception:
-                break
 
+        self.session.findById(self._ID_MM02_MATNR).text = material
+        self.session.findById("wnd[0]").sendVKey(0)   # Enter → selección de vistas
+        self._esperar(T_MEDIO)
+
+        # Aceptar popup de selección de vistas si aparece
+        self._primera_opcion_si_popup()
+
+        # Tab Clasificación
         self.session.findById(self._ID_MM02_TAB03).select()
         self._esperar(T_RAPIDO)
+        self._primera_opcion_si_popup()   # popup lista material si aparece
+
+        # Tab PIEZA
         self.session.findById(self._ID_MM02_TAB4).select()
         self._esperar(T_RAPIDO)
 
-        self.session.findById(f"{self._ID_MM02_TABLA}/ctxtRCTMS-MWERT[1,0]").text = nuevo_pn
+        # Escribir nuevo PARTNUMBER en fila 0
+        campo_pn = f"{self._ID_MM02_TABLA}/ctxtRCTMS-MWERT[1,0]"
+        self.session.findById(campo_pn).text = nuevo_pn
+        self.session.findById(campo_pn).caretPosition = len(nuevo_pn)
+        self.session.findById("wnd[0]").sendVKey(0)   # Enter para confirmar valor
         self._esperar(T_RAPIDO)
 
-        # Guardar (btn[0] dos veces como en VBS grabado)
-        self.session.findById("wnd[0]/tbar[0]/btn[0]").press()
-        self._esperar(T_RAPIDO)
-        self.session.findById("wnd[0]/tbar[0]/btn[0]").press()
+        # F3 → SAP pregunta si guardar
+        self.session.findById("wnd[0]/tbar[0]/btn[3]").press()
         self._esperar(T_MEDIO)
 
-        # Confirmar diálogo si aparece
-        try:
-            self.session.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
-            self._esperar(T_RAPIDO)
-        except Exception:
-            pass
+        # Siempre primera opción (guardar)
+        self._primera_opcion_si_popup()
 
+        # F3 para volver (igual que VBS)
         try:
-            self.session.findById(self._ID_MM02_TAB03).select()
+            self.session.findById("wnd[0]/tbar[0]/btn[3]").press()
+            self._esperar(T_RAPIDO)
         except Exception:
             pass
 
@@ -640,12 +716,13 @@ class AutomatizadorSAP:
 
     def _leer_clases_zpla_sap(self, zpla: str) -> dict:
         """
-        Abre sesión auxiliar SAP, navega a CS03 con el ZPLA como material,
-        lee la tabla de componentes y retorna {posicion: clase_destino}.
-        IDs confirmados por VBS grabado (cs03 .vbs).
+        Abre sesión auxiliar, navega ZPPR0008 (radio LMat alt.), filtra por
+        material=ZPLA y centro=CO01, lee el ALV completo.
+        Retorna {posicion_zfill4: clase, posicion: clase}.
+        IDs y flujo confirmados por VBS grabado (zppr0008.vbs).
         """
         resultado = {}
-        print(f"     Leyendo clases ZPLA {zpla} desde CS03...")
+        print(f"     Leyendo clases ZPLA {zpla} desde ZPPR0008...")
         self.session.createSession()
         self._esperar(T_LENTO)
 
@@ -653,76 +730,64 @@ class AutomatizadorSAP:
         ses = self.conn_sap.Children(idx_nueva)
         ses.findById("wnd[0]").maximize()
 
-        # Ruta de la tabla — confirmada por VBS
-        _ID_TBL_CS03 = (
-            "wnd[0]/usr/tabsTS_ITOV/tabpTCMA"
-            "/ssubSUBPAGE:SAPL CSDI:0152/tblSAPLCSDITCMAT"
-        )
-
         try:
-            ses.findById(self._ID_TCODE_BOX).text = "CS03"
+            ses.findById(self._ID_TCODE_BOX).text = "ZPPR0008"
             ses.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
 
-            # Campos confirmados por VBS (RC29N, no RC29B)
-            ses.findById("wnd[0]/usr/ctxtRC29N-MATNR").text = zpla
-            ses.findById("wnd[0]/usr/ctxtRC29N-WERKS").text = "CO01"
-            ses.findById("wnd[0]/usr/ctxtRC29N-STLAN").text = "1"
-            ses.findById("wnd[0]/usr/ctxtRC29N-STLAN").setFocus()
-            ses.findById("wnd[0]/usr/ctxtRC29N-STLAN").caretPosition = 1
-            ses.findById("wnd[0]").sendVKey(0)   # Enter → pantalla de componentes
+            # Radio "por material" — confirmado por VBS
+            ses.findById("wnd[0]/usr/radRB_2").setFocus()
+            ses.findById("wnd[0]/usr/radRB_2").select()
+            self._esperar(T_RAPIDO)
+
+            ses.findById("wnd[0]/usr/ctxtS_MATNR2-LOW").text = zpla
+            ses.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").text  = "CO01"
+            ses.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").setFocus()
+            ses.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").caretPosition = 4
+
+            ses.findById("wnd[0]/tbar[1]/btn[8]").press()   # F8 Ejecutar
             self._esperar(T_LENTO)
 
-            # Leer tabla GuiTableControl
+            grid = ses.findById("wnd[0]/usr/cntlGRID1/shellcont/shell")
+            n    = grid.RowCount
+            print(f"      ZPPR0008 grid: {n} filas")
+
+            # Imprimir columnas disponibles para debug
             try:
-                tabla = ses.findById(_ID_TBL_CS03)
-                n = tabla.RowCount
-                print(f"      CS03 tabla encontrada: {n} filas")
-                for i in range(n):
-                    pos   = ""
-                    clase = ""
-                    # POSNR — campo confirmado por VBS: RC29P-POSNR
-                    for campo_pos in ("RC29P-POSNR", "POSNR"):
-                        try:
-                            pos = str(tabla.GetCell(i, campo_pos).text or "").strip()
-                            if pos:
-                                break
-                        except Exception:
-                            pass
-                    # Clase — intentar campos comunes de categoría de posición CS03
-                    for campo_cls in ("RC29P-POSTP", "RC29P-KLART", "POSTP", "KLART", "CLASE"):
-                        try:
-                            clase = str(tabla.GetCell(i, campo_cls).text or "").strip()
-                            if clase:
-                                break
-                        except Exception:
-                            pass
-                    if pos:
-                        resultado[pos.zfill(4)] = clase
-                        resultado[pos]          = clase
-                        print(f"      CS03 BOM: POS={pos.zfill(4)} CLASE={clase or '(vacía)'}")
-            except Exception as e_tbl:
-                print(f"      [WARN] Tabla CS03 no encontrada ({e_tbl}) — buscando recursivo")
-                found = self._buscar_grid_recursivo(ses.findById("wnd[0]"))
-                if found:
-                    n = found.RowCount
-                    for i in range(n):
-                        pos = ""
-                        try:
-                            pos = str(found.GetCellValue(i, "POSNR") or "").strip()
-                        except Exception:
-                            pass
-                        if pos:
-                            resultado[pos.zfill(4)] = ""
-                            resultado[pos]          = ""
-                            print(f"      CS03 fallback: POS={pos.zfill(4)}")
+                cols = list(grid.ColumnOrder)
+                print(f"      Columnas disponibles: {cols}")
+            except Exception:
+                cols = []
+
+            for i in range(n):
+                pos   = ""
+                clase = ""
+                for col in ("POSNR", "POSICION", "POS"):
+                    try:
+                        v = str(grid.GetCellValue(i, col) or "").strip()
+                        if v:
+                            pos = v
+                            break
+                    except Exception:
+                        pass
+                for col in ("CLASE", "IDNRK", "MATNR_K", "COMP", "CLASS"):
+                    try:
+                        v = str(grid.GetCellValue(i, col) or "").strip()
+                        if v:
+                            clase = v
+                            break
+                    except Exception:
+                        pass
+                if pos:
+                    resultado[pos.zfill(4)] = clase
+                    resultado[pos]          = clase
+                    print(f"      ZPPR0008 fila {i}: POS={pos.zfill(4)} CLASE={clase or '(vacía)'}")
 
             if not resultado:
-                print(f"      [WARN] No se leyeron posiciones para ZPLA {zpla} en CS03")
+                print(f"      [WARN] Sin datos en ZPPR0008 para ZPLA {zpla}")
 
         except Exception as e:
             print(f"      [WARN] _leer_clases_zpla_sap {zpla}: {e}")
-
         finally:
             try:
                 ses.findById(self._ID_TCODE_BOX).text = "/i"
@@ -805,8 +870,10 @@ class AutomatizadorSAP:
 
             # PASO 2 — ZMME0001 ejecutar
             res._log(f"PASO 2: ZMME0001 → color={p_color} franja={p_franj}")
+            # zpla puede ser string simple o lista separada por comas
+            zplas_validos = [z.strip() for z in str(zpla).split(",") if z.strip()]
             zfer_nuevo, zfor_nuevo, zpla_usado = self.zmme0001_ejecutar(
-                zfer_base, p_color, p_franj, zpla
+                zfer_base, p_color, p_franj, zplas_validos
             )
             res.zfer_nuevo = zfer_nuevo
             res.zfor_nuevo = zfor_nuevo

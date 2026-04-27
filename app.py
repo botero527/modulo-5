@@ -979,7 +979,6 @@ def api_sap_ejecutar():
         placeholder = ResultadoItem(batch_id=batch_id, zfer_base=zfer_base,
                                     color_codigo=color_cod, estado="EN_PROCESO")
         _sap_jobs[batch_id] = placeholder
-
         def _run():
             res = procesar_combinacion(zfer_base, color_cod, color_nombre, franja, pn_base, zpla)
             res.batch_id = batch_id
