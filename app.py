@@ -959,58 +959,333 @@ def api_bloqueos(material: str):
 
 @app.route("/api/sap/ejecutar", methods=["POST"])
 def api_sap_ejecutar():
-    """Lanza la automatización SAP en hilo separado para una combinación."""
+    """Lanza automatización SAP para múltiples combinaciones, secuencialmente en un hilo."""
     try:
-        data        = request.get_json(force=True)
-        zfer_base    = data.get("zfer", "").strip()
-        color_cod    = data.get("color", "").strip()
-        color_nombre = data.get("color_nombre", color_cod)
-        franja       = data.get("franja", "00") or "00"
-        pn_base      = data.get("pn_base", "")
-        zpla         = data.get("zpla", "").strip()
-
-        if not zfer_base or not color_cod:
-            return jsonify({"ok": False, "error": "Faltan parámetros zfer y color"}), 400
-
-        from sap_auto import procesar_combinacion, ResultadoItem
+        data = request.get_json(force=True)
         import uuid as _uuid
 
+        # Acepta array "combinaciones" o parámetros individuales (compatibilidad)
+        combis_raw = data.get("combinaciones")
+        if not combis_raw:
+            zfer_base = data.get("zfer", "").strip()
+            color_cod = data.get("color", "").strip()
+            if not zfer_base or not color_cod:
+                return jsonify({"ok": False, "error": "Faltan parámetros"}), 400
+            combis_raw = [{
+                "zfer":        zfer_base,
+                "color":       color_cod,
+                "color_nombre": data.get("color_nombre", color_cod),
+                "franja":      data.get("franja", "00") or "00",
+                "pn_base":     data.get("pn_base", ""),
+                "zpla":        data.get("zpla", ""),
+            }]
+
+        import datetime as _dt
         batch_id = str(_uuid.uuid4())[:8]
-        placeholder = ResultadoItem(batch_id=batch_id, zfer_base=zfer_base,
-                                    color_codigo=color_cod, estado="EN_PROCESO")
-        _sap_jobs[batch_id] = placeholder
-        def _run():
-            res = procesar_combinacion(zfer_base, color_cod, color_nombre, franja, pn_base, zpla)
-            res.batch_id = batch_id
-            _sap_jobs[batch_id] = res
+        _sap_jobs[batch_id] = {
+            "estado":       "EN_PROCESO",
+            "total":        len(combis_raw),
+            "procesados":   0,
+            "items":        [],
+            "zfer_base":    combis_raw[0].get("zfer", "") if combis_raw else "",
+            "pn_base":      combis_raw[0].get("pn_base", "") if combis_raw else "",
+            "franja":       combis_raw[0].get("franja", "") if combis_raw else "",
+            "fecha_inicio": _dt.datetime.now().isoformat(timespec="seconds"),
+            "fecha_fin":    None,
+            "usuario_sap":  "PROGRAING",
+        }
 
-        t = threading.Thread(target=_run, daemon=True)
-        t.start()
+        def _run_batch():
+            from sap_auto import procesar_combinacion as _pc
+            import datetime as _dt2
+            for c in combis_raw:
+                zfer  = c.get("zfer", "").strip()
+                color = c.get("color", "").strip()
+                if not zfer or not color:
+                    continue
+                t0  = _dt2.datetime.now()
+                res = _pc(
+                    zfer, color,
+                    c.get("color_nombre", color),
+                    c.get("franja", "00") or "00",
+                    c.get("pn_base", ""),
+                    c.get("zpla", ""),
+                )
+                job = _sap_jobs[batch_id]
+                job["items"].append({
+                    "color":        color,
+                    "color_nombre": c.get("color_nombre", color),
+                    "pn_base":      c.get("pn_base", ""),
+                    "zpla_entrada": c.get("zpla", ""),
+                    "estado":       res.estado,
+                    "zfer_nuevo":   res.zfer_nuevo,
+                    "zfor_nuevo":   res.zfor_nuevo,
+                    "zpla":         res.zpla,
+                    "posiciones":   res.posiciones_bom,
+                    "error":        res.error,
+                    "duracion_seg": res.duracion_seg,
+                    "fecha_inicio": t0.isoformat(timespec="seconds"),
+                    "fecha_fin":    _dt2.datetime.now().isoformat(timespec="seconds"),
+                    "log":          res.log,
+                })
+                job["procesados"] += 1
+            _sap_jobs[batch_id]["estado"]    = "COMPLETADO"
+            _sap_jobs[batch_id]["fecha_fin"] = _dt2.datetime.now().isoformat(timespec="seconds")
 
-        return jsonify({"ok": True, "batch_id": batch_id})
+        threading.Thread(target=_run_batch, daemon=True).start()
+        return jsonify({"ok": True, "batch_id": batch_id, "total": len(combis_raw)})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/api/sap/estado/<batch_id>")
 def api_sap_estado(batch_id: str):
-    """Consulta el estado de un job SAP."""
+    """Consulta el estado de un batch SAP."""
     job = _sap_jobs.get(batch_id)
     if not job:
         return jsonify({"error": "batch_id no encontrado"}), 404
     return jsonify({
-        "batch_id":     job.batch_id,
-        "estado":       job.estado,
-        "zfer_base":    job.zfer_base,
-        "color":        job.color_codigo,
-        "zfer_nuevo":   job.zfer_nuevo,
-        "zfor_nuevo":   job.zfor_nuevo,
-        "zpla":         job.zpla,
-        "posiciones":   job.posiciones_bom,
-        "error":        job.error,
-        "duracion_seg": job.duracion_seg,
-        "log":          job.log[-20:],   # últimas 20 líneas
+        "batch_id":     batch_id,
+        "estado":       job["estado"],
+        "total":        job["total"],
+        "procesados":   job["procesados"],
+        "items":        job["items"],
+        "zfer_base":    job.get("zfer_base", ""),
+        "pn_base":      job.get("pn_base", ""),
+        "franja":       job.get("franja", ""),
+        "fecha_inicio": job.get("fecha_inicio", ""),
+        "fecha_fin":    job.get("fecha_fin", ""),
+        "usuario_sap":  job.get("usuario_sap", "PROGRAING"),
+        "log":          [],
     })
+
+
+@app.route("/api/sap/reporte/<batch_id>")
+def api_sap_reporte(batch_id: str):
+    """Genera y descarga reporte Excel del batch SAP."""
+    job = _sap_jobs.get(batch_id)
+    if not job:
+        return "Batch no encontrado", 404
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        import io, datetime as _dt
+
+        wb = openpyxl.Workbook()
+
+        # ── Estilos ──────────────────────────────────────────────────────────
+        H_FILL   = PatternFill("solid", fgColor="0D1117")
+        OK_FILL  = PatternFill("solid", fgColor="1A3A2A")
+        ERR_FILL = PatternFill("solid", fgColor="3A1A1A")
+        HDR_FILL = PatternFill("solid", fgColor="161B22")
+        TH_FILL  = PatternFill("solid", fgColor="21262D")
+        thin     = Side(style="thin", color="30363D")
+        brd      = Border(left=thin, right=thin, top=thin, bottom=thin)
+        fnt_h    = Font(name="Calibri", bold=True, color="E6EDF3", size=11)
+        fnt_ok   = Font(name="Calibri", bold=True, color="56D364", size=10)
+        fnt_err  = Font(name="Calibri", bold=True, color="FFA198", size=10)
+        fnt_muted= Font(name="Calibri", color="8B949E", size=10)
+        fnt_norm = Font(name="Calibri", color="E6EDF3", size=10)
+        cnt      = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        lft      = Alignment(horizontal="left",   vertical="center", wrap_text=True)
+
+        items  = job.get("items", [])
+        n_ok   = sum(1 for i in items if i.get("estado") == "OK")
+        n_err  = sum(1 for i in items if i.get("estado") == "ERROR")
+        t_segs = sum(i.get("duracion_seg", 0) for i in items)
+
+        def set_col_widths(ws, widths):
+            for col, w in enumerate(widths, 1):
+                ws.column_dimensions[get_column_letter(col)].width = w
+
+        def add_header_row(ws, cols, row=1):
+            for c, title in enumerate(cols, 1):
+                cell = ws.cell(row=row, column=c, value=title)
+                cell.font      = fnt_h
+                cell.fill      = TH_FILL
+                cell.border    = brd
+                cell.alignment = cnt
+
+        # ════════════════════════════════════════════════════════════════════
+        # HOJA 1 — RESUMEN
+        # ════════════════════════════════════════════════════════════════════
+        ws1 = wb.active
+        ws1.title = "RESUMEN"
+        ws1.sheet_view.showGridLines = False
+        ws1.row_dimensions[1].height = 40
+
+        # Título
+        ws1.merge_cells("A1:F1")
+        t = ws1["A1"]
+        t.value     = "🔷  REPORTE DE AUTOMATIZACIÓN SAP — AGP GLASS"
+        t.font      = Font(name="Calibri", bold=True, color="58A6FF", size=16)
+        t.fill      = H_FILL
+        t.alignment = Alignment(horizontal="center", vertical="center")
+
+        # Info batch
+        meta = [
+            ("Batch ID",        batch_id),
+            ("ZFER Base",       job.get("zfer_base", "—")),
+            ("PN Base",         job.get("pn_base", "—")),
+            ("Franja",          job.get("franja", "—")),
+            ("Usuario SAP",     job.get("usuario_sap", "PROGRAING")),
+            ("Fecha Inicio",    job.get("fecha_inicio", "—")),
+            ("Fecha Fin",       job.get("fecha_fin", "—")),
+            ("Duración total",  f"{round(t_segs/60, 1)} min ({int(t_segs)}s)"),
+        ]
+        for r, (k, v) in enumerate(meta, 3):
+            lbl  = ws1.cell(row=r, column=1, value=k)
+            val  = ws1.cell(row=r, column=2, value=str(v))
+            lbl.font = fnt_h;  lbl.fill = TH_FILL; lbl.border = brd; lbl.alignment = lft
+            val.font = fnt_norm; val.fill = HDR_FILL; val.border = brd; val.alignment = lft
+
+        # KPIs
+        kpis = [
+            ("TOTAL",    len(items), "E6EDF3"),
+            ("✓ OK",     n_ok,       "56D364"),
+            ("✗ ERRORES",n_err,      "FFA198"),
+            ("TIEMPO",   f"{round(t_segs/60,1)} min", "E3B341"),
+        ]
+        for c, (label, val, color) in enumerate(kpis, 1):
+            ws1.row_dimensions[12].height = 50
+            ws1.row_dimensions[13].height = 30
+            lc = ws1.cell(row=12, column=c, value=label)
+            lc.font = Font(name="Calibri", bold=True, color=color, size=12)
+            lc.fill = TH_FILL; lc.border = brd; lc.alignment = cnt
+            vc = ws1.cell(row=13, column=c, value=val)
+            vc.font = Font(name="Calibri", bold=True, color=color, size=20)
+            vc.fill = HDR_FILL; vc.border = brd; vc.alignment = cnt
+
+        set_col_widths(ws1, [22, 35, 18, 18])
+
+        # ════════════════════════════════════════════════════════════════════
+        # HOJA 2 — DETALLE
+        # ════════════════════════════════════════════════════════════════════
+        ws2 = wb.create_sheet("DETALLE")
+        ws2.sheet_view.showGridLines = False
+
+        ws2.merge_cells("A1:I1")
+        t2 = ws2["A1"]
+        t2.value = "DETALLE POR COMBINACIÓN"
+        t2.font  = Font(name="Calibri", bold=True, color="58A6FF", size=13)
+        t2.fill  = H_FILL; t2.alignment = cnt
+        ws2.row_dimensions[1].height = 28
+
+        cols2 = ["#", "Color Código", "Color Nombre", "Estado",
+                 "ZFER Nuevo", "ZFOR Nuevo", "ZPLA Usado",
+                 "Posiciones BOM", "Duración (s)"]
+        add_header_row(ws2, cols2, row=2)
+
+        for i, item in enumerate(items, 1):
+            r    = i + 2
+            es   = item.get("estado", "")
+            fill = OK_FILL if es == "OK" else ERR_FILL if es == "ERROR" else HDR_FILL
+            vals = [
+                i,
+                item.get("color", ""),
+                item.get("color_nombre", ""),
+                es,
+                item.get("zfer_nuevo", ""),
+                item.get("zfor_nuevo", ""),
+                item.get("zpla", ""),
+                ", ".join(item.get("posiciones", [])),
+                item.get("duracion_seg", 0),
+            ]
+            for c, v in enumerate(vals, 1):
+                cell = ws2.cell(row=r, column=c, value=v)
+                cell.fill   = fill
+                cell.border = brd
+                cell.alignment = cnt if c in (1, 4, 9) else lft
+                if c == 4:
+                    cell.font = fnt_ok if es == "OK" else fnt_err
+                else:
+                    cell.font = fnt_norm
+
+        set_col_widths(ws2, [5, 14, 30, 12, 18, 18, 18, 28, 14])
+
+        # ════════════════════════════════════════════════════════════════════
+        # HOJA 3 — ERRORES (solo si hay)
+        # ════════════════════════════════════════════════════════════════════
+        if n_err > 0:
+            ws3 = wb.create_sheet("ERRORES")
+            ws3.sheet_view.showGridLines = False
+            ws3.merge_cells("A1:D1")
+            t3 = ws3["A1"]
+            t3.value = f"ERRORES DETALLADOS — {n_err} item(s)"
+            t3.font  = Font(name="Calibri", bold=True, color="FFA198", size=13)
+            t3.fill  = H_FILL; t3.alignment = cnt
+            ws3.row_dimensions[1].height = 28
+
+            add_header_row(ws3, ["Color", "Color Nombre", "Error", "Log completo"], row=2)
+            set_col_widths(ws3, [14, 30, 60, 80])
+
+            fila_err = 3
+            for item in items:
+                if item.get("estado") != "ERROR":
+                    continue
+                log_txt = "\n".join(item.get("log", []))
+                for c, v in enumerate([
+                    item.get("color", ""),
+                    item.get("color_nombre", ""),
+                    item.get("error", ""),
+                    log_txt,
+                ], 1):
+                    cell = ws3.cell(row=fila_err, column=c, value=v)
+                    cell.fill   = ERR_FILL
+                    cell.border = brd
+                    cell.font   = fnt_err if c == 3 else fnt_norm
+                    cell.alignment = Alignment(horizontal="left", vertical="top",
+                                               wrap_text=True)
+                ws3.row_dimensions[fila_err].height = max(
+                    60, len(log_txt.split("\n")) * 14)
+                fila_err += 1
+
+        # ════════════════════════════════════════════════════════════════════
+        # HOJA 4 — LOG COMPLETO
+        # ════════════════════════════════════════════════════════════════════
+        ws4 = wb.create_sheet("LOG")
+        ws4.sheet_view.showGridLines = False
+        ws4.merge_cells("A1:C1")
+        t4 = ws4["A1"]
+        t4.value = "LOG COMPLETO DE EJECUCIÓN"
+        t4.font  = Font(name="Calibri", bold=True, color="8B949E", size=13)
+        t4.fill  = H_FILL; t4.alignment = cnt
+        ws4.row_dimensions[1].height = 28
+        add_header_row(ws4, ["Color", "Estado", "Línea de log"], row=2)
+        set_col_widths(ws4, [14, 12, 120])
+
+        fila_log = 3
+        for item in items:
+            es    = item.get("estado", "")
+            fill  = OK_FILL if es == "OK" else ERR_FILL if es == "ERROR" else HDR_FILL
+            color = item.get("color", "")
+            for linea in item.get("log", []):
+                for c, v in enumerate([color, es, linea], 1):
+                    cell = ws4.cell(row=fila_log, column=c, value=v)
+                    cell.fill   = fill
+                    cell.border = brd
+                    cell.font   = fnt_muted
+                    cell.alignment = lft
+                fila_log += 1
+
+        # ── Enviar como descarga ──────────────────────────────────────────
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        fecha_str = _dt.datetime.now().strftime("%Y%m%d_%H%M")
+        filename  = f"SAP_Reporte_{batch_id}_{fecha_str}.xlsx"
+
+        from flask import send_file
+        return send_file(
+            buf,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename,
+        )
+    except Exception as e:
+        return f"Error generando reporte: {e}", 500
 
 
 if __name__ == "__main__":

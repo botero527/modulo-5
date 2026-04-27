@@ -339,7 +339,7 @@ class AutomatizadorSAP:
     # ── ZPPR0020 — Esperar fases en sesión auxiliar ───────────────────────────
 
     def zppr0020_esperar_fases(self, zfer_nuevo: str,
-                                intervalo_seg: int = 30,
+                                intervalo_seg: int = 10,
                                 max_espera_seg: int = 600) -> dict:
         """
         Abre sesión auxiliar SAP para ZPPR0020 (deja ZMME0001 intacta en sesión
