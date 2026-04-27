@@ -641,6 +641,27 @@ class AutomatizadorSAP:
             except Exception as e:
                 print(f"    [WARN] COPY_ITEM: {e}")
 
+        # Cerrar popup de log "Programa ZMME0001" que aparece tras COPY_ITEM
+        # El usuario lo cierra con la X roja del popup → wnd[1].close() / F12
+        self._esperar(T_RAPIDO)
+        for wnd_id in ("wnd[2]", "wnd[1]"):
+            try:
+                self.session.findById(wnd_id)
+                # Intentar primero la X roja (sendVKey 12 = F12/Escape)
+                try:
+                    self.session.findById(wnd_id).sendVKey(12)
+                    self._esperar(T_RAPIDO)
+                    print(f"    Popup {wnd_id} cerrado (F12)")
+                except Exception:
+                    try:
+                        self.session.findById(wnd_id).close()
+                        self._esperar(T_RAPIDO)
+                        print(f"    Popup {wnd_id} cerrado (.close)")
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
         return ok
 
     # ── MM02 — Actualizar PARTNUMBER ─────────────────────────────────────────
@@ -664,26 +685,39 @@ class AutomatizadorSAP:
     def mm02_actualizar_partnumber(self, material: str, nuevo_pn: str):
         """
         MM02 → Clasificación → PIEZA → actualiza PARTNUMBER AGP.
-        Flujo confirmado por VBS: Enter tras llenar campo → F3 → OPTION1 → F3.
-        Cualquier popup intermedio se acepta con primera opción.
+        Flujo confirmado por VBS: Enter tras llenar → F3 → OPTION1 → F3.
+        Maneja pantalla de selección de vistas y niveles org. con Enter.
         """
         self._cerrar_dialogs_abiertos()
 
-        self.session.findById(self._ID_TCODE_BOX).text = "MM02"
+        # Navegación limpia con /N
+        self.session.findById(self._ID_TCODE_BOX).text = "/NMM02"
         self.session.findById("wnd[0]").sendVKey(0)
         self._esperar(T_MEDIO)
 
         self.session.findById(self._ID_MM02_MATNR).text = material
-        self.session.findById("wnd[0]").sendVKey(0)   # Enter → selección de vistas
+        self.session.findById("wnd[0]").sendVKey(0)
         self._esperar(T_MEDIO)
 
-        # Aceptar popup de selección de vistas si aparece
-        self._primera_opcion_si_popup()
+        # Pasar pantallas intermedias de MM02:
+        # 1) Selección de vistas  2) Niveles organizativos (Centro)
+        # Cada una se acepta con Enter — hasta 3 intentos
+        for _ in range(3):
+            # Si ya vemos el tab de Clasificación, terminamos
+            try:
+                self.session.findById(self._ID_MM02_TAB03)
+                break
+            except Exception:
+                pass
+            # Primero intentar OPTION1, si no existe mandar Enter
+            if not self._primera_opcion_si_popup():
+                self.session.findById("wnd[0]").sendVKey(0)
+                self._esperar(T_MEDIO)
 
         # Tab Clasificación
         self.session.findById(self._ID_MM02_TAB03).select()
         self._esperar(T_RAPIDO)
-        self._primera_opcion_si_popup()   # popup lista material si aparece
+        self._primera_opcion_si_popup()
 
         # Tab PIEZA
         self.session.findById(self._ID_MM02_TAB4).select()
@@ -693,17 +727,13 @@ class AutomatizadorSAP:
         campo_pn = f"{self._ID_MM02_TABLA}/ctxtRCTMS-MWERT[1,0]"
         self.session.findById(campo_pn).text = nuevo_pn
         self.session.findById(campo_pn).caretPosition = len(nuevo_pn)
-        self.session.findById("wnd[0]").sendVKey(0)   # Enter para confirmar valor
+        self.session.findById("wnd[0]").sendVKey(0)
         self._esperar(T_RAPIDO)
 
-        # F3 → SAP pregunta si guardar
+        # F3 → SAP pregunta si guardar → primera opción → F3
         self.session.findById("wnd[0]/tbar[0]/btn[3]").press()
         self._esperar(T_MEDIO)
-
-        # Siempre primera opción (guardar)
         self._primera_opcion_si_popup()
-
-        # F3 para volver (igual que VBS)
         try:
             self.session.findById("wnd[0]/tbar[0]/btn[3]").press()
             self._esperar(T_RAPIDO)
