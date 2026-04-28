@@ -870,7 +870,8 @@ class AutomatizadorSAP:
     # ── Procesar una combinación ──────────────────────────────────────────────
 
     def procesar(self, zfer_base: str, color_codigo: str, color_nombre: str,
-                 franja: str = "00", pn_base: str = "", zpla: str = "") -> ResultadoItem:
+                 franja: str = "00", pn_base: str = "", zpla: str = "",
+                 step_callback=None) -> ResultadoItem:
         """
         Procesa una combinación zfer_base + color en SAP.
         franja, pn_base y zpla vienen resueltos desde la BD por app.py.
@@ -884,6 +885,14 @@ class AutomatizadorSAP:
             fecha_inicio = datetime.datetime.now(),
         )
 
+        def _cb(paso_num: int, desc: str):
+            res._log(f"PASO {paso_num}/5: {desc}")
+            if step_callback:
+                try:
+                    step_callback(paso_num, desc)
+                except Exception:
+                    pass
+
         try:
             res._log(f"=== Inicio: {zfer_base} → color {color_codigo} ({color_nombre}) ===")
             res._log(f"  Franja={franja}  PN_base={pn_base}  ZPLA={zpla}")
@@ -892,14 +901,14 @@ class AutomatizadorSAP:
             p_franj = franja or "00"
 
             # PASO 1 — ZPPP0042 validar
-            res._log("PASO 1: ZPPP0042 validar versión")
+            _cb(1, "Validando ZFER base en SAP (ZPPP0042)")
             val = self.zppp0042_validar(zfer_base)
             if not val["ok"]:
                 raise RuntimeError(f"ZPPP0042: {val['error']}")
             res._log(f"  VERID={val['verid']} — OK")
 
             # PASO 2 — ZMME0001 ejecutar
-            res._log(f"PASO 2: ZMME0001 → color={p_color} franja={p_franj}")
+            _cb(2, f"Creando nueva variante de color en SAP (ZMME0001) — color {p_color}")
             # zpla puede ser string simple o lista separada por comas
             zplas_validos = [z.strip() for z in str(zpla).split(",") if z.strip()]
             zfer_nuevo, zfor_nuevo, zpla_usado = self.zmme0001_ejecutar(
@@ -910,7 +919,7 @@ class AutomatizadorSAP:
             res.zpla       = zpla_usado
 
             # PASO 3 — ZPPR0020 esperar fases
-            res._log(f"PASO 3: ZPPR0020 esperando fases para {zfer_nuevo}...")
+            _cb(3, f"Esperando aprobación del proceso SAP (ZPPR0020) — {zfer_nuevo}")
             fase_res = self.zppr0020_esperar_fases(zfer_nuevo)
             if not fase_res["ok"]:
                 raise RuntimeError(
@@ -922,7 +931,7 @@ class AutomatizadorSAP:
             res._log(f"  ZPPR0020 OK | ZPLA={zpla_usado}")
 
             # PASO 4 — ZMME0001 BOM
-            res._log("PASO 4: ZMME0001 BOM — Comparar + llenar posiciones + COPY_ITEM")
+            _cb(4, "Comparando y copiando estructura de materiales (BOM)")
             # Re-establecer campos (SAP puede haberlos perdido al volver de ZPPR0020)
             try:
                 self.session.findById(self._ID_RAD_HOMOLOG).setFocus()
@@ -969,7 +978,7 @@ class AutomatizadorSAP:
 
             # PASO 5 — MM02 actualizar PARTNUMBER
             if pn_base and p_color:
-                res._log("PASO 5: MM02 actualizar PARTNUMBER")
+                _cb(5, f"Actualizando número de parte en SAP (MM02) — {zfer_nuevo}")
                 nuevo_pn = self._construir_nuevo_pn(pn_base, p_color)
                 if nuevo_pn and nuevo_pn != pn_base:
                     self.mm02_actualizar_partnumber(zfer_nuevo, nuevo_pn)
@@ -999,7 +1008,7 @@ class AutomatizadorSAP:
 
 def procesar_combinacion(zfer_base: str, color_codigo: str, color_nombre: str,
                          franja: str = "00", pn_base: str = "",
-                         zpla: str = "") -> ResultadoItem:
+                         zpla: str = "", step_callback=None) -> ResultadoItem:
     auto = AutomatizadorSAP()
     if not auto.conectar():
         r = ResultadoItem(
@@ -1009,4 +1018,5 @@ def procesar_combinacion(zfer_base: str, color_codigo: str, color_nombre: str,
             fecha_inicio=datetime.datetime.now(), fecha_fin=datetime.datetime.now(),
         )
         return r
-    return auto.procesar(zfer_base, color_codigo, color_nombre, franja, pn_base, zpla)
+    return auto.procesar(zfer_base, color_codigo, color_nombre, franja, pn_base, zpla,
+                         step_callback=step_callback)

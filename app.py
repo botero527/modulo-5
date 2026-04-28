@@ -1004,12 +1004,19 @@ def api_sap_ejecutar():
                 if not zfer or not color:
                     continue
                 t0  = _dt2.datetime.now()
+
+                def _step_cb(paso_num, desc, _color=color):
+                    _sap_jobs[batch_id]["_current"] = {
+                        "color": _color, "paso": paso_num, "desc": desc
+                    }
+
                 res = _pc(
                     zfer, color,
                     c.get("color_nombre", color),
                     c.get("franja", "00") or "00",
                     c.get("pn_base", ""),
                     c.get("zpla", ""),
+                    step_callback=_step_cb,
                 )
                 job = _sap_jobs[batch_id]
                 job["items"].append({
@@ -1031,6 +1038,7 @@ def api_sap_ejecutar():
                 job["procesados"] += 1
             _sap_jobs[batch_id]["estado"]    = "COMPLETADO"
             _sap_jobs[batch_id]["fecha_fin"] = _dt2.datetime.now().isoformat(timespec="seconds")
+            _sap_jobs[batch_id]["_current"]  = None
 
         threading.Thread(target=_run_batch, daemon=True).start()
         return jsonify({"ok": True, "batch_id": batch_id, "total": len(combis_raw)})
@@ -1056,6 +1064,7 @@ def api_sap_estado(batch_id: str):
         "fecha_inicio": job.get("fecha_inicio", ""),
         "fecha_fin":    job.get("fecha_fin", ""),
         "usuario_sap":  job.get("usuario_sap", "PROGRAING"),
+        "_current":     job.get("_current"),
         "log":          [],
     })
 
