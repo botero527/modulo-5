@@ -176,7 +176,24 @@
        onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">
       <i class="bi bi-funnel-fill"></i>Explorador
     </a>
-    <span class="nav-meta"><i class="bi bi-database me-1"></i>DB_COL_SAP &nbsp;·&nbsp; Centro CO01</span>
+    <span class="nav-meta"><i class="bi bi-database me-1"></i>DB_COL_SAP &nbsp;·&nbsp; CO01</span>
+    {% if usuario_actual %}
+    <div style="display:flex; align-items:center; gap:.5rem; border-left:1px solid #21262d; padding-left:.9rem;">
+      <span style="font-size:.78rem; color:var(--muted); max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+            title="{{ usuario_actual }}">
+        <i class="bi bi-person-circle me-1" style="color:var(--accent);"></i>{{ usuario_actual.split('@')[0] }}
+      </span>
+      <a href="/logout"
+         style="background:#2d1f1f; border:1px solid #f85149; color:#ffa198;
+                border-radius:7px; padding:.2rem .55rem; font-size:.75rem;
+                text-decoration:none; white-space:nowrap; transition:background .15s;"
+         onmouseover="this.style.background='#4a1f1f'"
+         onmouseout="this.style.background='#2d1f1f'"
+         title="Cerrar sesión">
+        <i class="bi bi-box-arrow-right"></i>
+      </a>
+    </div>
+    {% endif %}
   </div>
 </nav>
 

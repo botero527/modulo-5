@@ -2,17 +2,65 @@
 app.py — MODULO 5 AGP Glass
 Sistema de consulta y reporte de ZFERs (Colombia CO01)
 """
-from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, abort
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, abort, session, flash
 import pyodbc
 import threading
 import os
 import mimetypes
-from functools import lru_cache
+from functools import lru_cache, wraps
 from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
+app.secret_key = "AGP_M5_2025_xK9!mQ#zL"
 
-# Estado en memoria de jobs SAP activos  {batch_id: ResultadoItem}
+# ── Usuarios autorizados ──────────────────────────────────────────────────────
+_USUARIOS = {
+    "atcol@agpglass.com":              "AdminIng2025_It",
+    "fguerrero@agpglass.com":          "1022438939",
+    "jguanumen@agpglass.com":          "1023005676",
+    "alexander.acosta@agpglass.com":   "93437119",
+    "g.delgado@agpglass.com":          "1031180571",
+    "kmorales@agpglass.com":           "1233501014",
+    "jpinzon@agpglass.com":            "1030596420",
+    "lpelaez@agpglass.com":            "1000047853",
+    "mbernal@agpglass.com":            "1000007660",
+    "nirojas@agpglass.com":            "1030688452",
+    "asuarez@agpglass.com":            "1030690990",
+    "dgrimaldo@agpglass.com":          "1000236441",
+    "nleon@agpglass.com":              "1137624222",
+    "jramirezf@agpglass.com":          "1031420151",
+    "pract1@agpglass.com":             "PRACT_ING1",
+    "pract2@agpglass.com":             "PRACT_ING2",
+    "pract3@agpglass.com":             "PRACT_ING3",
+    "pract4@agpglass.com":             "PRACT_ING4",
+    "spina@agpglass.com":              "1010236538",
+    "lcruz@agpglass.com":              "1032937021",
+    "jgalvis@agpglass.com":            "1032877183",
+    "spimentel@agpglass.com":          "1000034924",
+    "practingenieria@agpglass.com":    "1000971646",
+    "jmahecha@agpglass.com":           "1019982163",
+    "dforero@agpglass.com":            "1000256251",
+    "cegarcia@agpglass.com":           "1001092159",
+    "lfalla@agpglass.com":             "1022930033",
+    "leo@agpglass.com":                "123",
+}
+
+def _usuario_actual() -> str:
+    return session.get("usuario", "")
+
+@app.context_processor
+def _inject_usuario():
+    return {"usuario_actual": _usuario_actual()}
+
+def login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("usuario"):
+            return redirect(url_for("login", next=request.path))
+        return f(*args, **kwargs)
+    return wrapper
+
+# ── Estado en memoria de jobs SAP activos  {batch_id: ResultadoItem} ─────────
 _sap_jobs: dict = {}
 
 # ── Configuración BD ──────────────────────────────────────────────────────────
@@ -785,7 +833,28 @@ def q_valores_distintos(atnam: str) -> list:
 
 # ── Rutas Flask ───────────────────────────────────────────────────────────────
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("usuario"):
+        return redirect(url_for("index"))
+    error = None
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        clave = request.form.get("clave", "").strip()
+        if _USUARIOS.get(email) == clave:
+            session["usuario"] = email
+            session.permanent = True
+            return redirect(request.args.get("next") or url_for("index"))
+        error = "Correo o contraseña incorrectos."
+    return render_template("login.html", error=error)
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
 @app.route("/", methods=["GET", "POST"])
+@login_required
 def index():
     if request.method == "POST":
         raw = request.form.get("zfer", "").strip()
@@ -800,6 +869,7 @@ def index():
 
 
 @app.route("/explorar")
+@login_required
 def explorar():
     vehiculo = request.args.get("vehiculo", "").strip()
     formula  = request.args.get("formula",  "").strip()
@@ -848,6 +918,7 @@ def explorar():
 
 
 @app.route("/zfer/<material>")
+@login_required
 def detalle_zfer(material: str):
     material = material.strip()
 
@@ -911,6 +982,7 @@ def detalle_zfer(material: str):
     )
 
 @app.route("/combinaciones/<material>")
+@login_required
 def combinaciones(material: str):
     material = material.strip()
 
@@ -1022,6 +1094,7 @@ def combinaciones(material: str):
 # ── API Bloqueos ───────────────────────────────────────────────────────────────
 
 @app.route("/api/bloquear", methods=["POST"])
+@login_required
 def api_bloquear():
     try:
         from db_local import bloquear
@@ -1041,6 +1114,7 @@ def api_bloquear():
 
 
 @app.route("/api/desbloquear", methods=["POST"])
+@login_required
 def api_desbloquear():
     try:
         from db_local import desbloquear
@@ -1063,6 +1137,7 @@ def api_bloqueos(material: str):
 # ── API SAP ────────────────────────────────────────────────────────────────────
 
 @app.route("/api/sap/ejecutar", methods=["POST"])
+@login_required
 def api_sap_ejecutar():
     """Lanza automatización SAP para múltiples combinaciones, secuencialmente en un hilo."""
     try:
@@ -1097,7 +1172,7 @@ def api_sap_ejecutar():
             "franja":       combis_raw[0].get("franja", "") if combis_raw else "",
             "fecha_inicio": _dt.datetime.now().isoformat(timespec="seconds"),
             "fecha_fin":    None,
-            "usuario_sap":  "PROGRAING",
+            "usuario_sap":  _usuario_actual() or "PROGRAING",
         }
 
         def _run_batch():
@@ -1152,6 +1227,7 @@ def api_sap_ejecutar():
 
 
 @app.route("/api/sap/estado/<batch_id>")
+@login_required
 def api_sap_estado(batch_id: str):
     """Consulta el estado de un batch SAP."""
     job = _sap_jobs.get(batch_id)
@@ -1175,6 +1251,7 @@ def api_sap_estado(batch_id: str):
 
 
 @app.route("/api/sap/reporte/<batch_id>")
+@login_required
 def api_sap_reporte(batch_id: str):
     """Genera y descarga reporte Excel del batch SAP."""
     job = _sap_jobs.get(batch_id)
