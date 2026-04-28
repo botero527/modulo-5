@@ -28,7 +28,7 @@
           <label style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; display:block; margin-bottom:.4rem;">
             <i class="bi bi-car-front me-1"></i>Modelo Vehículo
           </label>
-          <input type="text" name="vehiculo" value="{{ vehiculo }}"
+          <input id="inp-vehiculo" type="text" name="vehiculo" value="{{ vehiculo }}"
                  class="search-box" style="border-radius:8px; width:100%; font-size:.9rem; padding:.55rem .9rem;"
                  placeholder="ej: CHEVROLET SUBURBAN"
                  list="list-vehiculos" autocomplete="off">
@@ -42,7 +42,7 @@
           <label style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; display:block; margin-bottom:.4rem;">
             <i class="bi bi-hash me-1"></i>Cód.
           </label>
-          <input type="text" name="cod_vehiculo" value="{{ cod_vehiculo }}"
+          <input id="inp-cod-vehiculo" type="text" name="cod_vehiculo" value="{{ cod_vehiculo }}"
                  class="search-box" style="border-radius:8px; width:100%; font-size:.9rem; padding:.55rem .9rem;"
                  placeholder="ej: 1715" autocomplete="off" maxlength="10">
         </div>
@@ -430,6 +430,38 @@ function abrirSeleccionados() {
 
   // Divide en lotes de 30
   for (let i = 0; i < mats.length; i += 30) loadBatch(mats.slice(i, i + 30));
+})();
+
+// ── Auto-fill modelo vehículo desde código ────────────────────────────────
+(function() {
+  const inpCod = document.getElementById('inp-cod-vehiculo');
+  const inpVeh = document.getElementById('inp-vehiculo');
+  if (!inpCod || !inpVeh) return;
+
+  let _timer = null;
+  let _last   = '';
+
+  inpCod.addEventListener('input', function() {
+    const val = this.value.trim();
+    if (val === _last) return;
+    _last = val;
+    clearTimeout(_timer);
+    if (val.length < 2) { return; }
+    _timer = setTimeout(() => {
+      fetch('/api/vehiculo_lookup?cod=' + encodeURIComponent(val))
+        .then(r => r.json())
+        .then(d => {
+          if (d.vehiculo) {
+            inpVeh.value = d.vehiculo;
+            inpVeh.style.borderColor = 'var(--accent)';
+            setTimeout(() => inpVeh.style.borderColor = '', 1500);
+          } else {
+            inpVeh.value = '';
+          }
+        })
+        .catch(() => {});
+    }, 350);
+  });
 })();
 </script>
 {% endblock %}

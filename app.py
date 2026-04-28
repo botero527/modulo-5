@@ -1479,7 +1479,46 @@ def api_sap_reporte(batch_id: str):
         return f"Error generando reporte: {e}", 500
 
 
+@app.route("/api/vehiculo_lookup")
+@login_required
+def api_vehiculo_lookup():
+    """Dado un cod_vehiculo (prefijo del PARTNUMBER), devuelve el modelo de vehículo."""
+    cod = request.args.get("cod", "").strip()
+    if not cod or len(cod) < 2:
+        return jsonify({"vehiculo": ""})
+    def _esc(s):
+        return s.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+    try:
+        conn = get_conn()
+        cur  = conn.cursor()
+        cur.execute("""
+            SELECT TOP 1 c2.ATWRT
+            FROM   dbo.ODATA_ZFER_CLASS_001 c1
+            JOIN   dbo.ODATA_ZFER_CLASS_001 c2
+                   ON  c2.MATERIAL = c1.MATERIAL
+                   AND c2.CENTRO   = 'CO01'
+                   AND c2.ATNAM    = 'Z_VEHICLE_MODEL'
+            WHERE  c1.CENTRO = 'CO01'
+              AND  c1.ATNAM  = 'Z_AGP_PARTNUMBER'
+              AND  c1.ATWRT  LIKE ? ESCAPE '!'
+        """, [f"{_esc(cod)}!_%"])
+        row = cur.fetchone()
+        conn.close()
+        return jsonify({"vehiculo": str(row[0]).strip() if row and row[0] else ""})
+    except Exception as e:
+        return jsonify({"vehiculo": "", "error": str(e)}), 200
+
+
+@app.after_request
+def _set_content_length(response):
+    # Prevent browser tab from showing infinite spinner on dynamic HTML pages
+    if response.content_type and "text/html" in response.content_type:
+        if not response.is_streamed:
+            response.headers["Content-Length"] = len(response.get_data())
+    return response
+
+
 if __name__ == "__main__":
     print("\n  AGP Intelligence — MODULO 5")
     print("  Abre tu navegador en: http://localhost:5000\n")
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5000, use_reloader=False)
