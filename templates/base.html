@@ -190,5 +190,104 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 {% block scripts %}{% endblock %}
+
+<!-- ── Lightbox global de Planos ─────────────────────────────────────────── -->
+<div id="_lb" onclick="if(event.target===this)_lbClose()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);
+            z-index:99999;align-items:center;justify-content:center;
+            flex-direction:column;gap:.9rem;padding:1.5rem;cursor:zoom-out;">
+
+  <!-- Barra superior -->
+  <div style="width:100%;max-width:1100px;display:flex;align-items:center;
+              justify-content:space-between;gap:1rem;flex-shrink:0;">
+    <div>
+      <div id="_lb-material"
+           style="font-size:1.1rem;font-weight:900;color:#00c2ff;letter-spacing:.5px;"></div>
+      <div id="_lb-doc"
+           style="font-size:.78rem;color:#8b949e;margin-top:.1rem;"></div>
+    </div>
+    <div style="display:flex;gap:.6rem;align-items:center;">
+      <a id="_lb-dl" href="#" download
+         style="background:#21262d;border:1px solid #30363d;color:#e6edf3;
+                border-radius:8px;padding:.35rem .85rem;font-size:.8rem;
+                text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;"
+         onclick="event.stopPropagation()">
+        <i class="bi bi-download"></i> Descargar
+      </a>
+      <button onclick="_lbClose()"
+              style="background:#2d1f1f;border:1px solid #f85149;color:#ffa198;
+                     border-radius:8px;padding:.35rem .85rem;font-size:.8rem;cursor:pointer;">
+        <i class="bi bi-x-lg me-1"></i>Cerrar
+      </button>
+    </div>
+  </div>
+
+  <!-- Imagen -->
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;
+              width:100%;max-width:1100px;overflow:hidden;cursor:default;"
+       onclick="event.stopPropagation()">
+    <img id="_lb-img" src="" alt="Plano"
+         style="max-width:100%;max-height:calc(100vh - 140px);
+                border-radius:10px;box-shadow:0 0 80px rgba(0,0,0,.9);
+                object-fit:contain;transition:transform .2s;cursor:zoom-in;"
+         onclick="_lbToggleZoom(this)"
+         onerror="this.src='';this.style.display='none';
+                  document.getElementById('_lb-err').style.display='flex'">
+    <div id="_lb-err"
+         style="display:none;flex-direction:column;align-items:center;gap:.8rem;
+                color:#484f58;padding:3rem;">
+      <i class="bi bi-image-alt" style="font-size:3.5rem;"></i>
+      <span style="font-size:.9rem;">No se pudo cargar la imagen del plano.</span>
+      <span style="font-size:.78rem;">Verifica que la red \\192.168.2.2 esté disponible.</span>
+    </div>
+  </div>
+</div>
+
+<style>
+._lb-thumb {
+  cursor:pointer; border-radius:8px; overflow:hidden; position:relative;
+  background:#161b22; border:1px solid #30363d; transition:border-color .15s, box-shadow .15s;
+  display:flex; align-items:center; justify-content:center;
+}
+._lb-thumb:hover { border-color:#00c2ff; box-shadow:0 0 0 3px rgba(0,194,255,.15); }
+._lb-thumb ._lb-overlay {
+  position:absolute; inset:0; background:rgba(0,0,0,0); transition:.2s;
+  display:flex; align-items:center; justify-content:center;
+}
+._lb-thumb:hover ._lb-overlay { background:rgba(0,0,0,.45); }
+._lb-thumb ._lb-eye {
+  font-size:1.8rem; color:#fff; opacity:0; transition:.2s;
+  filter:drop-shadow(0 0 8px rgba(0,0,0,.9));
+}
+._lb-thumb:hover ._lb-eye { opacity:1; }
+</style>
+
+<script>
+function _lbOpen(material, doc) {
+  const url = `/api/plano/${material}`;
+  document.getElementById('_lb-material').textContent = material;
+  document.getElementById('_lb-doc').textContent      = doc ? `Documento: ${doc}` : '';
+  const img = document.getElementById('_lb-img');
+  img.style.display   = '';
+  img.style.transform = 'scale(1)';
+  img.src             = url;
+  document.getElementById('_lb-dl').href   = url;
+  document.getElementById('_lb-dl').download = doc ? `${doc}.jpg` : `plano_${material}.jpg`;
+  document.getElementById('_lb-err').style.display = 'none';
+  const lb = document.getElementById('_lb');
+  lb.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function _lbClose() {
+  document.getElementById('_lb').style.display = 'none';
+  document.getElementById('_lb-img').src = '';
+  document.body.style.overflow = '';
+}
+function _lbToggleZoom(img) {
+  if (img._zoomed) { img.style.transform='scale(1)'; img.style.cursor='zoom-in'; img._zoomed=false; }
+  else             { img.style.transform='scale(1.9)'; img.style.cursor='zoom-out'; img._zoomed=true; }
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') _lbClose(); });
+</script>
 </body>
 </html>

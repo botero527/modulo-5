@@ -61,6 +61,34 @@
   <!-- ── Col izquierda: Atributos ──────────────────────────────────────── -->
   <div class="col-xl-4 col-lg-5">
 
+    <!-- Card plano de producción -->
+    {% if plano %}
+    <div class="card mb-4">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span>
+          <i class="bi bi-file-earmark-image me-2" style="color:#e3b341;"></i>
+          Plano de Producción
+        </span>
+        <span style="font-size:.72rem; color:#484f58; font-weight:400;">{{ plano.doc }}</span>
+      </div>
+      <div class="card-body" style="padding:.75rem;">
+        <div class="_lb-thumb" style="min-height:160px;"
+             onclick="_lbOpen('{{ material }}', '{{ plano.doc }}')">
+          <img src="/api/plano/{{ material }}" alt="Plano {{ material }}"
+               loading="lazy"
+               style="width:100%; max-height:220px; object-fit:contain; border-radius:6px; display:block;"
+               onerror="this.closest('.card').style.display='none'">
+          <div class="_lb-overlay">
+            <i class="bi bi-eye-fill _lb-eye"></i>
+          </div>
+        </div>
+        <div style="font-size:.7rem; color:#484f58; text-align:center; margin-top:.5rem;">
+          <i class="bi bi-zoom-in me-1"></i>Clic para ampliar · doble clic para zoom
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Card atributos -->
     <div class="card mb-4">
       <div class="card-header">

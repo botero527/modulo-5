@@ -2,9 +2,13 @@
 app.py — MODULO 5 AGP Glass
 Sistema de consulta y reporte de ZFERs (Colombia CO01)
 """
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, abort
 import pyodbc
 import threading
+import os
+import mimetypes
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 
@@ -295,8 +299,96 @@ def _decode_route(route: str) -> str:
     return route
 
 
+# ── Planos ───────────────────────────────────────────────────────────────────
+# Nombre real de la tabla en DB_COL_SAP — ajustar si es diferente
+_TABLA_PLANOS = "ODATA_ZFER_RUTAS_JPG"
+
+_plano_cache: dict = {}   # {material: (ruta, doc) | None}
+
+def _q_plano(material: str):
+    """Retorna (ruta_unc, documento) o None. Cacheado en _plano_cache."""
+    if material in _plano_cache:
+        return _plano_cache[material]
+    try:
+        conn = get_conn()
+        cur  = conn.cursor()
+        cur.execute(
+            f"SELECT TOP 1 PLANO, DOCUMENTO FROM dbo.{_TABLA_PLANOS} "
+            "WHERE MATERIAL=? AND CENTRO='CO01' ORDER BY VERSION DESC, PROCESSDATE DESC",
+            (material,)
+        )
+        row = conn.cursor().fetchone() if False else cur.fetchone()
+        conn.close()
+        result = (str(row[0]).strip(), str(row[1]).strip() if row[1] else "") if row and row[0] else None
+        _plano_cache[material] = result
+        return result
+    except Exception:
+        return None
+
+
+def _q_planos_bulk(mats: list) -> None:
+    """Un solo IN query para poblar _plano_cache con todos los materiales no cacheados."""
+    uncached = [m for m in mats if m not in _plano_cache]
+    if not uncached:
+        return
+    try:
+        conn = get_conn()
+        cur  = conn.cursor()
+        ph   = ",".join(["?"] * len(uncached))
+        cur.execute(
+            f"SELECT MATERIAL, PLANO, DOCUMENTO FROM dbo.{_TABLA_PLANOS} "
+            f"WHERE MATERIAL IN ({ph}) AND CENTRO='CO01'",
+            uncached
+        )
+        seen = set()
+        for mat, plano, doc in cur.fetchall():
+            m = str(mat)
+            if m not in seen:
+                seen.add(m)
+                _plano_cache[m] = (str(plano).strip(), str(doc).strip() if doc else "") if plano else None
+        conn.close()
+        for m in uncached:           # los que no están en la tabla → None
+            if m not in _plano_cache:
+                _plano_cache[m] = None
+    except Exception:
+        pass
+
+def _normalizar_unc(ruta: str) -> str:
+    """Garantiza que la ruta empiece con \\\\ (UNC válido en Windows)."""
+    ruta = ruta.strip().replace("/", "\\")
+    if ruta.startswith("\\\\"):
+        return ruta
+    return "\\\\" + ruta.lstrip("\\")
+
+
+@app.route("/api/plano/<material>")
+def api_plano(material: str):
+    info = _q_plano(material.strip())
+    if not info:
+        abort(404)
+    ruta = _normalizar_unc(info[0])
+    if not os.path.isfile(ruta):
+        abort(404)
+    mime = mimetypes.guess_type(ruta)[0] or "image/jpeg"
+    return send_file(ruta, mimetype=mime, max_age=3600)
+
+
+@app.route("/api/planos/batch")
+def api_planos_batch():
+    """Retorna {material: documento} — un solo IN query para todos los no cacheados."""
+    mats = [m.strip() for m in request.args.get("mats", "").split(",") if m.strip()][:60]
+    _q_planos_bulk(mats)           # 1 query para todos los que faltan en cache
+    result = {}
+    for m in mats:
+        info = _q_plano(m)         # ahora todos son cache hits
+        if info:
+            result[m] = info[1]
+    return jsonify(result)
+
+
 # ── Queries ───────────────────────────────────────────────────────────────────
 
+@lru_cache(maxsize=400)
 def q_zfer_head(material: str):
     """Tabla 1: ODATA_ZFER_HEAD — info básica del ZFER."""
     try:
@@ -318,6 +410,7 @@ def q_zfer_head(material: str):
         return {"_error": str(e)}
 
 
+@lru_cache(maxsize=400)
 def q_atributos(material: str) -> dict:
     """Tabla 2: ODATA_ZFER_CLASS_001 — atributos de clasificación."""
     try:
@@ -669,6 +762,7 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="", nivel=""
         return [{"_error": str(e)}]
 
 
+@lru_cache(maxsize=30)
 def q_valores_distintos(atnam: str) -> list:
     """Devuelve los 200 valores ATWRT distintos más frecuentes para un ATNAM en CO01."""
     try:
@@ -757,7 +851,16 @@ def explorar():
 def detalle_zfer(material: str):
     material = material.strip()
 
-    head = q_zfer_head(material)
+    # Las 3 queries son independientes → las lanzamos en paralelo
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        f_head     = ex.submit(q_zfer_head, material)
+        f_attrs    = ex.submit(q_atributos, material)
+        f_entregas = ex.submit(q_entregas,  material)
+
+    head     = f_head.result()
+    attrs    = f_attrs.result()
+    entregas = f_entregas.result()
+
     if head is None:
         return render_template("index.html",
             error=f"ZFER '{material}' no encontrado o STATUS = ZZ (inactivo).")
@@ -765,8 +868,6 @@ def detalle_zfer(material: str):
         return render_template("index.html",
             error=f"Error de conexión BD: {head['_error']}")
 
-    attrs    = q_atributos(material)
-    entregas = q_entregas(material)
     mercados = q_mercados(entregas)
  
     # Construir lista de atributos para mostrar (en orden definido)
@@ -793,6 +894,9 @@ def detalle_zfer(material: str):
     # Top 15 para el gráfico; el resto en la tabla
     mercados_chart = mercados[:15]
 
+    plano_info = _q_plano(material)
+    plano = {"doc": plano_info[1], "tiene": True} if plano_info else None
+
     return render_template("zfer.html",
         material       = material,
         head           = head,
@@ -803,6 +907,7 @@ def detalle_zfer(material: str):
         total_entregas = total_entregas,
         DIFERENCIALES  = DIFERENCIALES,
         SUBPRODUCTOS   = SUBPRODUCTOS,
+        plano          = plano,
     )
 
 @app.route("/combinaciones/<material>")
