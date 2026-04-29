@@ -388,6 +388,7 @@ def _q_planos_bulk(mats: list) -> None:
             f"WHERE MATERIAL IN ({ph}) AND CENTRO='CO01'",
             uncached
         )
+        
         seen = set()
         for mat, plano, doc in cur.fetchall():
             m = str(mat)
@@ -407,7 +408,6 @@ def _normalizar_unc(ruta: str) -> str:
     if ruta.startswith("\\\\"):
         return ruta
     return "\\\\" + ruta.lstrip("\\")
-
 
 @app.route("/api/plano/<material>")
 def api_plano(material: str):
@@ -707,7 +707,7 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="", nivel=""
                 WHERE  MATERIAL IN ({ph}) AND CENTRO = 'CO01'
                   AND  UPPER(ISNULL(STATUS,'')) != 'ZZ'
             """, zfers_lista)
-            materiales = [str(r[0]) for r in cur.fetchall()]
+            materiales = list(dict.fromkeys(str(r[0]) for r in cur.fetchall()))
         else:
             # Búsqueda por filtros con INTERSECT dinámico
             filtros = [
@@ -747,7 +747,7 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="", nivel=""
                 HAVING COUNT(DISTINCT c.ATNAM) >= {n}
                 ORDER BY c.MATERIAL
             """, params)
-            materiales = [str(r[0]) for r in cur.fetchall()]
+            materiales = list(dict.fromkeys(str(r[0]) for r in cur.fetchall()))
 
         if not materiales:
             conn.close()
