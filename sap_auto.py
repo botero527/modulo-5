@@ -14,6 +14,7 @@ Parámetros que vienen de la BD (ya resueltos por app.py):
   - color_codigo: código del color SAP (ej: "19")
 """
 
+import os
 import win32com.client
 import time
 import pyodbc
@@ -27,7 +28,7 @@ T_RAPIDO = 0.4
 T_MEDIO  = 1.2
 T_LENTO  = 2.5
 
-_SAP_USER = "PROGRAING"
+_SAP_USER = os.environ.get("SAP_USER", "JPINZON")
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -352,12 +353,28 @@ class AutomatizadorSAP:
 
         idx_nueva = self.conn_sap.Children.Count - 1
         ses2 = self.conn_sap.Children(idx_nueva)
+        self._esperar(T_LENTO)   # dar tiempo a que la sesión arranque
         ses2.findById("wnd[0]").maximize()
+
+        # cerrar popup de bienvenida / avisos si existe
+        try:
+            ses2.findById("wnd[1]").sendVKey(0)
+            self._esperar(T_RAPIDO)
+        except Exception:
+            pass
 
         try:
             ses2.findById(self._ID_TCODE_BOX).text = "ZPPR0020"
             ses2.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_MEDIO)
+            self._esperar(T_LENTO)   # esperar carga completa de ZPPR0020
+
+            # cerrar popup de avisos post-navegación si existe
+            try:
+                ses2.findById("wnd[1]").sendVKey(0)
+                self._esperar(T_RAPIDO)
+            except Exception:
+                pass
+
             ses2.findById(self._ID_ZPPR_USER).text   = _SAP_USER
             ses2.findById(self._ID_ZPPR_CENTRO).text = "CO01"
             ses2.findById(self._ID_BTN_EXEC).press()
