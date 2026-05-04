@@ -28,7 +28,7 @@ T_RAPIDO = 0.4
 T_MEDIO  = 1.2
 T_LENTO  = 2.5
 
-_SAP_USER = os.environ.get("SAP_USER", "JPINZON")
+_SAP_USER = os.environ.get("SAP_USER", "FESPITIA")
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -548,32 +548,90 @@ class AutomatizadorSAP:
     # ── ZMME0001 — Comparar BOM, llenar tabla, COPY_ITEM ─────────────────────
 
     def zmme0001_leer_posiciones_popup(self) -> list:
+        """
+        Retorna lista de dicts: {pos, tipo, msg}
+          tipo 5 → modificar clase
+          tipo 6 → agregar posición (el ZPLA tiene la pos, el ZFER no)
+          tipo 7 → eliminar posición (el ZFER tiene la pos, el ZPLA no)
+        Lee la columna Nº directamente del grid (más fiable que parsear texto).
+        """
         self.session.findById(self._ID_BTN_COMP).press()
         self._esperar(T_MEDIO)
 
-        posiciones = []
-        # Intentar GuiTableControl clásico
+        filas = []
+
+        def _tipo_de_num(num_str: str, msg: str) -> int:
+            """Intenta leer el número directamente; fallback a texto."""
+            try:
+                n = int(num_str.strip())
+                if n in (5, 6, 7):
+                    return n
+            except Exception:
+                pass
+            # fallback por texto
+            m = msg.upper()
+            if "NO INCLUIDA EN EL ZPLA" in m or "NO ESTA INCLUIDO EN ZPLA" in m or "BOM NO ESTA" in m:
+                return 7
+            if "ZPLA MODELO TIENE" in m or "NO TIENE EL B" in m or "AGREGAR" in m:
+                return 6
+            return 5
+
+        # GuiGridView (es lo que muestra la imagen)
         try:
-            tabla = self.session.findById("wnd[1]/usr/tblZMME0001T_COMP")
-            for i in range(tabla.RowCount):
+            grid = self.session.findById("wnd[1]/usr/cntlGRID1/shellcont/shell")
+            for i in range(grid.RowCount):
                 try:
-                    pos = tabla.GetCell(i, 0).text.strip()
-                    if pos:
-                        posiciones.append(pos)
+                    pos = grid.GetCellValue(i, "POSNR").strip()
+                    if not pos:
+                        continue
+                    # Columna Nº — probar nombres posibles
+                    num_str = ""
+                    for col in ("MSGNO", "NR", "NUMERO", "NUM", "MSG_NR", "MNUM", "NO"):
+                        try:
+                            v = grid.GetCellValue(i, col).strip()
+                            if v:
+                                num_str = v
+                                break
+                        except Exception:
+                            pass
+                    # Mensaje de texto
+                    msg = ""
+                    for col in ("VARIABLE_MENSAJE", "MSG", "MESSAGE", "TEXT", "MELDUNG"):
+                        try:
+                            v = grid.GetCellValue(i, col).strip()
+                            if v:
+                                msg = v
+                                break
+                        except Exception:
+                            pass
+                    tipo = _tipo_de_num(num_str, msg)
+                    filas.append({"pos": pos, "tipo": tipo, "num": num_str, "msg": msg})
                 except Exception:
                     pass
         except Exception:
             pass
 
-        # Fallback GuiGridView
-        if not posiciones:
+        # Fallback GuiTableControl clásico
+        if not filas:
             try:
-                grid = self.session.findById("wnd[1]/usr/cntlGRID1/shellcont/shell")
-                for i in range(grid.RowCount):
+                tabla = self.session.findById("wnd[1]/usr/tblZMME0001T_COMP")
+                for i in range(tabla.RowCount):
                     try:
-                        pos = grid.GetCellValue(i, "POSNR").strip()
-                        if pos:
-                            posiciones.append(pos)
+                        pos = tabla.GetCell(i, 0).text.strip()
+                        if not pos:
+                            continue
+                        num_str = ""
+                        msg     = ""
+                        try:
+                            num_str = tabla.GetCell(i, 2).text.strip()  # columna Nº
+                        except Exception:
+                            pass
+                        try:
+                            msg = tabla.GetCell(i, 3).text.strip()
+                        except Exception:
+                            pass
+                        tipo = _tipo_de_num(num_str, msg)
+                        filas.append({"pos": pos, "tipo": tipo, "num": num_str, "msg": msg})
                     except Exception:
                         pass
             except Exception:
@@ -589,34 +647,133 @@ class AutomatizadorSAP:
                 pass
         self._esperar(T_RAPIDO)
 
+        # Deduplicar por posición manteniendo orden
         vistos = set()
-        return [p for p in posiciones if not (p in vistos or vistos.add(p))]
+        result = []
+        for f in filas:
+            if f["pos"] not in vistos:
+                vistos.add(f["pos"])
+                result.append(f)
+        return result
 
     def zmme0001_agregar_filas_bom(self, posiciones: list, zpla: str,
                                     clases_dict: dict = None):
         """
-        clases_dict: {posicion: clase} obtenido de _leer_clases_zpla_sap().
-        Si no se pasa, queda vacío (sin clase destino).
+        posiciones: lista de dicts {pos, tipo, msg} de leer_posiciones_popup().
+        tipo 5 → INSERT + POSNR + CLASE_DESTINO
+        tipo 7 → INSERT + POSNR + marcar ELIMINAR (sin clase)
+        tipo 6 → INSERT + POSNR + NEW_POSNR (múltiplo de 5) + CLASE_DESTINO
+        clases_dict: {posicion: clase}
         """
         if clases_dict is None:
             clases_dict = {}
-        for idx, pos in enumerate(posiciones):
+
+        # Soporte retrocompatible: si llega lista de strings en vez de dicts
+        posiciones = [
+            p if isinstance(p, dict) else {"pos": p, "tipo": 5, "msg": ""}
+            for p in posiciones
+        ]
+
+        for idx, item in enumerate(posiciones):
+            pos  = item["pos"]
+            tipo = item.get("tipo", 5)
+            pos_sin_ceros = str(int(pos)) if pos.isdigit() else pos
+
             self.session.findById(self._ID_BTN_INSERT).press()
             self._esperar(T_RAPIDO)
-            # SAP espera la posición sin ceros a la izquierda (0205 → 205)
-            pos_sin_ceros = str(int(pos)) if pos.isdigit() else pos
-            self.session.findById(
-                f"{self._ID_TBL_LISTA}/txtWA_LISTA-POSNR[0,{idx}]"
-            ).text = pos_sin_ceros
-            self._esperar(T_RAPIDO)
-            # Buscar clase con o sin padding
-            clase = clases_dict.get(pos.zfill(4), clases_dict.get(pos, ""))
-            if clase:
+
+            if tipo == 7:
+                # ELIMINAR POSICION: marcar checkbox + POSNR
                 self.session.findById(
-                    f"{self._ID_TBL_LISTA}/ctxtWA_LISTA-CLASE_DESTINO[3,{idx}]"
-                ).text = clase
+                    f"{self._ID_TBL_LISTA}/txtWA_LISTA-POSNR[0,{idx}]"
+                ).text = pos_sin_ceros
                 self._esperar(T_RAPIDO)
-            print(f"    Fila {idx}: POS={pos_sin_ceros} CLASE={clase or '(sin clase)'}")
+                try:
+                    self.session.findById(
+                        f"{self._ID_TBL_LISTA}/chkWA_LISTA-ELIMINAR[4,{idx}]"
+                    ).selected = True
+                    self._esperar(T_RAPIDO)
+                except Exception as e:
+                    print(f"    [WARN] No pudo marcar ELIMINAR fila {idx}: {e}")
+                print(f"    Fila {idx}: POS={pos_sin_ceros} → ELIMINAR (tipo 7)")
+
+            elif tipo == 6:
+                # AGREGAR POSICION:
+                #   col 0 (POSNR)     = referencia (posición anterior de la lista)
+                #   col 1 (NEW_POSNR) = posición del error (la que hay que agregar)
+                #   CLASE_DESTINO     = clase de la referencia
+                #
+                # Regla para encontrar la referencia en clases_dict:
+                #   - termina en "00" (100,200,300...)  → anterior que termine en "00"
+                #   - múltiplo de 5, no termina en "00" → anterior que termine en "5"
+                #   - no múltiplo de 5 (358,458...)     → anterior cualquiera (la más alta < X)
+
+                referencia = ""
+                try:
+                    pos_int = int(pos_sin_ceros)
+                    # Normalizar claves del dict a enteros
+                    claves_int = []
+                    for k in clases_dict.keys():
+                        try:
+                            claves_int.append(int(str(k).lstrip("0") or "0"))
+                        except Exception:
+                            pass
+
+                    menores = [k for k in claves_int if k < pos_int]
+
+                    if pos_int % 100 == 0:
+                        # termina en 00 → buscar anterior que termine en 00
+                        cands = [k for k in menores if k % 100 == 0]
+                    elif pos_int % 5 == 0:
+                        # múltiplo de 5 sin terminar en 00 → buscar anterior que termine en 5
+                        cands = [k for k in menores if k % 10 == 5]
+                    else:
+                        # no múltiplo de 5 → cualquier anterior
+                        cands = menores
+
+                    if cands:
+                        referencia = str(max(cands))
+                    elif menores:
+                        referencia = str(max(menores))  # fallback: la más alta disponible
+                except Exception:
+                    referencia = pos_sin_ceros
+
+                # col 0 = referencia, col 1 = posición del error
+                self.session.findById(
+                    f"{self._ID_TBL_LISTA}/txtWA_LISTA-POSNR[0,{idx}]"
+                ).text = referencia
+                self._esperar(T_RAPIDO)
+                try:
+                    self.session.findById(
+                        f"{self._ID_TBL_LISTA}/txtWA_LISTA-NEW_POSNR[1,{idx}]"
+                    ).text = pos_sin_ceros
+                    self._esperar(T_RAPIDO)
+                except Exception as e:
+                    print(f"    [WARN] No pudo escribir NEW_POSNR fila {idx}: {e}")
+
+                # Clase de la referencia
+                ref_key = referencia.zfill(4)
+                clase = clases_dict.get(ref_key, clases_dict.get(referencia, ""))
+                if clase:
+                    self.session.findById(
+                        f"{self._ID_TBL_LISTA}/ctxtWA_LISTA-CLASE_DESTINO[3,{idx}]"
+                    ).text = clase
+                    self._esperar(T_RAPIDO)
+                print(f"    Fila {idx}: POSNR={referencia} NEW_POSNR={pos_sin_ceros} CLASE={clase or '(sin clase)'} → AGREGAR (tipo 6)")
+
+            else:
+                # MODIFICAR CLASE (tipo 5, default)
+                self.session.findById(
+                    f"{self._ID_TBL_LISTA}/txtWA_LISTA-POSNR[0,{idx}]"
+                ).text = pos_sin_ceros
+                self._esperar(T_RAPIDO)
+                clase = clases_dict.get(pos.zfill(4), clases_dict.get(pos, ""))
+                if clase:
+                    self.session.findById(
+                        f"{self._ID_TBL_LISTA}/ctxtWA_LISTA-CLASE_DESTINO[3,{idx}]"
+                    ).text = clase
+                    self._esperar(T_RAPIDO)
+                print(f"    Fila {idx}: POS={pos_sin_ceros} CLASE={clase or '(sin clase)'} → MODIFICAR (tipo 5)")
 
     def zmme0001_segunda_comparar_y_copy(self) -> bool:
         self.session.findById(self._ID_BTN_COMP).press()
@@ -978,6 +1135,8 @@ class AutomatizadorSAP:
 
             posiciones = self.zmme0001_leer_posiciones_popup()
             res.posiciones_bom = posiciones
+            for _p in posiciones:
+                print(f"    BOM popup → POS={_p['pos']} TIPO={_p['tipo']} MSG={_p.get('msg','')}")
             res._log(f"  Posiciones BOM ({len(posiciones)}): {posiciones}")
 
             if posiciones and zpla_usado:

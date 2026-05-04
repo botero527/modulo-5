@@ -879,7 +879,7 @@ def explorar():
     nivel        = request.args.get("nivel",        "").strip()
     cod_vehiculo = request.args.get("cod_vehiculo", "").strip()
     zfers_qs     = request.args.get("zfers",        "").strip()
-
+    
     zfers_lista = [z.strip() for z in zfers_qs.split(",") if z.strip()][:12] if zfers_qs else []
 
     hay_filtros = any([vehiculo, formula, pieza, color, version, nivel, cod_vehiculo]) or bool(zfers_lista)
