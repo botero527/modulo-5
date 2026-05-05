@@ -152,7 +152,7 @@ class AutomatizadorSAP:
             self._esperar(T_RAPIDO)
         except Exception:
             pass
-        
+
     def _cerrar_dialogs_abiertos(self):
         for wnd in ("wnd[2]", "wnd[1]"):
             try:
@@ -261,15 +261,27 @@ class AutomatizadorSAP:
         self.session.findById(self._ID_CTX_P_ZPLA).setFocus()
         self.session.findById(self._ID_CTX_P_ZPLA).caretPosition = 0
         self.session.findById("wnd[0]").sendVKey(4)   # F4
-        self._esperar(T_MEDIO)
+        self._esperar(T_LENTO)   # máquina lenta: esperar carga completa del popup
 
         # 7. Leer popup y seleccionar ZPLA que coincida con los del combinador
         _ID_POPUP_GRID = "wnd[1]/usr/cntlLO_CONTAINER0500/shellcont/shell"
         zpla_seleccionado = ""
         fila_seleccionada = 0
 
+        # Retry: si el grid no cargó todavía, esperar y reintentar una vez
+        grid_popup = None
+        for _intento_f4 in range(3):
+            try:
+                grid_popup = self.session.findById(_ID_POPUP_GRID)
+                break   # encontrado
+            except Exception:
+                if _intento_f4 < 2:
+                    print(f"    [F4] popup no listo, esperando... (intento {_intento_f4+1})")
+                    self._esperar(T_LENTO)
+        if grid_popup is None:
+            raise RuntimeError(f"F4 ZPLA popup falló: grid no apareció tras 3 intentos")
+
         try:
-            grid_popup = self.session.findById(_ID_POPUP_GRID)
             n_filas    = grid_popup.RowCount
             print(f"    F4 ZPLA popup: {n_filas} sugerencias SAP")
 
