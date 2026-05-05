@@ -24,11 +24,11 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 # ── Tiempos de espera ─────────────────────────────────────────────────────────
-T_RAPIDO = 1.0
-T_MEDIO  = 2.5
-T_LENTO  = 5.0
+T_RAPIDO = 1.5
+T_MEDIO  = 3.5
+T_LENTO  = 7.0
 
-_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "JPINZON") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -152,7 +152,7 @@ class AutomatizadorSAP:
             self._esperar(T_RAPIDO)
         except Exception:
             pass
-
+        
     def _cerrar_dialogs_abiertos(self):
         for wnd in ("wnd[2]", "wnd[1]"):
             try:
@@ -404,19 +404,23 @@ class AutomatizadorSAP:
             pass
 
         try:
+            print("     ZPPR0020: navegando...")
             ses2.findById(self._ID_TCODE_BOX).text = "ZPPR0020"
             ses2.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_LENTO)   # esperar carga completa de ZPPR0020
+            self._esperar(T_LENTO * 2)   # máquina lenta: doble espera
 
-            # cerrar popup de avisos post-navegación si existe
-            try:
-                ses2.findById("wnd[1]").sendVKey(0)
-                self._esperar(T_RAPIDO)
-            except Exception:
-                pass
+            # cerrar cualquier popup post-navegación
+            for _ in range(3):
+                try:
+                    ses2.findById("wnd[1]").sendVKey(0)
+                    self._esperar(T_RAPIDO)
+                except Exception:
+                    break
 
+            print("     ZPPR0020: llenando filtros...")
             ses2.findById(self._ID_ZPPR_USER).text   = _SAP_USER
             ses2.findById(self._ID_ZPPR_CENTRO).text = "CO01"
+            print("     ZPPR0020: ejecutando F8...")
             ses2.findById(self._ID_BTN_EXEC).press()
             self._esperar(T_LENTO)
 
@@ -508,53 +512,64 @@ class AutomatizadorSAP:
             print("    [WARN] ZPPR0020: grid no encontrado.")
             return resultado
 
+        # Columnas candidatas para ZFER, ZPLA y fases — probadas directamente
+        _COLS_ZFER = ("ZFER", "MATNR_ZFER", "MAT_ZFER", "ZFER_NEW", "MATNR", "MATERIAL")
+        _COLS_ZPLA = ("ZPLA", "MATNR_ZPLA", "MAT_ZPLA", "ZPLA_NEW")
+        _COLS_FASE = (
+            tuple(f"FASE{i}"    for i in range(1, 16)) +
+            tuple(f"FASE_{i:02}" for i in range(1, 16)) +
+            tuple(f"PHASE{i}"   for i in range(1, 16)) +
+            tuple(f"F{i:02}"    for i in range(1, 16))
+        )
+
+        def _leer(fila, candidatas):
+            for col in candidatas:
+                try:
+                    v = str(grid.GetCellValue(fila, col) or "").strip()
+                    if v:
+                        return v, col
+                except Exception:
+                    pass
+            return "", ""
+
         try:
             n_filas = grid.RowCount
             if not n_filas:
                 return resultado
-            try:
-                cols = list(grid.ColumnOrder)
-            except Exception:
-                cols = []
+
+            # Debug primera fila: probar TODAS las columnas candidatas
+            if n_filas > 0:
+                vals_debug = {}
+                for col in _COLS_ZFER + _COLS_ZPLA + _COLS_FASE[:5]:
+                    try:
+                        v = str(grid.GetCellValue(0, col) or "").strip()
+                        if v:
+                            vals_debug[col] = v
+                    except Exception:
+                        pass
+                print(f"    [DEBUG] ZPPR0020 fila0 cols con valor: {vals_debug}")
 
             for i in range(n_filas):
-                zfer_fila = ""
-                for col in cols:
-                    if "MAT_ZFER" in col.upper() or col.upper() in ("ZFER", "MATNR_ZFER"):
-                        try:
-                            zfer_fila = str(grid.GetCellValue(i, col) or "").strip()
-                            if zfer_fila:
-                                break
-                        except Exception:
-                            pass
+                zfer_fila, col_zfer = _leer(i, _COLS_ZFER)
                 if zfer_fila != zfer_nuevo:
                     continue
 
                 resultado["encontrado"] = True
-                for col in cols:
-                    if "MAT_ZPLA" in col.upper() or col.upper() in ("ZPLA", "MATNR_ZPLA"):
-                        try:
-                            v = str(grid.GetCellValue(i, col) or "").strip()
-                            if v:
-                                resultado["zpla"] = v
-                                break
-                        except Exception:
-                            pass
+                zpla_val, _ = _leer(i, _COLS_ZPLA)
+                resultado["zpla"] = zpla_val
 
-                fases  = {}
-                n_fase = 1
-                for col in cols:
-                    if col.upper().startswith("PHASE"):
-                        try:
-                            v = str(grid.GetCellValue(i, col) or "").strip()
-                            fases[f"Fase {n_fase}"] = v
-                            n_fase += 1
-                        except Exception:
-                            pass
+                fases = {}
+                for col in _COLS_FASE:
+                    try:
+                        v = str(grid.GetCellValue(i, col) or "").strip()
+                        if v:
+                            fases[col] = v
+                    except Exception:
+                        pass
                 resultado["fases"] = fases
                 n_s = sum(1 for v in fases.values() if v.upper() == "S")
                 n_e = sum(1 for v in fases.values() if v.upper() == "E")
-                print(f"    ZPPR0020 fila {i}: ZPLA={resultado['zpla']} | S={n_s} | E={n_e}")
+                print(f"    ZPPR0020 fila {i} (col={col_zfer}): ZPLA={zpla_val} | S={n_s} | E={n_e} | fases={fases}")
                 break
 
         except Exception as e:

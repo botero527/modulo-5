@@ -1471,7 +1471,10 @@ def api_sap_reporte(batch_id: str):
                 item.get("zfer_nuevo", ""),
                 item.get("zfor_nuevo", ""),
                 item.get("zpla", ""),
-                ", ".join(item.get("posiciones", [])),
+                ", ".join(
+                    p["pos"] if isinstance(p, dict) else str(p)
+                    for p in item.get("posiciones", [])
+                ),
                 item.get("duracion_seg", 0),
             ]
             for c, v in enumerate(vals, 1):
