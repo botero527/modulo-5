@@ -24,11 +24,11 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 # ── Tiempos de espera ─────────────────────────────────────────────────────────
-T_RAPIDO = 0.4
-T_MEDIO  = 1.2
-T_LENTO  = 2.5
+T_RAPIDO = 1.0
+T_MEDIO  = 2.5
+T_LENTO  = 5.0
 
-_SAP_USER = os.environ.get("SAP_USER", "FESPITIA")
+_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -115,7 +115,7 @@ class AutomatizadorSAP:
         self.app      = None
         self.conn_sap = None
         self.session  = None
-
+#excepcion de tiempo 
     def conectar(self) -> bool:
         try:
             sap_gui_auto = win32com.client.GetObject("SAPGUI")
@@ -223,10 +223,12 @@ class AutomatizadorSAP:
     # ── ZMME0001 — ejecutar ───────────────────────────────────────────────────
 
     def zmme0001_ejecutar(self, zfer_base: str, p_color: str, p_franj: str,
-                          zplas_validos: list) -> tuple:
+                          zplas_validos: list, forzar_be: bool = False) -> tuple:
         """
         ZMME0001 → Homologar → Cambio de Color → F4 en ZPLA (SAP sugiere) →
         valida contra zplas_validos del combinador → doble clic → F8.
+        forzar_be=True: en el popup F4 selecciona la fila cuya descripción
+        contenga 'BE' (caso especial nivel 02/03 + tipo pieza 009/090 + clase 0100 termina en 800).
         Retorna (zfer_nuevo, zfor_nuevo, zpla_seleccionado).
         """
         self._cerrar_dialogs_abiertos()
@@ -271,10 +273,21 @@ class AutomatizadorSAP:
             n_filas    = grid_popup.RowCount
             print(f"    F4 ZPLA popup: {n_filas} sugerencias SAP")
 
-            # Leer todos los ZPLAs que sugiere SAP
-            zplas_sap = []
+            # — Dump columnas reales del grid (solo para debug, una vez) ——————
+            try:
+                cols_obj = grid_popup.Columns
+                col_names_real = [cols_obj.Item(ci).Name for ci in range(cols_obj.Count)]
+                print(f"    [DEBUG] Columnas popup: {col_names_real}")
+            except Exception as _ce:
+                col_names_real = []
+                print(f"    [DEBUG] No se pudieron leer columnas: {_ce}")
+
+            # Leer todos los ZPLAs que sugiere SAP (número + descripción)
+            zplas_sap  = []
+            descs_sap  = []
             for i in range(n_filas):
-                val = ""
+                val  = ""
+                desc = ""
                 for col in ("MATNR", "ZPLA", "ZPLARF", "MATERIAL"):
                     try:
                         val = str(grid_popup.GetCellValue(i, col) or "").strip()
@@ -282,19 +295,46 @@ class AutomatizadorSAP:
                             break
                     except Exception:
                         pass
+                # Intentar columnas conocidas + las columnas reales detectadas
+                desc_cols = list(dict.fromkeys(
+                    ["MAKTX", "DESCR", "TEXT", "MAKTG", "MAKTX_K", "BEZEICHNUNG", "BEZEICH"]
+                    + [c for c in col_names_real if c not in ("MATNR", "ZPLA", "ZPLARF", "MATERIAL")]
+                ))
+                for col in desc_cols:
+                    try:
+                        desc = str(grid_popup.GetCellValue(i, col) or "").strip()
+                        if desc:
+                            break
+                    except Exception:
+                        pass
                 zplas_sap.append(val)
-                print(f"      Sugerencia SAP fila {i}: {val}")
+                descs_sap.append(desc)
+                print(f"      Sugerencia SAP fila {i}: {val}  desc='{desc}'")
 
-            # Buscar la primera sugerencia de SAP que esté en nuestros ZPLAs válidos
+            # Selección de fila según contexto
             zplas_set = {z.strip() for z in zplas_validos if z.strip()}
-            fila_seleccionada = 0   # por defecto tomar la primera sugerencia de SAP
-            for i, z in enumerate(zplas_sap):
-                if z in zplas_set:
-                    fila_seleccionada = i
-                    print(f"    ZPLA validado: fila {i} = {z} (coincide con combinador)")
-                    break
+            fila_seleccionada = 0   # default: primera sugerencia
+
+            if forzar_be:
+                # Caso especial: buscar fila cuya descripción contenga "BE"
+                fila_be = next(
+                    (i for i, d in enumerate(descs_sap) if "BE" in d.upper()),
+                    None
+                )
+                if fila_be is not None:
+                    fila_seleccionada = fila_be
+                    print(f"    [BE] fila seleccionada: {fila_be} = {zplas_sap[fila_be]}  desc='{descs_sap[fila_be]}'")
+                else:
+                    print(f"    [BE][WARN] No se encontró ZPLA con 'BE' en desc — tomando fila 0")
             else:
-                print(f"    [WARN] Ningún ZPLA del popup coincide con el combinador {zplas_validos} — tomando fila 0: {zplas_sap[0] if zplas_sap else '?'}")
+                # Flujo normal: buscar coincidencia con zplas_validos del combinador
+                for i, z in enumerate(zplas_sap):
+                    if z in zplas_set:
+                        fila_seleccionada = i
+                        print(f"    ZPLA validado: fila {i} = {z} (coincide con combinador)")
+                        break
+                else:
+                    print(f"    [WARN] Ningún ZPLA del popup coincide con el combinador {zplas_validos} — tomando fila 0: {zplas_sap[0] if zplas_sap else '?'}")
 
             zpla_seleccionado = zplas_sap[fila_seleccionada] if zplas_sap else ""
 
@@ -1045,6 +1085,7 @@ class AutomatizadorSAP:
 
     def procesar(self, zfer_base: str, color_codigo: str, color_nombre: str,
                  franja: str = "00", pn_base: str = "", zpla: str = "",
+                 nivel: str = "", tipo_pieza: str = "",
                  step_callback=None) -> ResultadoItem:
         """
         Procesa una combinación zfer_base + color en SAP.
@@ -1081,12 +1122,35 @@ class AutomatizadorSAP:
                 raise RuntimeError(f"ZPPP0042: {val['error']}")
             res._log(f"  VERID={val['verid']} — OK")
 
+            # ── Caso especial BE: nivel 02/03 + tipo_pieza 009/090 ───────────────
+            # Si se cumple la condición, verificar si posición 0100 del ZFER base
+            # en ZPPR0008 tiene clase que termine en "800". Si es así, en el F4
+            # del ZPLA hay que seleccionar la fila que contenga "BE" en descripción.
+            forzar_be = False
+            nivel_norm     = str(nivel or "").strip().lstrip("0") or "0"
+            tipopza_norm   = str(tipo_pieza or "").strip().lstrip("0") or "0"
+            es_caso_be     = nivel_norm in ("2", "3") and tipopza_norm in ("9", "90")
+            if es_caso_be:
+                res._log(f"  Caso especial BE: nivel={nivel} tipo_pieza={tipo_pieza} — verificando pos 0100 en ZPPR0008")
+                try:
+                    # Reutilizamos _leer_clases_zpla_sap pero sobre el ZFER base
+                    clases_zfer = self._leer_clases_zpla_sap(zfer_base)
+                    clase_0100  = clases_zfer.get("0100", clases_zfer.get("100", ""))
+                    res._log(f"  Pos 0100 → clase: '{clase_0100}'")
+                    if clase_0100.upper().endswith("800") or clase_0100.upper().endswith("800_"):
+                        forzar_be = True
+                        res._log("  → Clase termina en 800: se seleccionará ZPLA con 'BE'")
+                    else:
+                        res._log("  → Clase NO termina en 800: proceso normal")
+                except Exception as e:
+                    res._log(f"  [WARN] No pudo verificar pos 0100: {e} — proceso normal")
+
             # PASO 2 — ZMME0001 ejecutar
             _cb(2, f"Creando nueva variante de color en SAP (ZMME0001) — color {p_color}")
             # zpla puede ser string simple o lista separada por comas
             zplas_validos = [z.strip() for z in str(zpla).split(",") if z.strip()]
             zfer_nuevo, zfor_nuevo, zpla_usado = self.zmme0001_ejecutar(
-                zfer_base, p_color, p_franj, zplas_validos
+                zfer_base, p_color, p_franj, zplas_validos, forzar_be=forzar_be
             )
             res.zfer_nuevo = zfer_nuevo
             res.zfor_nuevo = zfor_nuevo
@@ -1169,7 +1233,7 @@ class AutomatizadorSAP:
             res.estado    = "OK"
             res.fecha_fin = datetime.datetime.now()
             res._log(f"=== COMPLETADO OK ({res.duracion_seg}s) ===")
-
+            
         except Exception as e:
             res.estado    = "ERROR"
             res.error     = str(e)
@@ -1184,7 +1248,8 @@ class AutomatizadorSAP:
 
 def procesar_combinacion(zfer_base: str, color_codigo: str, color_nombre: str,
                          franja: str = "00", pn_base: str = "",
-                         zpla: str = "", step_callback=None) -> ResultadoItem:
+                         zpla: str = "", nivel: str = "", tipo_pieza: str = "",
+                         step_callback=None) -> ResultadoItem:
     auto = AutomatizadorSAP()
     if not auto.conectar():
         r = ResultadoItem(
@@ -1195,4 +1260,5 @@ def procesar_combinacion(zfer_base: str, color_codigo: str, color_nombre: str,
         )
         return r
     return auto.procesar(zfer_base, color_codigo, color_nombre, franja, pn_base, zpla,
+                         nivel=nivel, tipo_pieza=tipo_pieza,
                          step_callback=step_callback)

@@ -540,6 +540,69 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECCIÓN: COMBINACIONES POR FÓRMULA
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div style="margin-top:2.5rem;" id="sec-formula-alt">
+
+  <!-- Encabezado + filtros -->
+  <div class="card mb-3" style="border-color:#2d2150;">
+    <div class="card-header" style="border-bottom:1px solid #2d2150;">
+      <i class="bi bi-arrow-left-right me-2" style="color:#bc8cff;"></i>
+      <span style="font-weight:800;">Cambio de Fórmula</span>
+      <span style="color:var(--muted); font-size:.8rem; margin-left:.5rem;">
+        Fórmula base: <strong style="color:var(--accent);">{{ formula_code }}</strong>
+        &nbsp;·&nbsp;Pieza: <strong>{{ piece_type }}</strong>
+      </span>
+    </div>
+    <div class="card-body" style="padding:.9rem 1.2rem;">
+      <div style="display:flex; gap:.8rem; flex-wrap:wrap; align-items:flex-end;">
+
+        <!-- Filtro Nivel -->
+        <div>
+          <label style="font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; display:block; margin-bottom:.3rem;">
+            <i class="bi bi-layers me-1"></i>Nivel
+          </label>
+          <input id="flt-nivel" type="text" value="{{ nivel }}"
+                 placeholder="ej: 03"
+                 style="background:#0d1117; border:1px solid #30363d; color:var(--text); border-radius:8px;
+                        padding:.45rem .75rem; font-size:.88rem; width:100px;"
+                 autocomplete="off" maxlength="10">
+        </div>
+
+        <!-- Filtro Subproducto -->
+        <div>
+          <label style="font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; display:block; margin-bottom:.3rem;">
+            <i class="bi bi-tag me-1"></i>Subproducto
+          </label>
+          <input id="flt-sub" type="text" value="{{ subproducto }}"
+                 placeholder="ej: X57, B1"
+                 style="background:#0d1117; border:1px solid #30363d; color:var(--text); border-radius:8px;
+                        padding:.45rem .75rem; font-size:.88rem; width:140px;"
+                 autocomplete="off" maxlength="20">
+        </div>
+
+        <!-- Botón buscar -->
+        <button id="btn-buscar-formulas"
+                style="background:#6e40c9; color:#fff; border:none; border-radius:8px;
+                       padding:.45rem 1.2rem; font-size:.85rem; font-weight:700; cursor:pointer;
+                       display:flex; align-items:center; gap:.4rem; height:36px;">
+          <i class="bi bi-search"></i>Buscar fórmulas
+        </button>
+
+        <!-- Info vacíos -->
+        <span style="font-size:.78rem; color:#484f58; align-self:center;">
+          Deja vacío para no filtrar por ese campo
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contenedor de resultados (se llena dinámicamente) -->
+  <div id="formulas-resultado"></div>
+
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -579,6 +642,7 @@ const FORMULA_CODE = "{{ formula_code }}";
 const PIECE_TYPE   = "{{ piece_type }}";
 const FRANJA_BASE  = "{{ shade_band }}";
 const PN_BASE      = "{{ partnumber }}";
+const NIVEL_BASE   = "{{ nivel }}";
 
 // ── Nombres amigables de los 5 pasos ─────────────────────────────────────────
 const PASO_NOMBRES = [
@@ -751,6 +815,8 @@ if (btnEjec) {
         zpla:         row.dataset.zplas || row.dataset.zpla,
         franja:       FRANJA_BASE,
         pn_base:      PN_BASE,
+        nivel:        NIVEL_BASE,
+        tipo_pieza:   PIECE_TYPE,
       };
     });
 
@@ -964,5 +1030,185 @@ function _mostrarReporte(data, batchId) {
   document.getElementById("btn-dl-excel").href = `/api/sap/reporte/${batchId}`;
   document.getElementById("modal-reporte").style.display = "flex";
 }
+
+// ── Combinaciones por Fórmula ──────────────────────────────────────────────
+
+function _renderFormulaCards(formulas) {
+  const cont = document.getElementById("formulas-resultado");
+  if (!cont) return;
+
+  if (!formulas.length) {
+    cont.innerHTML = `<div style="text-align:center; padding:2rem 0; color:#484f58;">
+      <i class="bi bi-search" style="font-size:2rem; display:block; margin-bottom:.5rem;"></i>
+      Sin fórmulas alternativas para los filtros indicados
+    </div>`;
+    return;
+  }
+
+  cont.innerHTML = formulas.map((fa, i) => {
+    const idx = i + 1;
+    const filas = fa.colores.map(c => `
+      <tr style="border-bottom:1px solid #161b22;"
+          onmouseover="this.style.background='rgba(188,140,255,.06)'"
+          onmouseout="this.style.background=''">
+        <td style="padding:.5rem .8rem; text-align:center;">
+          <input type="checkbox" class="chk-fc chk-fc-${idx}"
+                 data-fidx="${idx}" data-formula="${fa.formula}"
+                 data-color="${c.color}" data-color-nombre="${c.color_nombre}"
+                 data-zpla="${c.zpla}"
+                 style="width:15px; height:15px; accent-color:#bc8cff; cursor:pointer;">
+        </td>
+        <td style="padding:.5rem .8rem;"><span class="tag t-color">${c.color}</span></td>
+        <td style="padding:.5rem .8rem; font-weight:600;">${c.color_nombre}</td>
+        <td style="padding:.5rem .8rem; color:var(--muted); font-size:.82rem; font-weight:600;">${c.zpla}</td>
+        <td style="padding:.5rem .8rem; color:#484f58; font-size:.78rem;">${c.differentials || '—'}</td>
+      </tr>`).join("");
+
+    return `
+    <div class="card mb-3" style="border-color:#2d2150;">
+      <div class="card-header" style="cursor:pointer; user-select:none; display:flex; align-items:center; gap:.7rem;"
+           onclick="_toggleFC(${idx})">
+        <i class="bi bi-flask" style="color:#bc8cff;"></i>
+        <span style="font-weight:800; font-size:1rem; color:#bc8cff;">${fa.formula}</span>
+        <span class="tag" style="background:#1e1030; border:1px solid #6e40c9; color:#bc8cff; font-size:.72rem;">
+          ${fa.colores.length} color(es)
+        </span>
+        <i class="bi bi-chevron-down ms-auto" id="fc-chv-${idx}" style="color:var(--muted); transition:transform .2s;"></i>
+      </div>
+      <div id="fc-body-${idx}" style="display:none;">
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:.85rem;">
+            <thead>
+              <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+                <th style="padding:.5rem .8rem; width:40px;">
+                  <input type="checkbox" id="chk-fc-all-${idx}" title="Seleccionar todos"
+                         style="width:15px; height:15px; accent-color:#bc8cff; cursor:pointer;"
+                         onchange="_fcSelAll(${idx}, this.checked)">
+                </th>
+                <th style="padding:.5rem .8rem;">Color</th>
+                <th style="padding:.5rem .8rem;">Nombre</th>
+                <th style="padding:.5rem .8rem;">ZPLA</th>
+                <th style="padding:.5rem .8rem;">Diferencial</th>
+              </tr>
+            </thead>
+            <tbody>${filas}</tbody>
+          </table>
+        </div>
+        <div style="padding:.8rem 1rem; border-top:1px solid #21262d; display:flex; align-items:center; gap:.8rem; flex-wrap:wrap;">
+          <span style="font-size:.8rem; color:var(--muted);">
+            <span id="cnt-fc-${idx}">0</span> seleccionado(s)
+          </span>
+          <button id="btn-fc-${idx}" data-idx="${idx}" data-formula="${fa.formula}"
+                  onclick="_fcEjecutar(${idx}, '${fa.formula}')"
+                  style="background:#6e40c9; color:#fff; border:none; border-radius:8px;
+                         padding:.45rem 1.2rem; font-size:.82rem; font-weight:700; cursor:pointer;
+                         display:flex; align-items:center; gap:.4rem;" disabled>
+            <i class="bi bi-arrow-left-right"></i>
+            Homologar ${fa.formula}
+            <span id="badge-fc-${idx}" style="background:#bc8cff; color:#1a0050;
+                  border-radius:20px; padding:.1rem .5rem; font-size:.72rem; font-weight:900; display:none;"></span>
+          </button>
+          <span id="status-fc-${idx}" style="font-size:.78rem; color:#bc8cff;"></span>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+
+  // Registrar eventos de checkboxes dinámicos
+  document.querySelectorAll(".chk-fc").forEach(chk => {
+    chk.addEventListener("change", () => _fcActualizarCnt(parseInt(chk.dataset.fidx)));
+  });
+}
+
+function _toggleFC(idx) {
+  const body = document.getElementById(`fc-body-${idx}`);
+  const chv  = document.getElementById(`fc-chv-${idx}`);
+  if (!body) return;
+  const open = body.style.display === "none" || body.style.display === "";
+  body.style.display = open ? "block" : "none";
+  if (chv) chv.style.transform = open ? "rotate(180deg)" : "";
+}
+
+function _fcSelAll(idx, checked) {
+  document.querySelectorAll(`.chk-fc-${idx}`).forEach(c => { c.checked = checked; });
+  _fcActualizarCnt(idx);
+}
+
+function _fcActualizarCnt(idx) {
+  const sel   = document.querySelectorAll(`.chk-fc-${idx}:checked`).length;
+  const cnt   = document.getElementById(`cnt-fc-${idx}`);
+  const btn   = document.getElementById(`btn-fc-${idx}`);
+  const badge = document.getElementById(`badge-fc-${idx}`);
+  if (cnt)   cnt.textContent    = sel;
+  if (btn)   btn.disabled       = sel === 0;
+  if (badge) { badge.textContent = sel; badge.style.display = sel > 0 ? "inline" : "none"; }
+}
+
+function _fcEjecutar(idx, formula) {
+  const checks = document.querySelectorAll(`.chk-fc-${idx}:checked`);
+  if (!checks.length) return;
+  const statusEl = document.getElementById(`status-fc-${idx}`);
+  const btn      = document.getElementById(`btn-fc-${idx}`);
+  btn.disabled   = true;
+  if (statusEl) statusEl.textContent = "Preparando…";
+
+  const combinaciones = Array.from(checks).map(c => ({
+    zfer:            ZFER_BASE,
+    color:           c.dataset.color,
+    color_nombre:    c.dataset.colorNombre,
+    zpla:            c.dataset.zpla,
+    franja:          FRANJA_BASE,
+    pn_base:         PN_BASE,
+    nivel:           NIVEL_BASE,
+    tipo_pieza:      PIECE_TYPE,
+    formula_destino: formula,
+    tipo_cambio:     "formula",
+  }));
+
+  if (statusEl) statusEl.textContent = `${combinaciones.length} combinación(es) listas. (Homologación por fórmula próximamente)`;
+  console.log("[Fórmula] Combinaciones:", combinaciones);
+}
+
+// Buscar fórmulas con filtros dinámicos
+async function buscarFormulasAlt() {
+  const nivel = document.getElementById("flt-nivel")?.value.trim() || "";
+  const sub   = document.getElementById("flt-sub")?.value.trim()   || "";
+  const btn   = document.getElementById("btn-buscar-formulas");
+  const cont  = document.getElementById("formulas-resultado");
+  if (!cont) return;
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Buscando…'; }
+  cont.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#484f58;">
+    <i class="bi bi-arrow-repeat" style="font-size:1.5rem; display:block; margin-bottom:.4rem;"></i>Consultando…</div>`;
+
+  try {
+    const params = new URLSearchParams({
+      piece_type:   PIECE_TYPE,
+      formula_base: FORMULA_CODE,
+      nivel:        nivel,
+      subproducto:  sub,
+    });
+    const r    = await fetch(`/api/formulas_alt?${params}`);
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    _renderFormulaCards(data);
+  } catch(e) {
+    if (cont) cont.innerHTML = `<div style="color:#ffa198; padding:1rem;">Error: ${e.message}</div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-search"></i> Buscar fórmulas'; }
+  }
+}
+
+document.getElementById("btn-buscar-formulas")?.addEventListener("click", buscarFormulasAlt);
+
+// Enter en los filtros también busca
+["flt-nivel","flt-sub"].forEach(id => {
+  document.getElementById(id)?.addEventListener("keydown", e => {
+    if (e.key === "Enter") buscarFormulasAlt();
+  });
+});
+
+// Carga inicial con los valores del ZFER
+buscarFormulasAlt();
 </script>
 {% endblock %}

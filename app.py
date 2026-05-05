@@ -659,6 +659,69 @@ def q_zplas_compatibles(formula_code: str, piece_type: str,
     except Exception as e:
         return [{"_error": str(e)}]
 
+def q_formulas_por_pieza(piece_type: str, nivel: str, subproducto: str,
+                          formula_base: str) -> list:
+    """
+    Busca fórmulas alternativas disponibles para el mismo tipo de pieza / nivel / subproducto.
+    Retorna lista de dicts: {formula, colores: [{zpla, color, color_nombre, differentials}]}
+    Excluye la fórmula base del ZFER.
+    """
+    if not piece_type:
+        return []
+    try:
+        conn = get_conn()
+        cur  = conn.cursor()
+        cur.execute("""
+            WITH zpla_attrs AS (
+                SELECT
+                    h.MATERIAL,
+                    MAX(CASE WHEN c.ATNAM = 'Z_FORMULA_CODE'            THEN LTRIM(RTRIM(c.ATWRT)) END) AS formula,
+                    MAX(CASE WHEN c.ATNAM = 'Z_COLOR'                   THEN LTRIM(RTRIM(c.ATWRT)) END) AS color,
+                    MAX(CASE WHEN c.ATNAM = 'Z_PIECE_TYPE'              THEN LTRIM(RTRIM(c.ATWRT)) END) AS piece_types,
+                    MAX(CASE WHEN c.ATNAM = 'Z_AGP_LEVEL'               THEN LTRIM(RTRIM(c.ATWRT)) END) AS nivel,
+                    MAX(CASE WHEN c.ATNAM = 'Z_SUBPRODUCT'              THEN LTRIM(RTRIM(c.ATWRT)) END) AS subproducto,
+                    MAX(CASE WHEN c.ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS'  THEN LTRIM(RTRIM(c.ATWRT)) END) AS differentials
+                FROM dbo.ODATA_ZPLA_HEAD h
+                JOIN dbo.ODATA_ZPLA_CLASS_001 c ON c.MATERIAL = h.MATERIAL AND c.CENTRO = 'CO01'
+                WHERE h.CENTRO  = 'CO01'
+                  AND UPPER(ISNULL(h.STATUS, '')) != 'ZZ'
+                  AND c.TIPO_MAT = 'ZPLA'
+                GROUP BY h.MATERIAL
+            )
+            SELECT MATERIAL, formula, color, differentials
+            FROM   zpla_attrs
+            WHERE  formula IS NOT NULL
+              AND  color   IS NOT NULL
+              AND  (? = '' OR CHARINDEX(?, ',' + piece_types + ',') > 0)
+              AND  (? = '' OR nivel      = ?)
+              AND  (? = '' OR subproducto = ?)
+              AND  formula <> ?
+            ORDER BY formula, color
+        """, (piece_type, piece_type,
+              nivel or '', nivel or '',
+              subproducto or '', subproducto or '',
+              formula_base or ''))
+        rows = cur.fetchall()
+        conn.close()
+
+        # Agrupar por fórmula
+        formulas: dict = {}
+        for mat, formula, color, differentials in rows:
+            if formula not in formulas:
+                formulas[formula] = []
+            formulas[formula].append({
+                "zpla":          str(mat).strip(),
+                "color":         str(color).strip(),
+                "color_nombre":  COLORES.get(str(color).strip(), str(color).strip()),
+                "differentials": differentials or "",
+            })
+
+        return [{"formula": f, "colores": cols}
+                for f, cols in sorted(formulas.items())]
+    except Exception as e:
+        return [{"_error": str(e)}]
+
+
 def q_mercados(entregas: list) -> list:
     """Tabla 4: ODATA_ZCDS_Entregas_Head_CO — conteo por route/mercado."""
     if not entregas:
@@ -781,7 +844,7 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="", nivel=""
                           "zfor":   str(r[3]).strip() if r[3] is not None else ""}
                   for r in cur.fetchall()}
         conn.close()
-
+        
         resultado = []
         for mat in sorted(materiales):
             d = pivot.get(mat, {})
@@ -1005,6 +1068,8 @@ def combinaciones(material: str):
     vehicle_model = attrs.get("Z_VEHICLE_MODEL",         "")
     thickness     = attrs.get("Z_COMMERCIAL_THICKNESS",  "")
     differentials = attrs.get("Z_BEHAVIOR_DIFFERENTIALS","")
+    nivel         = attrs.get("Z_AGP_LEVEL", "")
+    subproducto   = attrs.get("Z_SUBPRODUCT", "")
 
     pn_parsed = _parsear_partnumber(partnumber)
 
@@ -1025,6 +1090,11 @@ def combinaciones(material: str):
     zplas = q_zplas_compatibles(formula_code, piece_type, shade_band, differentials)
     if zplas and "_error" in zplas[0]:
         zplas = []
+
+    # Fórmulas alternativas para combinaciones por fórmula
+    formulas_alt = q_formulas_por_pieza(piece_type, nivel, subproducto, formula_code)
+    if formulas_alt and "_error" in formulas_alt[0]:
+        formulas_alt = []
     # Mapa color → ZFER existente
     colores_con_zfer = {v["color_raw"]: v for v in variantes if v.get("color_raw")}
     # Mapa color → lista de ZPLAs (puede haber varios por color con distintos diferenciales)
@@ -1079,6 +1149,7 @@ def combinaciones(material: str):
         shade_band     = shade_band,
         thickness      = thickness,
         differentials  = differentials,
+        nivel          = nivel,
         partnumber     = partnumber,
         pn_parsed      = pn_parsed,
         pn_pattern_ui  = pn_pattern_ui,
@@ -1088,10 +1159,28 @@ def combinaciones(material: str):
         n_existe       = n_existe,
         n_disponible   = n_disponible,
         n_sin_zpla     = n_sin_zpla,
+        formulas_alt   = formulas_alt,
+        subproducto    = subproducto,
     )
 
 
 # ── API Bloqueos ───────────────────────────────────────────────────────────────
+
+@app.route("/api/formulas_alt")
+@login_required
+def api_formulas_alt():
+    """Devuelve fórmulas alternativas filtradas dinámicamente."""
+    piece_type   = request.args.get("piece_type",   "").strip()
+    nivel        = request.args.get("nivel",        "").strip()
+    subproducto  = request.args.get("subproducto",  "").strip()
+    formula_base = request.args.get("formula_base", "").strip()
+    if not piece_type:
+        return jsonify([])
+    result = q_formulas_por_pieza(piece_type, nivel, subproducto, formula_base)
+    if result and "_error" in result[0]:
+        return jsonify({"error": result[0]["_error"]}), 500
+    return jsonify(result)
+
 
 @app.route("/api/bloquear", methods=["POST"])
 @login_required
@@ -1196,6 +1285,8 @@ def api_sap_ejecutar():
                     c.get("franja", "00") or "00",
                     c.get("pn_base", ""),
                     c.get("zpla", ""),
+                    nivel      = c.get("nivel", ""),
+                    tipo_pieza = c.get("tipo_pieza", ""),
                     step_callback=_step_cb,
                 )
                 job = _sap_jobs[batch_id]
