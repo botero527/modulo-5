@@ -671,42 +671,64 @@ def q_formulas_por_pieza(piece_type: str, nivel: str, subproducto: str,
     try:
         conn = get_conn()
         cur  = conn.cursor()
+        pt_in    = piece_type.strip()
+        niv_in   = nivel.strip()       if nivel       else ""
+        sub_in   = subproducto.strip() if subproducto else ""
+        fbase_in = formula_base.strip() if formula_base else ""
+
         cur.execute("""
-            WITH zpla_attrs AS (
-                SELECT
-                    h.MATERIAL,
-                    MAX(CASE WHEN c.ATNAM = 'Z_FORMULA_CODE'            THEN LTRIM(RTRIM(c.ATWRT)) END) AS formula,
-                    MAX(CASE WHEN c.ATNAM = 'Z_COLOR'                   THEN LTRIM(RTRIM(c.ATWRT)) END) AS color,
-                    MAX(CASE WHEN c.ATNAM = 'Z_PIECE_TYPE'              THEN LTRIM(RTRIM(c.ATWRT)) END) AS piece_types,
-                    MAX(CASE WHEN c.ATNAM = 'Z_AGP_LEVEL'               THEN LTRIM(RTRIM(c.ATWRT)) END) AS nivel,
-                    MAX(CASE WHEN c.ATNAM = 'Z_SUBPRODUCT'              THEN LTRIM(RTRIM(c.ATWRT)) END) AS subproducto,
-                    MAX(CASE WHEN c.ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS'  THEN LTRIM(RTRIM(c.ATWRT)) END) AS differentials
-                FROM dbo.ODATA_ZPLA_HEAD h
-                JOIN dbo.ODATA_ZPLA_CLASS_001 c ON c.MATERIAL = h.MATERIAL AND c.CENTRO = 'CO01'
-                WHERE h.CENTRO  = 'CO01'
-                  AND UPPER(ISNULL(h.STATUS, '')) != 'ZZ'
-                  AND c.TIPO_MAT = 'ZPLA'
-                GROUP BY h.MATERIAL
+            WITH
+            ZPLA_HEAD AS (
+                SELECT MATERIAL
+                FROM   dbo.ODATA_ZPLA_HEAD
+                WHERE  STATUS IS NULL
+            ),
+            ZPLA_001 AS (
+                SELECT MATERIAL,
+                       ATNAM,
+                       LTRIM(RTRIM(ATWRT)) AS ATWRT
+                FROM   dbo.ODATA_ZPLA_CLASS_001
+                WHERE  ATNAM IN (
+                    'Z_FORMULA_CODE', 'Z_COLOR', 'Z_PIECE_TYPE',
+                    'Z_AGP_LEVEL', 'Z_SUBPRODUCT', 'Z_BEHAVIOR_DIFFERENTIALS'
+                )
             )
-            SELECT MATERIAL, formula, color, differentials
-            FROM   zpla_attrs
-            WHERE  formula IS NOT NULL
-              AND  color   IS NOT NULL
-              AND  (? = '' OR CHARINDEX(?, ',' + piece_types + ',') > 0)
-              AND  (? = '' OR nivel      = ?)
-              AND  (? = '' OR subproducto = ?)
-              AND  formula <> ?
+            SELECT
+                h.MATERIAL,
+                MAX(CASE WHEN a.ATNAM = 'Z_FORMULA_CODE'           THEN a.ATWRT END) AS formula,
+                MAX(CASE WHEN a.ATNAM = 'Z_COLOR'                  THEN a.ATWRT END) AS color,
+                MAX(CASE WHEN a.ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS' THEN a.ATWRT END) AS differentials
+            FROM   ZPLA_HEAD h
+            LEFT JOIN ZPLA_001 a ON a.MATERIAL = h.MATERIAL
+            GROUP BY h.MATERIAL
+            HAVING
+                MAX(CASE WHEN a.ATNAM = 'Z_FORMULA_CODE' THEN a.ATWRT END) IS NOT NULL
+                AND MAX(CASE WHEN a.ATNAM = 'Z_COLOR'    THEN a.ATWRT END) IS NOT NULL
+                -- piece_type: campo CSV => CHARINDEX para buscar el valor dentro de la lista
+                AND (? = '' OR CHARINDEX(?, ISNULL(MAX(CASE WHEN a.ATNAM = 'Z_PIECE_TYPE' THEN a.ATWRT END),'')) > 0)
+                -- filtro nivel
+                AND (? = '' OR MAX(CASE WHEN a.ATNAM = 'Z_AGP_LEVEL'  THEN a.ATWRT END) = ?)
+                -- filtro subproducto
+                AND (? = '' OR MAX(CASE WHEN a.ATNAM = 'Z_SUBPRODUCT' THEN a.ATWRT END) = ?)
+                -- excluir la fórmula base del ZFER actual
+                AND ISNULL(MAX(CASE WHEN a.ATNAM = 'Z_FORMULA_CODE' THEN a.ATWRT END), '') <> ?
             ORDER BY formula, color
-        """, (piece_type, piece_type,
-              nivel or '', nivel or '',
-              subproducto or '', subproducto or '',
-              formula_base or ''))
+        """, (pt_in, pt_in,
+              niv_in, niv_in,
+              sub_in, sub_in,
+              fbase_in))
         rows = cur.fetchall()
         conn.close()
 
-        # Agrupar por fórmula
+        print(f"  [q_formulas] piece={pt_in!r} nivel={niv_in!r} sub={sub_in!r} fbase={fbase_in!r} → {len(rows)} filas")
+        if rows:
+            r0 = rows[0]
+            print(f"  [q_formulas] ejemplo fila0: mat={r0[0]} formula={r0[1]} color={r0[2]} differentials={r0[3]}")
+
+        # Agrupar por fórmula skyprom
         formulas: dict = {}
-        for mat, formula, color, differentials in rows:
+        for row in rows:
+            mat, formula, color, differentials = row[0], row[1], row[2], row[3]
             if formula not in formulas:
                 formulas[formula] = []
             formulas[formula].append({
@@ -796,7 +818,7 @@ def q_explorar(vehiculo="", formula="", pieza="", color="", version="", nivel=""
             if not or_parts:
                 conn.close()
                 return []
-
+            
             n = len(activos) + (1 if cod_vehiculo.strip() else 0)
             cur.execute(f"""
                 SELECT TOP 300 c.MATERIAL
@@ -1312,6 +1334,88 @@ def api_sap_ejecutar():
             _sap_jobs[batch_id]["_current"]  = None
 
         threading.Thread(target=_run_batch, daemon=True).start()
+        return jsonify({"ok": True, "batch_id": batch_id, "total": len(combis_raw)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/sap/ejecutar_formula_sin_acero", methods=["POST"])
+@login_required
+def api_sap_ejecutar_formula_sin_acero():
+    """Lanza automatización SAP para cambio de fórmula (con acero → sin acero)."""
+    try:
+        data = request.get_json(force=True)
+        import uuid as _uuid, datetime as _dt
+
+        combis_raw = data.get("combinaciones", [])
+        if not combis_raw:
+            return jsonify({"ok": False, "error": "Faltan combinaciones"}), 400
+
+        batch_id = str(_uuid.uuid4())[:8]
+        _sap_jobs[batch_id] = {
+            "estado":       "EN_PROCESO",
+            "total":        len(combis_raw),
+            "procesados":   0,
+            "items":        [],
+            "zfer_base":    combis_raw[0].get("zfer", "") if combis_raw else "",
+            "pn_base":      combis_raw[0].get("pn_base", "") if combis_raw else "",
+            "franja":       combis_raw[0].get("franja", "") if combis_raw else "",
+            "fecha_inicio": _dt.datetime.now().isoformat(timespec="seconds"),
+            "fecha_fin":    None,
+            "tipo":         "formula_sin_acero",
+            "usuario_sap":  _usuario_actual() or "PROGRAING",
+        }
+
+        def _run_formula():
+            from sap_auto import procesar_combinacion_formula_sin_acero as _pf
+            import datetime as _dt2
+            for c in combis_raw:
+                zfer    = c.get("zfer", "").strip()
+                formula = c.get("formula_nueva", "").strip()
+                color   = c.get("color", "").strip()
+                if not zfer or not formula:
+                    continue
+                t0 = _dt2.datetime.now()
+
+                def _step_cb(paso_num, desc, _f=formula):
+                    _sap_jobs[batch_id]["_current"] = {
+                        "formula": _f, "paso": paso_num, "desc": desc
+                    }
+
+                res = _pf(
+                    zfer, formula, color,
+                    c.get("color_nombre", color),
+                    c.get("franja", "00") or "00",
+                    c.get("pn_base", ""),
+                    c.get("zpla", ""),
+                    nivel      = c.get("nivel", ""),
+                    tipo_pieza = c.get("tipo_pieza", ""),
+                    step_callback=_step_cb,
+                )
+                job = _sap_jobs[batch_id]
+                job["items"].append({
+                    "formula_nueva": formula,
+                    "color":         color,
+                    "color_nombre":  c.get("color_nombre", color),
+                    "pn_base":       c.get("pn_base", ""),
+                    "zpla_entrada":  c.get("zpla", ""),
+                    "estado":        res.estado,
+                    "zfer_nuevo":    res.zfer_nuevo,
+                    "zfor_nuevo":    res.zfor_nuevo,
+                    "zpla":          res.zpla,
+                    "posiciones":    res.posiciones_bom,
+                    "error":         res.error,
+                    "duracion_seg":  res.duracion_seg,
+                    "fecha_inicio":  t0.isoformat(timespec="seconds"),
+                    "fecha_fin":     _dt2.datetime.now().isoformat(timespec="seconds"),
+                    "log":           res.log,
+                })
+                job["procesados"] += 1
+            _sap_jobs[batch_id]["estado"]    = "COMPLETADO"
+            _sap_jobs[batch_id]["fecha_fin"] = _dt2.datetime.now().isoformat(timespec="seconds")
+            _sap_jobs[batch_id]["_current"]  = None
+
+        threading.Thread(target=_run_formula, daemon=True).start()
         return jsonify({"ok": True, "batch_id": batch_id, "total": len(combis_raw)})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500

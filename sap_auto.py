@@ -28,7 +28,7 @@ T_RAPIDO = 1.5
 T_MEDIO  = 3.5
 T_LENTO  = 7.0
 
-_SAP_USER = os.environ.get("SAP_USER", "JPINZON") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -524,15 +524,9 @@ class AutomatizadorSAP:
             print("    [WARN] ZPPR0020: grid no encontrado.")
             return resultado
 
-        # Columnas candidatas para ZFER, ZPLA y fases — probadas directamente
-        _COLS_ZFER = ("ZFER", "MATNR_ZFER", "MAT_ZFER", "ZFER_NEW", "MATNR", "MATERIAL")
-        _COLS_ZPLA = ("ZPLA", "MATNR_ZPLA", "MAT_ZPLA", "ZPLA_NEW")
-        _COLS_FASE = (
-            tuple(f"FASE{i}"    for i in range(1, 16)) +
-            tuple(f"FASE_{i:02}" for i in range(1, 16)) +
-            tuple(f"PHASE{i}"   for i in range(1, 16)) +
-            tuple(f"F{i:02}"    for i in range(1, 16))
-        )
+        # Nombres confirmados por log real: MAT_ZFER, MAT_ZPLA, PHASE1..PHASE18
+        _COLS_ZFER = ("MAT_ZFER", "ZFER", "MATNR_ZFER", "ZFER_NEW", "MATNR", "MATERIAL")
+        _COLS_ZPLA = ("MAT_ZPLA", "ZPLA", "MATNR_ZPLA", "ZPLA_NEW")
 
         def _leer(fila, candidatas):
             for col in candidatas:
@@ -549,17 +543,46 @@ class AutomatizadorSAP:
             if not n_filas:
                 return resultado
 
-            # Debug primera fila: probar TODAS las columnas candidatas
-            if n_filas > 0:
+            # Obtener TODAS las columnas reales del grid
+            all_cols = []
+            try:
+                co = grid.ColumnOrder
+                if isinstance(co, str):
+                    all_cols = co.split()
+                else:
+                    all_cols = [str(c) for c in co]
+            except Exception:
+                pass
+            print(f"    [DEBUG] ZPPR0020 columnas reales: {all_cols}")
+
+            # Detectar columnas de fase dinámicamente: cualquier columna cuyo nombre
+            # contenga "FASE", "PHASE" o "F0" y empiece por F/P
+            _COLS_FASE = tuple(
+                c for c in all_cols
+                if any(k in c.upper() for k in ("FASE", "PHASE"))
+                or (c.upper().startswith("F") and c[1:].isdigit())
+            )
+            if not _COLS_FASE:
+                # Fallback: nombres confirmados por log real (PHASE1..18) + variantes
+                _COLS_FASE = (
+                    tuple(f"PHASE{i}"    for i in range(1, 19)) +
+                    tuple(f"FASE{i}"     for i in range(1, 16)) +
+                    tuple(f"FASE_{i:02}" for i in range(1, 16)) +
+                    tuple(f"F{i:02}"     for i in range(1, 16))
+                )
+            print(f"    [DEBUG] ZPPR0020 cols fase detectadas: {_COLS_FASE}")
+
+            # Debug fila 0: mostrar valor de CADA columna real
+            if all_cols:
                 vals_debug = {}
-                for col in _COLS_ZFER + _COLS_ZPLA + _COLS_FASE[:5]:
+                for col in all_cols:
                     try:
                         v = str(grid.GetCellValue(0, col) or "").strip()
                         if v:
                             vals_debug[col] = v
                     except Exception:
                         pass
-                print(f"    [DEBUG] ZPPR0020 fila0 cols con valor: {vals_debug}")
+                print(f"    [DEBUG] ZPPR0020 fila0 valores: {vals_debug}")
 
             for i in range(n_filas):
                 zfer_fila, col_zfer = _leer(i, _COLS_ZFER)
@@ -724,7 +747,7 @@ class AutomatizadorSAP:
         return result
 
     def zmme0001_agregar_filas_bom(self, posiciones: list, zpla: str,
-                                    clases_dict: dict = None):
+                                    clases_dict: dict = None, row_offset: int = 0):
         """
         posiciones: lista de dicts {pos, tipo, msg} de leer_posiciones_popup().
         tipo 5 → INSERT + POSNR + CLASE_DESTINO
@@ -741,6 +764,75 @@ class AutomatizadorSAP:
             for p in posiciones
         ]
 
+        # ── Referencia para tipo 6 ────────────────────────────────────────────────
+        # Candidatas para el NÚMERO de referencia: TODAS las posiciones de la lista
+        # (incluyendo tipo 7 que se borran) — la 458 puede referenciar a 358.
+        # La CLASE siempre viene de clases_dict[referencia] o clases_dict[pos_nueva].
+        # Regla último dígito:
+        #   termina en 00 → candidatas k%100==0
+        #   termina en 0 (no 00) → candidatas k%10==5 (00 son intocables)
+        #   otros → candidatas k%10==mismo último dígito (puede repetirse)
+        _claves_con_clase = set()   # para clase
+        for _k in clases_dict.keys():
+            try:
+                _claves_con_clase.add(int(str(_k).lstrip("0") or "0"))
+            except Exception:
+                pass
+        _todas_posiciones = set()   # para referencia numérica
+        for _p in posiciones:
+            try:
+                _todas_posiciones.add(int(str(_p["pos"]).lstrip("0") or "0"))
+            except Exception:
+                pass
+
+        def _calcular_ref(pos_str) -> str:
+            try:
+                pos_int = int(str(int(pos_str)))
+                # Candidatas: TODAS las posiciones menores (incl. tipo 7)
+                menores = [k for k in _todas_posiciones if k < pos_int]
+                if not menores:
+                    return ""
+                if pos_int % 100 == 0:
+                    cands = [k for k in menores if k % 100 == 0]
+                elif pos_int % 10 == 0:
+                    # Termina en 0 no 00 → busca en 5
+                    cands = [k for k in menores if k % 10 == 5]
+                else:
+                    ultimo = pos_int % 10
+                    cands = [k for k in menores if k % 10 == ultimo]
+                return str(max(cands)) if cands else str(max(menores))
+            except Exception:
+                pass
+            return ""
+
+        # ── Pre-validación ────────────────────────────────────────────────────────
+        faltantes = []
+        for item in posiciones:
+            tipo = item.get("tipo", 5)
+            pos  = item["pos"]
+            if tipo == 5:
+                clase = clases_dict.get(pos.zfill(4), clases_dict.get(pos, ""))
+                if not clase:
+                    faltantes.append(f"{pos}(tipo5: clase propia no encontrada en ZPPR0008)")
+            elif tipo == 6:
+                ref = _calcular_ref(pos)
+                if not ref:
+                    faltantes.append(f"{pos}(tipo6: sin posición anterior válida)")
+                else:
+                    ref_key = ref.zfill(4)
+                    clase_ref = clases_dict.get(ref_key, clases_dict.get(ref, ""))
+                    clase_propia = clases_dict.get(pos.zfill(4), clases_dict.get(pos, ""))
+                    if not clase_ref and not clase_propia:
+                        faltantes.append(f"{pos}(tipo6: ni referencia {ref} ni posición propia tienen clase en ZPPR0008)")
+        if faltantes:
+            raise RuntimeError(
+                f"BOM incompleto — faltan clases en ZPPR0008 para: {'; '.join(faltantes)}. "
+                f"Verifica que el ZPLA {zpla} tenga esas posiciones con clase asignada."
+            )
+
+        # Tipo 7 (ELIMINAR) siempre al final para que las referencias ya existan
+        posiciones = sorted(posiciones, key=lambda p: 1 if p.get("tipo", 5) == 7 else 0)
+
         for idx, item in enumerate(posiciones):
             pos  = item["pos"]
             tipo = item.get("tipo", 5)
@@ -749,98 +841,84 @@ class AutomatizadorSAP:
             self.session.findById(self._ID_BTN_INSERT).press()
             self._esperar(T_RAPIDO)
 
+            # ── Calcular índice visible en la tabla ──────────────────────────────
+            # La tabla SAP solo muestra VisibleRowCount filas a la vez.
+            # Cuando idx >= VisibleRowCount, hay que scrollar y usar el índice
+            # relativo al viewport (vis_idx) para acceder a los controles de celda.
+            abs_idx = row_offset + idx   # posición absoluta en la tabla
+            vis_idx = abs_idx
+            try:
+                tbl_obj = self.session.findById(self._ID_TBL_LISTA)
+                try:
+                    vis_cnt = int(tbl_obj.VisibleRowCount or 0)
+                except Exception:
+                    vis_cnt = 0
+                if vis_cnt <= 0:
+                    vis_cnt = 8  # fallback conservador si SAP no expone VisibleRowCount
+                print(f"    [SCROLL] abs={abs_idx} vis_cnt={vis_cnt}")
+                if abs_idx >= vis_cnt:
+                    primer_vis = abs_idx - vis_cnt + 1
+                    tbl_obj.VerticalScrollbar.Position = primer_vis
+                    self._esperar(T_MEDIO)
+                    vis_idx = vis_cnt - 1   # la nueva fila queda en la última posición visible
+            except Exception as _se:
+                print(f"    [WARN] scroll table: {_se}")
+
             if tipo == 7:
                 # ELIMINAR POSICION: marcar checkbox + POSNR
                 self.session.findById(
-                    f"{self._ID_TBL_LISTA}/txtWA_LISTA-POSNR[0,{idx}]"
+                    f"{self._ID_TBL_LISTA}/txtWA_LISTA-POSNR[0,{vis_idx}]"
                 ).text = pos_sin_ceros
                 self._esperar(T_RAPIDO)
                 try:
                     self.session.findById(
-                        f"{self._ID_TBL_LISTA}/chkWA_LISTA-ELIMINAR[4,{idx}]"
+                        f"{self._ID_TBL_LISTA}/chkWA_LISTA-ELIMINAR[4,{vis_idx}]"
                     ).selected = True
                     self._esperar(T_RAPIDO)
                 except Exception as e:
-                    print(f"    [WARN] No pudo marcar ELIMINAR fila {idx}: {e}")
-                print(f"    Fila {idx}: POS={pos_sin_ceros} → ELIMINAR (tipo 7)")
+                    print(f"    [WARN] No pudo marcar ELIMINAR fila {vis_idx}: {e}")
+                print(f"    Fila {idx}(vis={vis_idx}): POS={pos_sin_ceros} → ELIMINAR (tipo 7)")
 
             elif tipo == 6:
-                # AGREGAR POSICION:
-                #   col 0 (POSNR)     = referencia (posición anterior de la lista)
-                #   col 1 (NEW_POSNR) = posición del error (la que hay que agregar)
-                #   CLASE_DESTINO     = clase de la referencia
-                #
-                # Regla para encontrar la referencia en clases_dict:
-                #   - termina en "00" (100,200,300...)  → anterior que termine en "00"
-                #   - múltiplo de 5, no termina en "00" → anterior que termine en "5"
-                #   - no múltiplo de 5 (358,458...)     → anterior cualquiera (la más alta < X)
+                referencia = _calcular_ref(pos_sin_ceros)
 
-                referencia = ""
-                try:
-                    pos_int = int(pos_sin_ceros)
-                    # Normalizar claves del dict a enteros
-                    claves_int = []
-                    for k in clases_dict.keys():
-                        try:
-                            claves_int.append(int(str(k).lstrip("0") or "0"))
-                        except Exception:
-                            pass
-
-                    menores = [k for k in claves_int if k < pos_int]
-
-                    if pos_int % 100 == 0:
-                        # termina en 00 → buscar anterior que termine en 00
-                        cands = [k for k in menores if k % 100 == 0]
-                    elif pos_int % 5 == 0:
-                        # múltiplo de 5 sin terminar en 00 → buscar anterior que termine en 5
-                        cands = [k for k in menores if k % 10 == 5]
-                    else:
-                        # no múltiplo de 5 → cualquier anterior
-                        cands = menores
-
-                    if cands:
-                        referencia = str(max(cands))
-                    elif menores:
-                        referencia = str(max(menores))  # fallback: la más alta disponible
-                except Exception:
-                    referencia = pos_sin_ceros
-
-                # col 0 = referencia, col 1 = posición del error
+                # col 0 = referencia, col 1 = posición a agregar
                 self.session.findById(
-                    f"{self._ID_TBL_LISTA}/txtWA_LISTA-POSNR[0,{idx}]"
+                    f"{self._ID_TBL_LISTA}/txtWA_LISTA-POSNR[0,{vis_idx}]"
                 ).text = referencia
                 self._esperar(T_RAPIDO)
                 try:
                     self.session.findById(
-                        f"{self._ID_TBL_LISTA}/txtWA_LISTA-NEW_POSNR[1,{idx}]"
+                        f"{self._ID_TBL_LISTA}/txtWA_LISTA-NEW_POSNR[1,{vis_idx}]"
                     ).text = pos_sin_ceros
                     self._esperar(T_RAPIDO)
                 except Exception as e:
-                    print(f"    [WARN] No pudo escribir NEW_POSNR fila {idx}: {e}")
+                    print(f"    [WARN] No pudo escribir NEW_POSNR fila {vis_idx}: {e}")
 
-                # Clase de la referencia
+                # Clase: de la referencia si tiene, sino de la posición nueva misma
                 ref_key = referencia.zfill(4)
-                clase = clases_dict.get(ref_key, clases_dict.get(referencia, ""))
+                clase = (clases_dict.get(ref_key, clases_dict.get(referencia, ""))
+                         or clases_dict.get(pos.zfill(4), clases_dict.get(pos, "")))
                 if clase:
                     self.session.findById(
-                        f"{self._ID_TBL_LISTA}/ctxtWA_LISTA-CLASE_DESTINO[3,{idx}]"
+                        f"{self._ID_TBL_LISTA}/ctxtWA_LISTA-CLASE_DESTINO[3,{vis_idx}]"
                     ).text = clase
                     self._esperar(T_RAPIDO)
-                print(f"    Fila {idx}: POSNR={referencia} NEW_POSNR={pos_sin_ceros} CLASE={clase or '(sin clase)'} → AGREGAR (tipo 6)")
+                print(f"    Fila {idx}(vis={vis_idx}): POSNR={referencia} NEW_POSNR={pos_sin_ceros} CLASE={clase or '(sin clase)'} → AGREGAR (tipo 6)")
 
             else:
                 # MODIFICAR CLASE (tipo 5, default)
                 self.session.findById(
-                    f"{self._ID_TBL_LISTA}/txtWA_LISTA-POSNR[0,{idx}]"
+                    f"{self._ID_TBL_LISTA}/txtWA_LISTA-POSNR[0,{vis_idx}]"
                 ).text = pos_sin_ceros
                 self._esperar(T_RAPIDO)
                 clase = clases_dict.get(pos.zfill(4), clases_dict.get(pos, ""))
                 if clase:
                     self.session.findById(
-                        f"{self._ID_TBL_LISTA}/ctxtWA_LISTA-CLASE_DESTINO[3,{idx}]"
+                        f"{self._ID_TBL_LISTA}/ctxtWA_LISTA-CLASE_DESTINO[3,{vis_idx}]"
                     ).text = clase
                     self._esperar(T_RAPIDO)
-                print(f"    Fila {idx}: POS={pos_sin_ceros} CLASE={clase or '(sin clase)'} → MODIFICAR (tipo 5)")
+                print(f"    Fila {idx}(vis={vis_idx}): POS={pos_sin_ceros} CLASE={clase or '(sin clase)'} → MODIFICAR (tipo 5)")
 
     def zmme0001_segunda_comparar_y_copy(self) -> bool:
         self.session.findById(self._ID_BTN_COMP).press()
@@ -904,6 +982,61 @@ class AutomatizadorSAP:
                 pass
 
         return ok
+
+    def bom_con_retry(self, zpla_usado: str, clases: dict,
+                      max_intentos: int = 3, on_retry=None) -> list:
+        """
+        Loop BOM en la misma pantalla ZMME0001 sin navegar:
+          1. Comparar BOM → leer popup de errores
+          2. Si hay errores 5/6/7 → insertar esas posiciones → volver a 1
+          3. Cuando popup está limpio → Ejecutar BOM (COPY_ITEM) y cerrar log
+        Máx max_intentos ciclos. Lanza RuntimeError si los agota.
+        """
+        posiciones_acum = []
+        filas_ya_insertadas = 0
+        for intento in range(1, max_intentos + 1):
+            print(f"    [BOM] Comparar BOM — ciclo {intento}/{max_intentos}")
+            posiciones = self.zmme0001_leer_posiciones_popup()
+
+            if not posiciones:
+                # Sin errores → Ejecutar BOM
+                print(f"    [BOM] Sin errores en ciclo {intento} → Ejecutar BOM")
+                try:
+                    self.session.findById(self._ID_BTN_COPY_ITEM).press()
+                    self._esperar(T_LENTO)
+                    msg = self._estado_sap()
+                    print(f"    Ejecutar BOM: {msg}")
+                    for wnd_id in ("wnd[2]", "wnd[1]"):
+                        try:
+                            self.session.findById(wnd_id)
+                            try:
+                                self.session.findById(wnd_id).sendVKey(12)
+                                self._esperar(T_RAPIDO)
+                            except Exception:
+                                try:
+                                    self.session.findById(wnd_id).close()
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+                except Exception as _e:
+                    print(f"    [WARN] Ejecutar BOM: {_e}")
+                return posiciones_acum
+
+            posiciones_acum = posiciones
+            print(f"    [BOM] {len(posiciones)} errores: {[p['pos'] for p in posiciones]}")
+
+            if intento == max_intentos:
+                raise RuntimeError(
+                    f"BOM: Comparar BOM sigue con {len(posiciones)} errores tras "
+                    f"{max_intentos} ciclos. Posiciones: {[p['pos'] for p in posiciones]}"
+                )
+
+            self.zmme0001_agregar_filas_bom(posiciones, zpla_usado, clases,
+                                            row_offset=filas_ya_insertadas)
+            filas_ya_insertadas += len(posiciones)
+
+        return posiciones_acum
 
     # ── MM02 — Actualizar PARTNUMBER ─────────────────────────────────────────
 
@@ -1108,6 +1241,384 @@ class AutomatizadorSAP:
             return "_".join(partes)
         return pn_base
 
+    def _construir_nuevo_pn_formula(self, pn_base: str, formula_nueva: str, p_color: str) -> str:
+        """Reemplaza índice [2] (fórmula) e índice [3] (color) del PARTNUMBER."""
+        if not pn_base:
+            return pn_base
+        partes = pn_base.split("_")
+        if len(partes) >= 4:
+            if formula_nueva:
+                partes[2] = formula_nueva
+            if p_color:
+                partes[3] = p_color
+            return "_".join(partes)
+        return pn_base
+
+    def _construir_plano_desde_pn(self, pn_base: str) -> str:
+        """Construye nombre de plano desde PARTNUMBER: M{[0]}   {[1]}   {[4]}"""
+        partes = pn_base.split("_")
+        if len(partes) >= 5:
+            return f"M{partes[0]}   {partes[1]}   {partes[4]}"
+        elif len(partes) >= 2:
+            return f"M{partes[0]}   {partes[1]}   001"
+        return ""
+
+    # ── ZPPR0008 — Validar posición acero ────────────────────────────────────
+
+    def zppr0008_validar_posicion_acero(self, zpla_base: str) -> dict:
+        """
+        Entra a ZPPR0008 con el ZPLA del ZFER base y busca posición 0106 ó 0116.
+        Retorna {"ok": True/False, "pos": "0106"|"0116"|"", "error": ""}
+        """
+        print(f"    ZPPR0008: validando posición acero para ZPLA={zpla_base}")
+        self._navegar("ZPPR0008")
+
+        # Modo ZPLA: radRB_2
+        self.session.findById("wnd[0]/usr/radRB_2").setFocus()
+        self.session.findById("wnd[0]/usr/radRB_2").select()
+        self._esperar(T_RAPIDO)
+
+        self.session.findById("wnd[0]/usr/ctxtS_MATNR2-LOW").text = zpla_base
+        self.session.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").text = "CO01"
+        self.session.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").setFocus()
+        self.session.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").caretPosition = 4
+        self.session.findById(self._ID_BTN_EXEC).press()
+        self._esperar(T_LENTO)
+
+        try:
+            grid = self.session.findById("wnd[0]/usr/cntlGRID1/shellcont/shell")
+            n = grid.RowCount
+            print(f"    ZPPR0008: {n} filas")
+            for i in range(n):
+                for col in ("POSNR", "POSN", "POS"):
+                    try:
+                        v = str(grid.GetCellValue(i, col) or "").strip().lstrip("0") or "0"
+                        if v in ("106", "116"):
+                            pos_found = "0" + v
+                            print(f"    ZPPR0008: posición acero encontrada = {pos_found}")
+                            return {"ok": True, "pos": pos_found, "error": ""}
+                        break
+                    except Exception:
+                        pass
+            return {"ok": False, "pos": "",
+                    "error": f"ZPLA {zpla_base} no tiene posición 0106 ni 0116 → no aplica cambio de fórmula sin acero"}
+        except Exception as e:
+            return {"ok": False, "pos": "", "error": f"ZPPR0008 error: {e}"}
+
+    # ── ZMME0001 — Cambio de Fórmula ─────────────────────────────────────────
+
+    _ID_RAD_FORMULA = "wnd[0]/usr/radRB2_A1"
+    _ID_TXT_FORMU   = "wnd[0]/usr/txtP_FORMU"
+
+    def zmme0001_ejecutar_formula(self, zfer_base: str, p_color: str, p_franj: str,
+                                  formula_nueva: str, zplas_validos: list,
+                                  forzar_be: bool = False) -> tuple:
+        """
+        Igual que zmme0001_ejecutar pero selecciona 'Cambio de Fórmula' (radRB2_A1)
+        y llena el campo txtP_FORMU con la fórmula destino.
+        """
+        self._cerrar_dialogs_abiertos()
+        self._navegar("ZMME0001")
+        self.session.findById("wnd[0]").maximize()
+        self._esperar(T_RAPIDO)
+
+        self.session.findById(self._ID_RAD_HOMOLOG).setFocus()
+        self.session.findById(self._ID_RAD_HOMOLOG).select()
+        self._esperar(T_RAPIDO)
+
+        self.session.findById(self._ID_MATER_LOW).text = zfer_base
+        self._esperar(T_RAPIDO)
+        self.session.findById(self._ID_CTX_CENTER).text = "CO01"
+
+        # Cambio de Fórmula
+        self.session.findById(self._ID_RAD_FORMULA).setFocus()
+        self.session.findById(self._ID_RAD_FORMULA).select()
+        self._esperar(T_RAPIDO)
+
+        self.session.findById(self._ID_CTX_P_COLOR).text = p_color
+        self.session.findById(self._ID_CTX_P_FRANJ).text = p_franj
+        self.session.findById(self._ID_TXT_FORMU).text   = formula_nueva
+
+        # F4 en ZPLA (idéntico al flujo de color)
+        self.session.findById(self._ID_CTX_P_ZPLA).setFocus()
+        self.session.findById(self._ID_CTX_P_ZPLA).caretPosition = 0
+        self.session.findById("wnd[0]").sendVKey(4)
+        self._esperar(T_LENTO)
+
+        _ID_POPUP_GRID = "wnd[1]/usr/cntlLO_CONTAINER0500/shellcont/shell"
+        grid_popup = None
+        for _intento in range(3):
+            try:
+                grid_popup = self.session.findById(_ID_POPUP_GRID)
+                break
+            except Exception:
+                if _intento < 2:
+                    print(f"    [F4-formula] popup no listo, esperando... ({_intento+1})")
+                    self._esperar(T_LENTO)
+        if grid_popup is None:
+            raise RuntimeError("F4 ZPLA popup falló en cambio de fórmula")
+
+        try:
+            n_filas   = grid_popup.RowCount
+            zplas_sap = []
+            descs_sap = []
+            for i in range(n_filas):
+                val = ""
+                for col in ("MATNR", "ZPLA", "ZPLARF", "MATERIAL"):
+                    try:
+                        val = str(grid_popup.GetCellValue(i, col) or "").strip()
+                        if val:
+                            break
+                    except Exception:
+                        pass
+                desc = ""
+                for col in ("MAKTX", "DESCR", "TEXT", "MAKTG", "BEZEICHNUNG"):
+                    try:
+                        desc = str(grid_popup.GetCellValue(i, col) or "").strip()
+                        if desc:
+                            break
+                    except Exception:
+                        pass
+                zplas_sap.append(val)
+                descs_sap.append(desc)
+                print(f"      F4-formula fila {i}: {val}  desc='{desc}'")
+
+            zplas_set = {z.strip() for z in zplas_validos if z.strip()}
+            fila_sel  = 0
+            if forzar_be:
+                fila_be = next((i for i, d in enumerate(descs_sap) if "BE" in d.upper()), None)
+                fila_sel = fila_be if fila_be is not None else 0
+            else:
+                for i, z in enumerate(zplas_sap):
+                    if z in zplas_set:
+                        fila_sel = i
+                        break
+
+            zpla_seleccionado = zplas_sap[fila_sel] if zplas_sap else ""
+            grid_popup.selectedRows = str(fila_sel)
+            grid_popup.doubleClickCurrentCell()
+            self._esperar(T_RAPIDO)
+        except Exception as e:
+            raise RuntimeError(f"F4 ZPLA popup (fórmula) falló: {e}")
+
+        self.session.findById(self._ID_CTX_P_FRANJ).setFocus()
+        self.session.findById(self._ID_CTX_P_FRANJ).caretPosition = 2
+        self._esperar(T_RAPIDO)
+        self.session.findById(self._ID_BTN_EXEC).press()
+        self._esperar(T_LENTO)
+
+        msg_sap = self._estado_sap()
+        try:
+            grid       = self.session.findById(self._ID_GRID_RESULT)
+            n_filas    = grid.RowCount
+            # Debug: dump columnas reales del grid resultado
+            try:
+                co = grid.ColumnOrder
+                all_cols = co.split() if isinstance(co, str) else [str(c) for c in co]
+                print(f"    [DEBUG] ZMME0001-formula grid cols: {all_cols} | filas={n_filas}")
+            except Exception:
+                all_cols = []
+            zfer_nuevo = ""
+            zfor_nuevo = ""
+            # Leer fila 0 (la primera y única fila del resultado)
+            for col in ("ZFER", "MATNR_ZFER", "ZFER_NEW", "MATNR", "MAT_ZFER"):
+                try:
+                    v = str(grid.GetCellValue(0, col) or "").strip()
+                    if v and v != col:   # descartar cuando SAP devuelve el nombre de columna
+                        zfer_nuevo = v
+                        break
+                except Exception:
+                    pass
+            for col in ("ZFOR", "MATNR_ZFOR", "ZFOR_NEW", "MAT_ZFOR"):
+                try:
+                    v = str(grid.GetCellValue(0, col) or "").strip()
+                    if v and v != col:
+                        zfor_nuevo = v
+                        break
+                except Exception:
+                    pass
+            print(f"    ZMME0001-formula OK: ZFER_NUEVO={zfer_nuevo} | ZFOR={zfor_nuevo} | ZPLA={zpla_seleccionado}")
+        except Exception as e:
+            raise RuntimeError(f"ZMME0001-formula: grid resultado no leído: {e} | msg={msg_sap}")
+
+        # F3 para volver a pantalla de selección (igual que cambio de color, necesario para paso 4)
+        self.session.findById("wnd[0]").sendVKey(3)
+        self._esperar(T_RAPIDO)
+
+        return zfer_nuevo, zfor_nuevo, zpla_seleccionado
+
+    # ── MM02 — Desactivar diferencial 06 ─────────────────────────────────────
+
+    _ID_MM02_TBL_PIEZA = ("wnd[0]/usr/subSUBSCR_BEWERT:SAPLCTMS:5000"
+                           "/tabsTABSTRIP_CHAR/tabpTAB4"
+                           "/ssubTABSTRIP_CHAR_GR:SAPLCTMS:5100"
+                           "/tblSAPLCTMSCHARS_S")
+
+    def mm02_desactivar_diferencial_06(self, zfer: str):
+        """
+        En MM02, tab PIEZA: scroll a pos 6, fila visual 7 = Z_BEHAVIOR_DIFFERENTIALS.
+        Abre popup con sendVKey(2), desmarca fila 5 (valor "06"), cierra popup.
+        IDs confirmados por VBS grabado en QUAS.
+        """
+        print(f"    MM02 diferencial: desmarcando 06 en {zfer}")
+        tbl = self._ID_MM02_TBL_PIEZA
+        # Scroll a posición 6 (confirma VBS)
+        self.session.findById(tbl).verticalScrollbar.position = 6
+        self._esperar(T_RAPIDO)
+
+        # Fila visual 7 = Z_BEHAVIOR_DIFFERENTIALS (con scroll en pos 6)
+        campo_name = tbl + "/ctxtRCTMS-MNAME[0,7]"
+        self.session.findById(campo_name).setFocus()
+        self.session.findById(campo_name).caretPosition = 16
+        self.session.findById("wnd[0]").sendVKey(2)   # abre popup de valores
+        self._esperar(T_MEDIO)
+
+        # En popup wnd[1]: desmarcar checkbox fila 5 (el "06")
+        try:
+            chk = "wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]"
+            self.session.findById(chk).selected = False
+            self.session.findById(chk).setFocus()
+            self.session.findById("wnd[1]").sendVKey(2)   # confirmar selección
+            self._esperar(T_RAPIDO)
+        except Exception as e:
+            print(f"    [WARN] Diferencial popup check: {e}")
+
+        # Cerrar popup
+        try:
+            self.session.findById("wnd[1]").close()
+        except Exception:
+            try:
+                self.session.findById("wnd[1]").sendVKey(12)  # F12 alternativo
+            except Exception:
+                pass
+        self._esperar(T_RAPIDO)
+
+    # ── MM02 — Cambio de plano (tab ZU04) ────────────────────────────────────
+
+    def mm02_cambiar_plano(self, zfer: str, nuevo_plano: str = None):
+        """
+        En MM02, tab ZU04 (Documentos): lee DOKNR actual y le quita 'SP'.
+        Si nuevo_plano se pasa explícito, lo usa directamente.
+        """
+        print(f"    MM02 plano: procesando {zfer}")
+        try:
+            # Navegar a la vista de ingeniería (btn[30])
+            self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
+            self._esperar(T_MEDIO)
+
+            # Tab ZU04
+            self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
+            self._esperar(T_MEDIO)
+
+            _subZU04 = ("wnd[0]/usr/tabsTABSPR1/tabpZU04"
+                        "/ssubTABFRA1:SAPLMGMM:2110"
+                        "/subSUB2:SAPLMGD1:3400"
+                        "/subDOCU:SAPLCV140:0204")
+
+            # Radio "Todos" (GF_ALLE)
+            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
+            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
+            self._esperar(T_RAPIDO)
+
+            # Grid ALV de documentos
+            _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
+            # Si no se pasó plano explícito, leer el actual y quitarle "SP"
+            if not nuevo_plano:
+                try:
+                    doknr_actual = self.session.findById(_grid_docu).getCellValue(0, "DOKNR")
+                    nuevo_plano = doknr_actual.replace("SP", "").replace("sp", "")
+                    print(f"    MM02 plano: DOKNR actual='{doknr_actual}' → nuevo='{nuevo_plano}'")
+                except Exception as e:
+                    print(f"    [WARN] No pudo leer DOKNR actual: {e}")
+                    return
+            if not nuevo_plano:
+                print(f"    [WARN] mm02_cambiar_plano: sin plano, omitiendo")
+                return
+            self.session.findById(_grid_docu).modifyCell(0, "DOKNR", nuevo_plano)
+            self.session.findById(_grid_docu).currentCellColumn = "DOKNR"
+            self.session.findById(_grid_docu).pressEnter()
+            self._esperar(T_MEDIO)
+
+            # Confirmar popup si aparece
+            try:
+                self.session.findById("wnd[1]/usr/btnBUTTON_1").press()
+                self._esperar(T_RAPIDO)
+            except Exception:
+                pass
+
+            # Guardar con btn[11]
+            self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
+            self._esperar(T_LENTO)
+        except Exception as e:
+            print(f"    [WARN] mm02_cambiar_plano: {e}")
+
+    # ── CEWB — Eliminar posición acero ───────────────────────────────────────
+
+    def cewb_eliminar_posicion_acero(self, zpla_nuevo: str, pos_acero: str):
+        """
+        Navega a CEWB, filtra por zpla_nuevo y pos_acero, selecciona fila 0,
+        elimina y guarda.
+        """
+        print(f"    CEWB: eliminando pos {pos_acero} de ZPLA={zpla_nuevo}")
+        self._navegar("CEWB")
+        self._esperar(T_MEDIO)
+
+        # Popup inicial de área de trabajo
+        try:
+            self.session.findById("wnd[1]/usr/ctxtCWB_WORKAREA-WORK_AREA").text = "SAP_ITEM"
+            self.session.findById("wnd[1]/usr/ctxtCWB_WORKAREA-WORK_AREA").caretPosition = 8
+            self.session.findById("wnd[1]").sendVKey(0)
+            self._esperar(T_MEDIO)
+        except Exception:
+            pass
+
+        # Filtros: ZPLA, CO01, posición
+        _base_cewb = ("wnd[0]/usr/subSELECTION_CRITERIA:SAPLCPSC:1250"
+                      "/tabsTAB_STRIP_SEL/tabpITMS"
+                      "/ssubSUBPAGE:SAPLCPSC:3345")
+        try:
+            self.session.findById(_base_cewb + "/ctxtMBMMATNR-LOW").text  = zpla_nuevo
+            self.session.findById(_base_cewb + "/ctxtMBMWERKS-LOW").text  = "CO01"
+            self.session.findById(_base_cewb + "/txtITMPOSNR-LOW").text   = pos_acero
+            self.session.findById(_base_cewb + "/txtITMPOSNR-LOW").setFocus()
+            self.session.findById(_base_cewb + "/txtITMPOSNR-LOW").caretPosition = 4
+        except Exception as e:
+            print(f"    [WARN] CEWB filtros: {e}")
+
+        self.session.findById(self._ID_BTN_EXEC).press()
+        self._esperar(T_LENTO)
+
+        # Seleccionar fila 0 y eliminar
+        _tbl_cewb = ("wnd[0]/usr/tabsTAB_STRIP_ITM/tabpITM_TGEN"
+                     "/ssubSUBPAGE:SAPLCSOV:3205/tblSAPLCSOVTC_3205")
+        try:
+            self.session.findById(_tbl_cewb).getAbsoluteRow(0).selected = True
+            self.session.findById(_tbl_cewb + "/txtITM_CLASS_VIEW-ITM_LOCK[0,0]").setFocus()
+            self.session.findById(_tbl_cewb + "/txtITM_CLASS_VIEW-ITM_LOCK[0,0]").caretPosition = 0
+            self._esperar(T_RAPIDO)
+            self.session.findById("wnd[0]/tbar[1]/btn[14]").press()   # botón borrar
+            self._esperar(T_MEDIO)
+
+            # Confirmaciones
+            for btn in ("wnd[1]/tbar[0]/btn[0]", "wnd[1]/usr/btnSPOP-OPTION1"):
+                try:
+                    self.session.findById(btn).press()
+                    self._esperar(T_RAPIDO)
+                except Exception:
+                    pass
+
+            # Guardar y salir
+            self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
+            self._esperar(T_LENTO)
+            self.session.findById("wnd[0]").sendVKey(3)   # Back
+            self._esperar(T_RAPIDO)
+            try:
+                self.session.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"    [WARN] CEWB eliminar: {e}")
+
     # ── Procesar una combinación ──────────────────────────────────────────────
 
     def procesar(self, zfer_base: str, color_codigo: str, color_nombre: str,
@@ -1224,24 +1735,17 @@ class AutomatizadorSAP:
             self.session.findById(self._ID_MATER_LOW).caretPosition = len(zfer_nuevo)
             self._esperar(T_RAPIDO)
 
-            posiciones = self.zmme0001_leer_posiciones_popup()
-            res.posiciones_bom = posiciones
-            for _p in posiciones:
-                print(f"    BOM popup → POS={_p['pos']} TIPO={_p['tipo']} MSG={_p.get('msg','')}")
-            res._log(f"  Posiciones BOM ({len(posiciones)}): {posiciones}")
-
-            if posiciones and zpla_usado:
-                # Leer posicion→clase desde SAP (sesión auxiliar)
+            # Leer clases del ZPLA antes del loop BOM
+            clases = {}
+            if zpla_usado:
                 clases = self._leer_clases_zpla_sap(zpla_usado)
                 res._log(f"  Clases leídas desde SAP: {clases}")
-                self.zmme0001_agregar_filas_bom(posiciones, zpla_usado, clases)
-            elif posiciones and not zpla_usado:
+            else:
                 res._log("  [WARN] Sin ZPLA para leer clases")
-                self.zmme0001_agregar_filas_bom(posiciones, "", {})
 
-            ok_bom = self.zmme0001_segunda_comparar_y_copy()
-            if not ok_bom:
-                raise RuntimeError("Segunda Comparar BOM devolvió error — revisar Clave Destino")
+            posiciones = self.bom_con_retry(zpla_usado, clases)
+            res.posiciones_bom = posiciones
+            res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
 
             # PASO 5 — MM02 actualizar PARTNUMBER
             if pn_base and p_color:
@@ -1271,6 +1775,168 @@ class AutomatizadorSAP:
         return res
 
 
+    # ── Procesar fórmula sin acero ───────────────────────────────────────────
+
+    def procesar_formula_sin_acero(
+            self, zfer_base: str, formula_nueva: str,
+            color_codigo: str, color_nombre: str,
+            franja: str = "00", pn_base: str = "", zpla: str = "",
+            nivel: str = "", tipo_pieza: str = "",
+            step_callback=None) -> ResultadoItem:
+        """
+        Flujo completo: cambio de fórmula con acero → sin acero.
+        Pasos: ZPPR0008 validar pos acero → ZPPP0042 → ZMME0001 fórmula →
+               ZPPR0020 → ZMME0001 BOM → MM02 (PN+diferencial+plano) → CEWB borrar pos.
+        """
+        res = ResultadoItem(
+            batch_id     = str(uuid.uuid4())[:8],
+            zfer_base    = zfer_base,
+            color_codigo = color_codigo,
+            estado       = "EN_PROCESO",
+            fecha_inicio = datetime.datetime.now(),
+        )
+
+        def _cb(paso_num: int, desc: str):
+            res._log(f"PASO {paso_num}/7: {desc}")
+            if step_callback:
+                try:
+                    step_callback(paso_num, desc)
+                except Exception:
+                    pass
+
+        try:
+            res._log(f"=== Inicio fórmula sin acero: {zfer_base} → fórmula {formula_nueva} color {color_codigo} ===")
+            res._log(f"  Franja={franja}  PN_base={pn_base}  ZPLA={zpla}")
+
+            p_color = color_codigo.strip()
+            p_franj = franja or "00"
+            zplas_validos = [z.strip() for z in str(zpla).split(",") if z.strip()]
+            zpla_base = zplas_validos[0] if zplas_validos else ""
+
+            # PASO 0 — Validar posición acero en ZPPR0008
+            _cb(0, f"Validando posición acero en ZPPR0008 (ZPLA={zpla_base})")
+            if not zpla_base:
+                raise RuntimeError("ZPPR0008: sin ZPLA base para validar posición acero")
+            val_acero = self.zppr0008_validar_posicion_acero(zpla_base)
+            if not val_acero["ok"]:
+                raise RuntimeError(val_acero["error"])
+            pos_acero = val_acero["pos"]   # "0106" ó "0116"
+            res._log(f"  Posición acero encontrada: {pos_acero}")
+
+            # PASO 1 — ZPPP0042
+            _cb(1, "Validando ZFER base en SAP (ZPPP0042)")
+            val = self.zppp0042_validar(zfer_base)
+            if not val["ok"]:
+                raise RuntimeError(f"ZPPP0042: {val['error']}")
+            res._log(f"  VERID={val['verid']} — OK")
+
+            # Caso BE
+            forzar_be    = False
+            nivel_norm   = str(nivel or "").strip().lstrip("0") or "0"
+            tipopza_norm = str(tipo_pieza or "").strip().lstrip("0") or "0"
+            if nivel_norm in ("2", "3") and tipopza_norm in ("9", "90"):
+                try:
+                    clases_zfer = self._leer_clases_zpla_sap(zfer_base)
+                    clase_0100  = clases_zfer.get("0100", clases_zfer.get("100", ""))
+                    if clase_0100.upper().endswith("800") or clase_0100.upper().endswith("800_"):
+                        forzar_be = True
+                        res._log("  Caso BE activo")
+                except Exception as e:
+                    res._log(f"  [WARN] BE check: {e}")
+
+            # PASO 2 — ZMME0001 fórmula
+            _cb(2, f"Homologando cambio de fórmula en SAP (ZMME0001) — {formula_nueva}")
+            zfer_nuevo, zfor_nuevo, zpla_usado = self.zmme0001_ejecutar_formula(
+                zfer_base, p_color, p_franj, formula_nueva, zplas_validos, forzar_be=forzar_be
+            )
+            res.zfer_nuevo = zfer_nuevo
+            res.zfor_nuevo = zfor_nuevo
+            res.zpla       = zpla_usado
+
+            # PASO 3 — ZPPR0020
+            _cb(3, f"Esperando aprobación del proceso SAP (ZPPR0020) — {zfer_nuevo}")
+            fase_res = self.zppr0020_esperar_fases(zfer_nuevo)
+            if not fase_res["ok"]:
+                raise RuntimeError(f"ZPPR0020 falló — {fase_res['fase_error']}: {fase_res['detalle']}")
+            if not zpla_usado and fase_res.get("zpla"):
+                zpla_usado = fase_res["zpla"]
+                res.zpla   = zpla_usado
+            res._log(f"  ZPPR0020 OK | ZPLA={zpla_usado}")
+
+            # PASO 4 — ZMME0001 BOM (igual que cambio de color)
+            _cb(4, "Comparando y copiando estructura de materiales (BOM)")
+            try:
+                self.session.findById(self._ID_RAD_HOMOLOG).setFocus()
+                self.session.findById(self._ID_RAD_HOMOLOG).select()
+                self._esperar(T_RAPIDO)
+                self.session.findById(self._ID_CTX_CENTER).text = "CO01"
+                self.session.findById(self._ID_RAD_FORMULA).setFocus()
+                self.session.findById(self._ID_RAD_FORMULA).select()
+                self._esperar(T_RAPIDO)
+                self.session.findById(self._ID_CTX_P_COLOR).text = p_color
+                self.session.findById(self._ID_CTX_P_FRANJ).text = p_franj
+                self.session.findById(self._ID_TXT_FORMU).text   = formula_nueva
+                zpla_actual = ""
+                try:
+                    zpla_actual = self.session.findById(self._ID_CTX_P_ZPLA).text.strip()
+                except Exception:
+                    pass
+                if not zpla_actual and zpla_usado:
+                    self.session.findById(self._ID_CTX_P_ZPLA).text = f" {zpla_usado}"
+            except Exception as e_p4:
+                print(f"     [WARN] Re-establecer campos paso 4: {e_p4}")
+
+            self.session.findById(self._ID_MATER_LOW).text = zfer_nuevo
+            self.session.findById(self._ID_MATER_LOW).caretPosition = len(zfer_nuevo)
+            self._esperar(T_RAPIDO)
+
+            clases = {}
+            if zpla_usado:
+                clases = self._leer_clases_zpla_sap(zpla_usado)
+                res._log(f"  Clases leídas desde SAP: {clases}")
+            else:
+                res._log("  [WARN] Sin ZPLA para leer clases")
+
+            posiciones = self.bom_con_retry(zpla_usado, clases)
+            res.posiciones_bom = posiciones
+            res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
+
+            # PASO 5 — MM02 extendido: PN + diferencial 06 + plano
+            _cb(5, f"Actualizando MM02 (PN, diferencial, plano) — {zfer_nuevo}")
+            nuevo_pn = self._construir_nuevo_pn_formula(pn_base, formula_nueva, p_color)
+            res._log(f"  Nuevo PN={nuevo_pn}")
+
+            for mat in ([zfer_nuevo] + ([zfor_nuevo] if zfor_nuevo else [])):
+                # 5a — PARTNUMBER
+                if nuevo_pn and nuevo_pn != pn_base:
+                    self.mm02_actualizar_partnumber(mat, nuevo_pn)
+                # 5b — Diferencial 06
+                self.mm02_desactivar_diferencial_06(mat)
+                # 5c — Plano: lee DOKNR actual y quita "SP"
+                self.mm02_cambiar_plano(mat)
+
+            # PASO 6 — CEWB: eliminar posición acero del ZPLA nuevo
+            _cb(6, f"Eliminando posición acero {pos_acero} en CEWB (ZPLA={zpla_usado})")
+            if zpla_usado and pos_acero:
+                self.cewb_eliminar_posicion_acero(zpla_usado, pos_acero)
+                res._log(f"  CEWB: pos {pos_acero} eliminada de ZPLA={zpla_usado}")
+            else:
+                res._log("  CEWB: omitido (sin ZPLA nuevo o sin pos_acero)")
+
+            res.estado    = "OK"
+            res.fecha_fin = datetime.datetime.now()
+            res._log(f"=== COMPLETADO OK ({res.duracion_seg}s) ===")
+
+        except Exception as e:
+            res.estado    = "ERROR"
+            res.error     = str(e)
+            res.fecha_fin = datetime.datetime.now()
+            res._log(f"=== ERROR: {e} ===")
+
+        self._log_bd(res)
+        return res
+
+
 # ── Función de entrada (usada desde app.py vía threading) ────────────────────
 
 def procesar_combinacion(zfer_base: str, color_codigo: str, color_nombre: str,
@@ -1289,3 +1955,25 @@ def procesar_combinacion(zfer_base: str, color_codigo: str, color_nombre: str,
     return auto.procesar(zfer_base, color_codigo, color_nombre, franja, pn_base, zpla,
                          nivel=nivel, tipo_pieza=tipo_pieza,
                          step_callback=step_callback)
+
+
+def procesar_combinacion_formula_sin_acero(
+        zfer_base: str, formula_nueva: str,
+        color_codigo: str, color_nombre: str,
+        franja: str = "00", pn_base: str = "", zpla: str = "",
+        nivel: str = "", tipo_pieza: str = "",
+        step_callback=None) -> ResultadoItem:
+    auto = AutomatizadorSAP()
+    if not auto.conectar():
+        r = ResultadoItem(
+            batch_id=str(uuid.uuid4())[:8], zfer_base=zfer_base,
+            color_codigo=color_codigo, estado="ERROR",
+            error="SAP GUI no disponible.",
+            fecha_inicio=datetime.datetime.now(), fecha_fin=datetime.datetime.now(),
+        )
+        return r
+    return auto.procesar_formula_sin_acero(
+        zfer_base, formula_nueva, color_codigo, color_nombre,
+        franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
+        step_callback=step_callback,
+    )

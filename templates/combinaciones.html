@@ -1144,7 +1144,7 @@ function _fcActualizarCnt(idx) {
   if (badge) { badge.textContent = sel; badge.style.display = sel > 0 ? "inline" : "none"; }
 }
 
-function _fcEjecutar(idx, formula) {
+async function _fcEjecutar(idx, formula) {
   const checks = document.querySelectorAll(`.chk-fc-${idx}:checked`);
   if (!checks.length) return;
   const statusEl = document.getElementById(`status-fc-${idx}`);
@@ -1153,20 +1153,42 @@ function _fcEjecutar(idx, formula) {
   if (statusEl) statusEl.textContent = "Preparando…";
 
   const combinaciones = Array.from(checks).map(c => ({
-    zfer:            ZFER_BASE,
-    color:           c.dataset.color,
-    color_nombre:    c.dataset.colorNombre,
-    zpla:            c.dataset.zpla,
-    franja:          FRANJA_BASE,
-    pn_base:         PN_BASE,
-    nivel:           NIVEL_BASE,
-    tipo_pieza:      PIECE_TYPE,
-    formula_destino: formula,
-    tipo_cambio:     "formula",
+    zfer:          ZFER_BASE,
+    color:         c.dataset.color,
+    color_nombre:  c.dataset.colorNombre,
+    zpla:          c.dataset.zpla,
+    franja:        FRANJA_BASE,
+    pn_base:       PN_BASE,
+    nivel:         NIVEL_BASE,
+    tipo_pieza:    PIECE_TYPE,
+    formula_nueva: formula,
   }));
 
-  if (statusEl) statusEl.textContent = `${combinaciones.length} combinación(es) listas. (Homologación por fórmula próximamente)`;
-  console.log("[Fórmula] Combinaciones:", combinaciones);
+  if (statusEl) statusEl.textContent = `Enviando ${combinaciones.length} combinación(es) a SAP…`;
+
+  try {
+    const r = await fetch("/api/sap/ejecutar_formula_sin_acero", {
+      method:  "POST",
+      headers: {"Content-Type": "application/json"},
+      body:    JSON.stringify({ combinaciones }),
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      if (statusEl) statusEl.textContent = `Error: ${d.error}`;
+      btn.disabled = false;
+      return;
+    }
+    if (statusEl) statusEl.textContent = `✓ Procesando batch ${d.batch_id} (${d.total} items)…`;
+    // Reusar el panel de estado del batch de color si existe
+    const batchPanel = document.getElementById("batch-status");
+    if (batchPanel) {
+      batchPanel.dataset.batchId = d.batch_id;
+      batchPanel.style.display = "block";
+    }
+  } catch (err) {
+    if (statusEl) statusEl.textContent = `Error de red: ${err}`;
+    btn.disabled = false;
+  }
 }
 
 // Buscar fórmulas con filtros dinámicos
