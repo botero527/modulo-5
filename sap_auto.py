@@ -1456,11 +1456,35 @@ class AutomatizadorSAP:
 
     def mm02_desactivar_diferencial_06(self, zfer: str):
         """
-        En MM02, tab PIEZA: scroll a pos 6, fila visual 7 = Z_BEHAVIOR_DIFFERENTIALS.
-        Abre popup con sendVKey(2), desmarca fila 5 (valor "06"), cierra popup.
+        Navega a MM02, abre PIEZA tab, scroll a pos 6, fila visual 7 = Z_BEHAVIOR_DIFFERENTIALS.
+        Abre popup con sendVKey(2), desmarca fila 5 (valor "06"), guarda y sale.
         IDs confirmados por VBS grabado en QUAS.
         """
         print(f"    MM02 diferencial: desmarcando 06 en {zfer}")
+
+        # Navegar a MM02 y abrir tab PIEZA (igual que mm02_actualizar_partnumber)
+        self._cerrar_dialogs_abiertos()
+        self.session.findById(self._ID_TCODE_BOX).text = "/NMM02"
+        self.session.findById("wnd[0]").sendVKey(0)
+        self._esperar(T_MEDIO)
+        self.session.findById(self._ID_MM02_MATNR).text = zfer
+        self.session.findById("wnd[0]").sendVKey(0)
+        self._esperar(T_MEDIO)
+        for _ in range(3):
+            try:
+                self.session.findById(self._ID_MM02_TAB03)
+                break
+            except Exception:
+                pass
+            if not self._primera_opcion_si_popup():
+                self.session.findById("wnd[0]").sendVKey(0)
+                self._esperar(T_MEDIO)
+        self.session.findById(self._ID_MM02_TAB03).select()
+        self._esperar(T_RAPIDO)
+        self._primera_opcion_si_popup()
+        self.session.findById(self._ID_MM02_TAB4).select()
+        self._esperar(T_RAPIDO)
+
         tbl = self._ID_MM02_TBL_PIEZA
         # Scroll a posición 6 (confirma VBS)
         self.session.findById(tbl).verticalScrollbar.position = 6
@@ -1488,10 +1512,24 @@ class AutomatizadorSAP:
             self.session.findById("wnd[1]").close()
         except Exception:
             try:
-                self.session.findById("wnd[1]").sendVKey(12)  # F12 alternativo
+                self.session.findById("wnd[1]").sendVKey(12)
             except Exception:
                 pass
         self._esperar(T_RAPIDO)
+
+        # Guardar con btn[11] y salir con F3 → OPTION1
+        try:
+            self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
+            self._esperar(T_MEDIO)
+            self._primera_opcion_si_popup()
+        except Exception as e:
+            print(f"    [WARN] Diferencial guardar: {e}")
+        try:
+            self.session.findById("wnd[0]/tbar[0]/btn[3]").press()
+            self._esperar(T_RAPIDO)
+            self._primera_opcion_si_popup()
+        except Exception:
+            pass
 
     # ── MM02 — Cambio de plano (tab ZU04) ────────────────────────────────────
 
