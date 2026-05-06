@@ -1461,7 +1461,7 @@ class AutomatizadorSAP:
         IDs confirmados por VBS grabado en QUAS.
         """
         print(f"    MM02 diferencial: desmarcando 06 en {zfer}")
-
+        
         # Navegar a MM02 y abrir tab PIEZA (igual que mm02_actualizar_partnumber)
         self._cerrar_dialogs_abiertos()
         self.session.findById(self._ID_TCODE_BOX).text = "/NMM02"
@@ -1535,69 +1535,74 @@ class AutomatizadorSAP:
 
     def mm02_cambiar_plano(self, zfer: str, nuevo_plano: str = None):
         """
-        En MM02, tab ZU04 (Documentos): lee DOKNR actual y le quita 'SP'.
-        Si nuevo_plano se pasa explícito, lo usa directamente.
+        Navega a MM02 → btn[30] → tabpZU04 → radGF_ALLE → lee DOKNR y quita 'SP' → guarda.
+        Flujo confirmado por VBS cambio plano_acero 1.vbs.
         """
         print(f"    MM02 plano: procesando {zfer}")
         try:
-            # Navegar a la vista de ingeniería (btn[30])
-            self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
-            self._esperar(T_MEDIO)
-
-            # Tab ZU04
-            self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
-            self._esperar(T_MEDIO)
-
             _subZU04 = ("wnd[0]/usr/tabsTABSPR1/tabpZU04"
                         "/ssubTABFRA1:SAPLMGMM:2110"
                         "/subSUB2:SAPLMGD1:3400"
                         "/subDOCU:SAPLCV140:0204")
+            _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
 
-            # Radio "Todos" (GF_ALLE)
+            # /nmm02 → Enter → material → Enter → Enter (dos enters para pasar pantallas)
+            self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById(self._ID_MM02_MATNR).text = zfer
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+
+            # Vista ingeniería → tab ZU04 → radio GF_ALLE
+            self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
+            self._esperar(T_MEDIO)
             self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
             self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
             self._esperar(T_RAPIDO)
 
-            # Grid ALV de documentos
-            _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
-            # Si no se pasó plano explícito, leer el actual y quitarle "SP"
+            # Leer DOKNR actual y quitarle "SP" si no se pasó plano explícito
             if not nuevo_plano:
                 try:
                     doknr_actual = self.session.findById(_grid_docu).getCellValue(0, "DOKNR")
                     nuevo_plano = doknr_actual.replace("SP", "").replace("sp", "")
-                    print(f"    MM02 plano: DOKNR actual='{doknr_actual}' → nuevo='{nuevo_plano}'")
+                    print(f"    MM02 plano: DOKNR='{doknr_actual}' → '{nuevo_plano}'")
                 except Exception as e:
-                    print(f"    [WARN] No pudo leer DOKNR actual: {e}")
+                    print(f"    [WARN] No pudo leer DOKNR: {e}")
                     return
             if not nuevo_plano:
                 print(f"    [WARN] mm02_cambiar_plano: sin plano, omitiendo")
                 return
+
+            # modifyCell → currentCellColumn → pressEnter → popup → guardar
             self.session.findById(_grid_docu).modifyCell(0, "DOKNR", nuevo_plano)
             self.session.findById(_grid_docu).currentCellColumn = "DOKNR"
             self.session.findById(_grid_docu).pressEnter()
             self._esperar(T_MEDIO)
-
-            # Confirmar popup si aparece
             try:
                 self.session.findById("wnd[1]/usr/btnBUTTON_1").press()
                 self._esperar(T_RAPIDO)
             except Exception:
                 pass
-
-            # Guardar con btn[11]
             self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
             self._esperar(T_LENTO)
+            print(f"    MM02 plano guardado: {zfer} → '{nuevo_plano}'")
         except Exception as e:
             print(f"    [WARN] mm02_cambiar_plano: {e}")
 
     # ── CEWB — Eliminar posición acero ───────────────────────────────────────
 
-    def cewb_eliminar_posicion_acero(self, zpla_nuevo: str, pos_acero: str):
+    def cewb_eliminar_posicion_acero(self, material: str, pos_acero: str):
         """
-        Navega a CEWB, filtra por zpla_nuevo y pos_acero, selecciona fila 0,
+        Navega a CEWB, filtra por material (ZFER nuevo) y pos_acero, selecciona fila 0,
         elimina y guarda.
         """
-        print(f"    CEWB: eliminando pos {pos_acero} de ZPLA={zpla_nuevo}")
+        zpla_nuevo = material  # compatibilidad interna — campo MATNR en CEWB
+        print(f"    CEWB: eliminando pos {pos_acero} de material={material}")
         self._navegar("CEWB")
         self._esperar(T_MEDIO)
 
@@ -1626,36 +1631,69 @@ class AutomatizadorSAP:
         self.session.findById(self._ID_BTN_EXEC).press()
         self._esperar(T_LENTO)
 
-        # Seleccionar fila 0 y eliminar
-        _tbl_cewb = ("wnd[0]/usr/tabsTAB_STRIP_ITM/tabpITM_TGEN"
-                     "/ssubSUBPAGE:SAPLCSOV:3205/tblSAPLCSOVTC_3205")
-        try:
-            self.session.findById(_tbl_cewb).getAbsoluteRow(0).selected = True
-            self.session.findById(_tbl_cewb + "/txtITM_CLASS_VIEW-ITM_LOCK[0,0]").setFocus()
-            self.session.findById(_tbl_cewb + "/txtITM_CLASS_VIEW-ITM_LOCK[0,0]").caretPosition = 0
-            self._esperar(T_RAPIDO)
-            self.session.findById("wnd[0]/tbar[1]/btn[14]").press()   # botón borrar
-            self._esperar(T_MEDIO)
-
-            # Confirmaciones
-            for btn in ("wnd[1]/tbar[0]/btn[0]", "wnd[1]/usr/btnSPOP-OPTION1"):
-                try:
-                    self.session.findById(btn).press()
-                    self._esperar(T_RAPIDO)
-                except Exception:
-                    pass
-
-            # Guardar y salir
-            self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
-            self._esperar(T_LENTO)
-            self.session.findById("wnd[0]").sendVKey(3)   # Back
-            self._esperar(T_RAPIDO)
+        # Intentar seleccionar el tab de resultados si no está activo
+        _tab_activo = "tabpITM_TGEN"
+        for _tab in ("tabpITM_TGEN", "tabpITM_STR", "tabpITM_DOC"):
             try:
-                self.session.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+                self.session.findById(f"wnd[0]/usr/tabsTAB_STRIP_ITM/{_tab}").select()
+                _tab_activo = _tab
+                self._esperar(T_RAPIDO)
+                break
             except Exception:
                 pass
-        except Exception as e:
-            print(f"    [WARN] CEWB eliminar: {e}")
+
+        # Intentar múltiples rutas para la tabla de resultados
+        _tbl_candidates = [
+            f"wnd[0]/usr/tabsTAB_STRIP_ITM/{_tab_activo}/ssubSUBPAGE:SAPLCSOV:3205/tblSAPLCSOVTC_3205",
+            "wnd[0]/usr/tabsTAB_STRIP_ITM/tabpITM_TGEN/ssubSUBPAGE:SAPLCSOV:3205/tblSAPLCSOVTC_3205",
+            "wnd[0]/usr/tabsTAB_STRIP_ITM/tabpITM_STR/ssubSUBPAGE:SAPLCSOV:3205/tblSAPLCSOVTC_3205",
+        ]
+        _tbl_cewb = None
+        for _cand in _tbl_candidates:
+            try:
+                self.session.findById(_cand).getAbsoluteRow(0)
+                _tbl_cewb = _cand
+                print(f"    CEWB: tabla encontrada en {_cand}")
+                break
+            except Exception:
+                pass
+
+        if _tbl_cewb is None:
+            # Diagnóstico: mostrar hijos de wnd[0]/usr para ayudar a grabar VBS
+            try:
+                _usr = self.session.findById("wnd[0]/usr")
+                print(f"    [DIAG] CEWB wnd[0]/usr hijos: {[_usr.Children(i).Id for i in range(min(_usr.Children.Count, 10))]}")
+            except Exception as _de:
+                print(f"    [DIAG] CEWB no pudo inspeccionar usr: {_de}")
+            print(f"    [WARN] CEWB eliminar: tabla tblSAPLCSOVTC_3205 no encontrada — grabar VBS en CEWB para confirmar ruta")
+        else:
+            try:
+                self.session.findById(_tbl_cewb).getAbsoluteRow(0).selected = True
+                self.session.findById(_tbl_cewb + "/txtITM_CLASS_VIEW-ITM_LOCK[0,0]").setFocus()
+                self.session.findById(_tbl_cewb + "/txtITM_CLASS_VIEW-ITM_LOCK[0,0]").caretPosition = 0
+                self._esperar(T_RAPIDO)
+                self.session.findById("wnd[0]/tbar[1]/btn[14]").press()   # botón borrar
+                self._esperar(T_MEDIO)
+
+                # Confirmaciones
+                for btn in ("wnd[1]/tbar[0]/btn[0]", "wnd[1]/usr/btnSPOP-OPTION1"):
+                    try:
+                        self.session.findById(btn).press()
+                        self._esperar(T_RAPIDO)
+                    except Exception:
+                        pass
+
+                # Guardar y salir
+                self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
+                self._esperar(T_LENTO)
+                self.session.findById("wnd[0]").sendVKey(3)   # Back
+                self._esperar(T_RAPIDO)
+                try:
+                    self.session.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+                except Exception:
+                    pass
+            except Exception as e:
+                print(f"    [WARN] CEWB eliminar: {e}")
 
     # ── Procesar una combinación ──────────────────────────────────────────────
 
@@ -1950,16 +1988,25 @@ class AutomatizadorSAP:
                     self.mm02_actualizar_partnumber(mat, nuevo_pn)
                 # 5b — Diferencial 06
                 self.mm02_desactivar_diferencial_06(mat)
-                # 5c — Plano: lee DOKNR actual y quita "SP"
-                self.mm02_cambiar_plano(mat)
 
-            # PASO 6 — CEWB: eliminar posición acero del ZPLA nuevo
-            _cb(6, f"Eliminando posición acero {pos_acero} en CEWB (ZPLA={zpla_usado})")
-            if zpla_usado and pos_acero:
-                self.cewb_eliminar_posicion_acero(zpla_usado, pos_acero)
-                res._log(f"  CEWB: pos {pos_acero} eliminada de ZPLA={zpla_usado}")
+            # 5c — Plano: solo para ZFER nuevo (no ZFOR)
+            self.mm02_cambiar_plano(zfer_nuevo)
+
+            # PASO 6 — CEWB: eliminar posición acero del ZFER nuevo
+            _cb(6, f"Eliminando posición acero {pos_acero} en CEWB (ZFER={zfer_nuevo})")
+            if zfer_nuevo and pos_acero:
+                self.cewb_eliminar_posicion_acero(zfer_nuevo, pos_acero)
+                res._log(f"  CEWB: pos {pos_acero} eliminada de ZFER={zfer_nuevo}")
             else:
-                res._log("  CEWB: omitido (sin ZPLA nuevo o sin pos_acero)")
+                res._log("  CEWB: omitido (sin ZFER nuevo o sin pos_acero)")
+
+            # PASO 7 — Volver a pantalla inicial (ZMME0001) para siguiente combinación
+            _cb(7, "Volviendo a pantalla inicial")
+            try:
+                self._navegar("ZMME0001")
+                self._esperar(T_MEDIO)
+            except Exception:
+                pass
 
             res.estado    = "OK"
             res.fecha_fin = datetime.datetime.now()
