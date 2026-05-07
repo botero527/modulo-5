@@ -1265,32 +1265,60 @@ class AutomatizadorSAP:
 
     # ── ZPPR0008 — Validar posición acero ────────────────────────────────────
 
-    def zppr0008_validar_posicion_acero(self, zpla_base: str) -> dict:
+    def zppr0008_validar_posicion_acero(self, zfer_base: str) -> dict:
         """
-        Entra a ZPPR0008 con el ZPLA del ZFER base y busca posición 0106 ó 0116.
+        Entra a ZPPR0008 con el ZFER base (modo material, radRB_1) y busca posición 0106 ó 0116.
         Retorna {"ok": True/False, "pos": "0106"|"0116"|"", "error": ""}
         """
-        print(f"    ZPPR0008: validando posición acero para ZPLA={zpla_base}")
+        print(f"    ZPPR0008: validando posición acero para ZFER={zfer_base}")
         self._navegar("ZPPR0008")
 
-        # Modo ZPLA: radRB_2
+        # Template lista de materiales: radRB_2 + ctxtS_MATNR2-LOW con ZFER base
         self.session.findById("wnd[0]/usr/radRB_2").setFocus()
         self.session.findById("wnd[0]/usr/radRB_2").select()
         self._esperar(T_RAPIDO)
 
-        self.session.findById("wnd[0]/usr/ctxtS_MATNR2-LOW").text = zpla_base
+        self.session.findById("wnd[0]/usr/ctxtS_MATNR2-LOW").text = zfer_base
         self.session.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").text = "CO01"
         self.session.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").setFocus()
         self.session.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").caretPosition = 4
         self.session.findById(self._ID_BTN_EXEC).press()
         self._esperar(T_LENTO)
 
+        # Intentar múltiples IDs de grid (el nombre varía según template/versión SAP)
+        grid = None
+        for _gid in ("wnd[0]/usr/cntlGRID1/shellcont/shell",
+                     "wnd[0]/usr/cntlGRID/shellcont/shell",
+                     "wnd[0]/usr/cntlALV/shellcont/shell"):
+            try:
+                grid = self.session.findById(_gid)
+                print(f"    ZPPR0008: grid encontrado en {_gid}")
+                break
+            except Exception:
+                pass
+
+        if grid is None:
+            # Diagnóstico: listar hijos de wnd[0]/usr
+            try:
+                _usr = self.session.findById("wnd[0]/usr")
+                _ids = [_usr.Children(i).Id for i in range(min(_usr.Children.Count, 20))]
+                print(f"    [DIAG] ZPPR0008 usr hijos tras F8: {_ids}")
+            except Exception as _de:
+                print(f"    [DIAG] ZPPR0008 no pudo listar hijos: {_de}")
+            return {"ok": False, "pos": "", "error": "ZPPR0008: grid no encontrado tras F8 — ver [DIAG] en log"}
+
         try:
-            grid = self.session.findById("wnd[0]/usr/cntlGRID1/shellcont/shell")
             n = grid.RowCount
             print(f"    ZPPR0008: {n} filas")
+            # Imprimir columnas disponibles en fila 0 para diagnóstico
+            if n > 0:
+                try:
+                    _cols = grid.ColumnOrder
+                    print(f"    [DIAG] ZPPR0008 columnas: {list(_cols)}")
+                except Exception:
+                    pass
             for i in range(n):
-                for col in ("POSNR", "POSN", "POS"):
+                for col in ("POSNR", "POSN", "POS", "COMPONENT", "MATNR"):
                     try:
                         v = str(grid.GetCellValue(i, col) or "").strip().lstrip("0") or "0"
                         if v in ("106", "116"):
@@ -1301,9 +1329,9 @@ class AutomatizadorSAP:
                     except Exception:
                         pass
             return {"ok": False, "pos": "",
-                    "error": f"ZPLA {zpla_base} no tiene posición 0106 ni 0116 → no aplica cambio de fórmula sin acero"}
+                    "error": f"ZFER {zfer_base} no tiene posición 0106 ni 0116 → no aplica cambio de fórmula sin acero"}
         except Exception as e:
-            return {"ok": False, "pos": "", "error": f"ZPPR0008 error: {e}"}
+            return {"ok": False, "pos": "", "error": f"ZPPR0008 error grid: {e}"}
 
     # ── ZMME0001 — Cambio de Fórmula ─────────────────────────────────────────
 
@@ -1889,11 +1917,9 @@ class AutomatizadorSAP:
             zplas_validos = [z.strip() for z in str(zpla).split(",") if z.strip()]
             zpla_base = zplas_validos[0] if zplas_validos else ""
 
-            # PASO 0 — Validar posición acero en ZPPR0008
-            _cb(0, f"Validando posición acero en ZPPR0008 (ZPLA={zpla_base})")
-            if not zpla_base:
-                raise RuntimeError("ZPPR0008: sin ZPLA base para validar posición acero")
-            val_acero = self.zppr0008_validar_posicion_acero(zpla_base)
+            # PASO 0 — Validar posición acero en ZPPR0008 (usa ZFER base, modo material)
+            _cb(0, f"Validando posición acero en ZPPR0008 (ZFER={zfer_base})")
+            val_acero = self.zppr0008_validar_posicion_acero(zfer_base)
             if not val_acero["ok"]:
                 raise RuntimeError(val_acero["error"])
             pos_acero = val_acero["pos"]   # "0106" ó "0116"
