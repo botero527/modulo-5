@@ -28,7 +28,7 @@ T_RAPIDO = 1.5
 T_MEDIO  = 3.5
 T_LENTO  = 7.0
 
-_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "FESPITIA") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -55,6 +55,10 @@ class ResultadoItem:
     fecha_inicio:   Optional[datetime.datetime] = None
     fecha_fin:      Optional[datetime.datetime] = None
     log:            list  = field(default_factory=list)
+    # Campos extra para log BD
+    formula:        str   = ""
+    tipo_pieza:     str   = ""
+    acero:          str   = ""
 
     @property
     def duracion_seg(self) -> float:
@@ -1216,15 +1220,35 @@ class AutomatizadorSAP:
 
     def _log_bd(self, res: "ResultadoItem"):
         try:
-            cn = pyodbc.connect(_DB_LOCAL_STR, autocommit=True)
-            cn.cursor().execute(
+            cn  = pyodbc.connect(_DB_LOCAL_STR, autocommit=True)
+            cur = cn.cursor()
+            # Asegurar que batch_id sea varchar (migrar columna si es uniqueidentifier)
+            try:
+                cur.execute(
+                    "IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS "
+                    "WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='M5_LogEjecucion' "
+                    "AND COLUMN_NAME='batch_id' AND DATA_TYPE='uniqueidentifier') "
+                    "ALTER TABLE dbo.M5_LogEjecucion ALTER COLUMN batch_id varchar(50) NULL"
+                )
+            except Exception:
+                pass
+            cur.execute(
                 "INSERT INTO dbo.M5_LogEjecucion "
                 "(batch_id, pedido_origen, tipo_pieza, formula, color_codigo, acero_variante, "
                 " estado, detalle_error, fecha_inicio, fecha_fin) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (res.batch_id, res.zfer_base, "", "", res.color_codigo, "",
-                 res.estado, res.error or None,
-                 res.fecha_inicio, res.fecha_fin)
+                (
+                    str(res.batch_id)[:50],
+                    str(res.zfer_base or "")[:50],
+                    str(getattr(res, "tipo_pieza", "") or "")[:50],
+                    str(getattr(res, "formula",    "") or "")[:50],
+                    str(res.color_codigo or "")[:20],
+                    str(getattr(res, "acero",      "") or "")[:50],
+                    str(res.estado or "")[:20],
+                    str(res.error)[:2000] if res.error else None,
+                    res.fecha_inicio,
+                    res.fecha_fin,
+                )
             )
             cn.close()
         except Exception as e:
@@ -1685,7 +1709,7 @@ class AutomatizadorSAP:
                 break
             except Exception:
                 pass
-
+            
         if _tbl_cewb is None:
             # Diagnóstico: mostrar hijos de wnd[0]/usr para ayudar a grabar VBS
             try:
@@ -1738,6 +1762,7 @@ class AutomatizadorSAP:
             batch_id     = str(uuid.uuid4())[:8],
             zfer_base    = zfer_base,
             color_codigo = color_codigo,
+            tipo_pieza   = str(tipo_pieza or ""),
             estado       = "EN_PROCESO",
             fecha_inicio = datetime.datetime.now(),
         )
@@ -1896,6 +1921,8 @@ class AutomatizadorSAP:
             batch_id     = str(uuid.uuid4())[:8],
             zfer_base    = zfer_base,
             color_codigo = color_codigo,
+            formula      = str(formula_nueva or ""),
+            tipo_pieza   = str(tipo_pieza or ""),
             estado       = "EN_PROCESO",
             fecha_inicio = datetime.datetime.now(),
         )

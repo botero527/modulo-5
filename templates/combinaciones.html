@@ -45,6 +45,8 @@
       <div class="stat-lbl">Sin ZPLA</div>
     </div>
   </div>
+
+
 </div>
 
 {% if not pn_parsed %}
@@ -440,9 +442,12 @@
         <i class="bi bi-check-all me-1"></i>Seleccionar todo
       </button>
       <button id="btn-ejecutar-sap"
-              style="background:var(--accent); color:#000; font-weight:700; border:none; border-radius:8px; padding:.45rem 1.2rem; font-size:.88rem; cursor:pointer; transition:.15s;"
+              style="background:var(--accent); color:#000; font-weight:700; border:none; border-radius:8px; padding:.45rem 1.2rem; font-size:.88rem; cursor:pointer; transition:.15s; display:flex; align-items:center; gap:.4rem;"
               onmouseover="this.style.background='#00a8d8'" onmouseout="this.style.background='var(--accent)'">
-        <i class="bi bi-play-circle-fill me-1"></i>Ejecutar en SAP
+        <i class="bi bi-play-circle-fill"></i>
+        <span>Ejecutar Cola SAP</span>
+        <span id="badge-cola-total" style="display:none; background:rgba(0,0,0,.3); border-radius:20px;
+              padding:.05rem .45rem; font-size:.75rem; font-weight:900;"></span>
       </button>
       <span id="sap-status-global" style="font-size:.82rem; color:var(--muted);"></span>
     </div>
@@ -478,16 +483,37 @@
     <div id="rep-kpis" style="display:grid; grid-template-columns:repeat(4,1fr);
          gap:.8rem; margin-bottom:1.8rem;"></div>
 
+    <!-- Tabs Tipo -->
+    <div id="rep-tabs" style="display:flex; gap:.4rem; margin-bottom:.8rem;">
+      <button class="rep-tab active" data-tab="todos"
+              style="background:#21262d; border:1px solid #30363d; color:#e6edf3; border-radius:8px;
+                     padding:.3rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;">
+        Todos
+      </button>
+      <button class="rep-tab" data-tab="color"
+              style="background:transparent; border:1px solid #30363d; color:#79c0ff; border-radius:8px;
+                     padding:.3rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;">
+        <i class="bi bi-palette me-1"></i>Color
+        <span id="rep-tab-cnt-color" style="background:#0d1e2e; border-radius:20px; padding:.05rem .4rem; font-size:.72rem; margin-left:.3rem;"></span>
+      </button>
+      <button class="rep-tab" data-tab="formula"
+              style="background:transparent; border:1px solid #30363d; color:#bc8cff; border-radius:8px;
+                     padding:.3rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;">
+        <i class="bi bi-flask me-1"></i>Fórmula
+        <span id="rep-tab-cnt-formula" style="background:#1e1030; border-radius:20px; padding:.05rem .4rem; font-size:.72rem; margin-left:.3rem;"></span>
+      </button>
+    </div>
+
     <!-- Tabla detalle -->
-    <div style="font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;
-                color:#8b949e; margin-bottom:.6rem;">Detalle por combinación</div>
     <div style="overflow-x:auto; border-radius:10px; border:1px solid #21262d;">
       <table style="width:100%; border-collapse:collapse; font-size:.83rem;">
         <thead>
           <tr style="background:#161b22;">
             <th style="padding:.55rem .8rem; color:#8b949e; text-align:left; white-space:nowrap;">#</th>
+            <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;">Tipo</th>
             <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;">Color</th>
             <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;">Nombre</th>
+            <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;" id="rep-th-formula" style="display:none;">Fórmula</th>
             <th style="padding:.55rem .8rem; color:#8b949e; text-align:center;">Estado</th>
             <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;">ZFER Nuevo</th>
             <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;">ZFOR / Error</th>
@@ -513,7 +539,46 @@
                 align-items:center; gap:.4rem;">
         &#8659; Descargar Excel
       </a>
-      <span style="font-size:.78rem; color:#484f58;">4 hojas: Resumen · Detalle · Errores · Log completo</span>
+      <span style="font-size:.78rem; color:#484f58;" id="rep-excel-hint">4 hojas: Resumen · Detalle · Errores · Log completo</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Duplicados ──────────────────────────────────────────────────────── -->
+<div id="modal-duplicados" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.78);
+     z-index:10000; align-items:center; justify-content:center; padding:1rem;">
+  <div style="background:#0d1117; border:1px solid #9e6a03; border-radius:18px;
+               width:100%; max-width:560px; padding:1.8rem 2rem;">
+    <div style="display:flex; align-items:center; gap:.7rem; margin-bottom:1.2rem;">
+      <i class="bi bi-exclamation-triangle-fill" style="color:#e3b341; font-size:1.4rem;"></i>
+      <div>
+        <div style="font-weight:800; font-size:1.1rem; color:#e6edf3;">Items ya existentes en SAP</div>
+        <div style="font-size:.78rem; color:#8b949e; margin-top:.15rem;">
+          <span id="dup-n-duplic" style="color:#e3b341; font-weight:700;"></span> item(s) ya tienen un ZFER activo.
+          <span id="dup-n-nuevos" style="color:#56d364; font-weight:700;"></span> son nuevos.
+        </div>
+      </div>
+    </div>
+    <div id="dup-lista" style="max-height:260px; overflow-y:auto; margin-bottom:1.4rem;
+         border:1px solid #21262d; border-radius:10px; padding:.6rem .9rem;"></div>
+    <div style="display:flex; gap:.7rem; flex-wrap:wrap; justify-content:flex-end;">
+      <button id="dup-btn-cancelar"
+              style="background:transparent; border:1px solid #30363d; color:#8b949e;
+                     border-radius:8px; padding:.45rem 1rem; font-size:.85rem; cursor:pointer;">
+        Cancelar
+      </button>
+      <button id="dup-btn-solo-nuevos"
+              style="background:#1a3a2a; border:1px solid #2ea043; color:#56d364;
+                     border-radius:8px; padding:.45rem 1.1rem; font-size:.85rem;
+                     font-weight:700; cursor:pointer;">
+        <i class="bi bi-skip-forward-fill me-1"></i>Ejecutar solo los nuevos
+      </button>
+      <button id="dup-btn-todos"
+              style="background:#2d2416; border:1px solid #9e6a03; color:#e3b341;
+                     border-radius:8px; padding:.45rem 1.1rem; font-size:.85rem;
+                     font-weight:700; cursor:pointer;">
+        <i class="bi bi-play-fill me-1"></i>Ejecutar todos de todos modos
+      </button>
     </div>
   </div>
 </div>
@@ -794,21 +859,44 @@ if (btnSelAll) {
   });
 }
 
-// ── Ejecutar SAP ──────────────────────────────────────────────────────────────
+// ── Contador de cola (actualiza badge del botón) ──────────────────────────────
+function _actualizarContadorCola() {
+  const nColor   = document.querySelectorAll(".sap-check:checked").length;
+  const nFormula = document.querySelectorAll(".chk-fc:checked").length;
+  const total    = nColor + nFormula;
+  const badge    = document.getElementById("badge-cola-total");
+  if (badge) {
+    badge.textContent = total;
+    badge.style.display = total > 0 ? "inline" : "none";
+  }
+  return { nColor, nFormula, total };
+}
+
+// Observar cambios en checkboxes de color
+document.querySelectorAll(".sap-check").forEach(cb =>
+  cb.addEventListener("change", _actualizarContadorCola));
+
+// ── Ejecutar Cola SAP (mixto: color + fórmula) ────────────────────────────────
 const btnEjec   = document.getElementById("btn-ejecutar-sap");
 const statusGlb = document.getElementById("sap-status-global");
 
 if (btnEjec) {
   btnEjec.addEventListener("click", async () => {
-    const seleccionados = [...document.querySelectorAll(".sap-check:checked")];
-    if (seleccionados.length === 0) {
-      statusGlb.textContent = "Selecciona al menos un color."; return;
+    const coloresCheck  = [...document.querySelectorAll(".sap-check:checked")];
+    const formulaChecks = [...document.querySelectorAll(".chk-fc:checked")];
+
+    if (coloresCheck.length === 0 && formulaChecks.length === 0) {
+      statusGlb.textContent = "Selecciona al menos un color o fórmula."; return;
     }
     btnEjec.disabled = true;
 
-    const combinaciones = seleccionados.map(cb => {
+    // Construir cola unificada
+    const cola = [];
+
+    coloresCheck.forEach(cb => {
       const row = cb.closest("tr");
-      return {
+      cola.push({
+        tipo:         "color",
         zfer:         ZFER_BASE,
         color:        cb.value,
         color_nombre: row.dataset.colorNombre,
@@ -817,31 +905,98 @@ if (btnEjec) {
         pn_base:      PN_BASE,
         nivel:        NIVEL_BASE,
         tipo_pieza:   PIECE_TYPE,
-      };
+      });
     });
 
-    // Estado inicial de cada fila
-    seleccionados.forEach((cb, i) => {
+    formulaChecks.forEach(chk => {
+      cola.push({
+        tipo:          "formula",
+        zfer:          ZFER_BASE,
+        color:         chk.dataset.color,
+        color_nombre:  chk.dataset.colorNombre,
+        zpla:          chk.dataset.zpla,
+        franja:        FRANJA_BASE,
+        pn_base:       PN_BASE,
+        nivel:         NIVEL_BASE,
+        tipo_pieza:    PIECE_TYPE,
+        formula_nueva: chk.dataset.formula,
+      });
+    });
+
+    // Feedback visual inicial
+    coloresCheck.forEach((cb, i) => {
       const td = document.querySelector(`.td-sap-${cb.value}`);
-      if (td) td.innerHTML = i === 0
+      if (td) td.innerHTML = i === 0 && formulaChecks.length === 0
         ? _renderStepper(1, "Iniciando proceso…")
         : _renderEnCola();
     });
+    formulaChecks.forEach((chk, i) => {
+      const statusEl = document.getElementById(`status-fc-${chk.dataset.fidx}`);
+      if (statusEl) statusEl.textContent = coloresCheck.length === 0 && i === 0
+        ? "⏳ Iniciando…" : "🕐 En cola…";
+    });
 
+    const nC = coloresCheck.length, nF = formulaChecks.length;
     statusGlb.innerHTML = `<i class="bi bi-arrow-repeat paso-spinner me-1"></i>
-      Procesando ${combinaciones.length} combinación(es) secuencialmente…`;
+      Verificando duplicados…`;
 
     try {
-      const resp = await fetch("/api/sap/ejecutar", {
+      // ── Paso 1: verificar duplicados ────────────────────────────────────
+      const vResp = await fetch("/api/sap/verificar_duplicados", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          zfer_base: ZFER_BASE,
+          items: cola.map(c => ({ tipo: c.tipo, color: c.color,
+                                  color_nombre: c.color_nombre,
+                                  formula_nueva: c.formula_nueva || "" }))
+        }),
+      });
+      const vData = await vResp.json();
+
+      const duplicados = (vData.results || []).filter(r => r.ya_existe);
+
+      if (duplicados.length > 0) {
+        // Mostrar aviso y dejar al usuario decidir
+        const continuar = await _mostrarAviso_duplicados(duplicados, cola.length);
+        if (continuar === "cancelar") {
+          statusGlb.textContent = "Cancelado.";
+          btnEjec.disabled = false;
+          return;
+        }
+        if (continuar === "solo_nuevos") {
+          // Filtrar la cola para quitar los duplicados
+          const dupKeys = new Set(duplicados.map(d =>
+            d.tipo === "formula" ? `formula:${d.formula_nueva}:${d.color}` : `color:${d.color}`
+          ));
+          cola.splice(0, cola.length, ...cola.filter(c => {
+            const k = c.tipo === "formula" ? `formula:${c.formula_nueva}:${c.color}` : `color:${c.color}`;
+            return !dupKeys.has(k);
+          }));
+          if (cola.length === 0) {
+            statusGlb.textContent = "Todos los items ya existen en SAP. Nada que procesar.";
+            btnEjec.disabled = false;
+            return;
+          }
+        }
+        // si continuar === "todos" → sigue con la cola completa
+      }
+
+      // ── Paso 2: ejecutar cola ────────────────────────────────────────────
+      const nCf = cola.filter(c=>c.tipo==="color").length;
+      const nFf = cola.filter(c=>c.tipo==="formula").length;
+      statusGlb.innerHTML = `<i class="bi bi-arrow-repeat paso-spinner me-1"></i>
+        Cola: ${nCf} color${nCf!==1?"es":""} + ${nFf} fórmula${nFf!==1?"s":""}…`;
+
+      const resp = await fetch("/api/sap/ejecutar_cola", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ combinaciones }),
+        body: JSON.stringify({ cola }),
       });
       const data = await resp.json();
       if (!data.ok) {
         statusGlb.textContent = `Error al iniciar: ${data.error}`;
         btnEjec.disabled = false; return;
       }
-      _pollBatch(data.batch_id, seleccionados);
+      _pollBatch(data.batch_id, coloresCheck, formulaChecks);
     } catch (e) {
       statusGlb.textContent = `Error de red: ${e.message}`;
       btnEjec.disabled = false;
@@ -849,10 +1004,49 @@ if (btnEjec) {
   });
 }
 
-// ── Polling del batch ─────────────────────────────────────────────────────────
-function _pollBatch(batchId, checkboxes) {
-  const colorList = checkboxes.map(cb => cb.value);
-  const itemMap   = {};  // color → item ya procesado
+// ── Modal aviso duplicados ────────────────────────────────────────────────────
+function _mostrarAviso_duplicados(duplicados, totalCola) {
+  return new Promise(resolve => {
+    const modal = document.getElementById("modal-duplicados");
+    const lista = document.getElementById("dup-lista");
+    const nNuevos = totalCola - duplicados.length;
+
+    lista.innerHTML = duplicados.map(d => `
+      <div style="display:flex; align-items:center; gap:.6rem; padding:.4rem 0; border-bottom:1px solid #21262d;">
+        <span style="background:#1e1030; border:1px solid #6e40c9; color:#bc8cff; border-radius:6px;
+                     padding:.1rem .4rem; font-size:.72rem; font-weight:700; white-space:nowrap;">
+          ${d.tipo==="formula" ? "🧪 "+d.formula_nueva : "🎨 "+d.color}
+        </span>
+        <span style="color:#e6edf3; font-size:.82rem;">${d.color_nombre||""}</span>
+        <span style="color:#484f58; font-size:.75rem; margin-left:auto;">→</span>
+        <a href="/zfer/${d.zfer_existente}" target="_blank"
+           style="color:#58a6ff; font-size:.8rem; font-weight:700; text-decoration:none;">
+          ${d.zfer_existente}
+        </a>
+      </div>`).join("");
+
+    document.getElementById("dup-n-nuevos").textContent   = nNuevos;
+    document.getElementById("dup-n-duplic").textContent   = duplicados.length;
+
+    modal.style.display = "flex";
+
+    document.getElementById("dup-btn-cancelar").onclick = () => {
+      modal.style.display = "none"; resolve("cancelar");
+    };
+    document.getElementById("dup-btn-solo-nuevos").onclick = () => {
+      modal.style.display = "none"; resolve("solo_nuevos");
+    };
+    document.getElementById("dup-btn-todos").onclick = () => {
+      modal.style.display = "none"; resolve("todos");
+    };
+  });
+}
+
+// ── Polling del batch (mixto) ─────────────────────────────────────────────────
+function _pollBatch(batchId, colorChecks, formulaChecks) {
+  colorChecks   = colorChecks   || [];
+  formulaChecks = formulaChecks || [];
+  const itemDone = new Set();  // "color:{val}" o "formula:{formula}:{color}"
 
   const iv = setInterval(async () => {
     try {
@@ -861,46 +1055,63 @@ function _pollBatch(batchId, checkboxes) {
 
       // Actualizar items ya finalizados
       (data.items || []).forEach((item, idx) => {
-        if (itemMap[item.color]) return;  // ya pintado
-        const td = document.querySelector(`.td-sap-${item.color}`);
-        if (!td) return;
-        if (item.estado === "OK") {
-          itemMap[item.color] = true;
-          td.innerHTML = _renderOkCelda(item);
-        } else if (item.estado === "ERROR") {
-          itemMap[item.color] = true;
-          td.innerHTML = _renderErrorCelda(item, idx);
+        const key = item.tipo === "formula"
+          ? `formula:${item.formula_nueva}:${item.color}`
+          : `color:${item.color}`;
+        if (itemDone.has(key)) return;
+
+        if (item.estado === "OK" || item.estado === "ERROR") {
+          itemDone.add(key);
+          if (item.tipo === "color") {
+            const td = document.querySelector(`.td-sap-${item.color}`);
+            if (td) td.innerHTML = item.estado === "OK"
+              ? _renderOkCelda(item) : _renderErrorCelda(item, idx);
+          } else {
+            // Buscar el status span del card de fórmula correspondiente
+            const chk = document.querySelector(`.chk-fc[data-formula="${item.formula_nueva}"][data-color="${item.color}"]`);
+            const fIdx = chk ? chk.dataset.fidx : null;
+            if (fIdx) {
+              const st = document.getElementById(`status-fc-${fIdx}`);
+              if (st) st.innerHTML = item.estado === "OK"
+                ? `<span style="color:#56d364;"><i class="bi bi-check-circle-fill me-1"></i>OK — ZFER ${item.zfer_nuevo||""}</span>`
+                : `<span style="color:#ffa198;"><i class="bi bi-x-circle-fill me-1"></i>${item.error||"Error"}</span>`;
+            }
+          }
         }
       });
 
-      // Actualizar paso actual del item en proceso
+      // Paso actual
       const curr = data._current;
-      if (curr && curr.color && !itemMap[curr.color]) {
-        const td = document.querySelector(`.td-sap-${curr.color}`);
-        if (td) td.innerHTML = _renderStepper(curr.paso || 1, curr.desc || "");
-      }
-
-      // Marcar siguiente en cola como "primer paso"
-      const procesados = data.procesados || 0;
-      if (procesados < colorList.length && !curr) {
-        const nextColor = colorList[procesados];
-        if (!itemMap[nextColor]) {
-          const tdNext = document.querySelector(`.td-sap-${nextColor}`);
-          if (tdNext && tdNext.innerHTML.includes("En cola"))
-            tdNext.innerHTML = _renderStepper(1, "Iniciando proceso…");
+      if (curr) {
+        const currKey = curr.tipo === "formula"
+          ? `formula:${curr.formula}:${curr.color}`
+          : `color:${curr.color}`;
+        if (!itemDone.has(currKey)) {
+          if (curr.tipo === "color") {
+            const td = document.querySelector(`.td-sap-${curr.color}`);
+            if (td) td.innerHTML = _renderStepper(curr.paso || 1, curr.desc || "");
+          } else {
+            const chk = document.querySelector(`.chk-fc[data-formula="${curr.formula}"][data-color="${curr.color}"]`);
+            if (chk) {
+              const st = document.getElementById(`status-fc-${chk.dataset.fidx}`);
+              if (st) st.innerHTML = `<i class="bi bi-arrow-repeat paso-spinner me-1"></i>
+                Paso ${curr.paso||1}: ${curr.desc||""}`;
+            }
+          }
         }
       }
 
       // Status global
-      const totalProcesados = data.procesados || 0;
-      const totalItems = data.total || colorList.length;
+      const total = data.total || (colorChecks.length + formulaChecks.length);
       statusGlb.innerHTML = `<i class="bi bi-arrow-repeat paso-spinner me-1"
-        style="color:#79c0ff;"></i> Procesando ${totalProcesados} de ${totalItems}…`;
+        style="color:#79c0ff;"></i> Procesando ${data.procesados||0} de ${total}…`;
 
       if (data.estado === "COMPLETADO") {
         clearInterval(iv);
         const ok  = (data.items||[]).filter(i => i.estado === "OK").length;
         const err = (data.items||[]).filter(i => i.estado === "ERROR").length;
+        btnEjec.disabled = false;
+        _actualizarContadorCola();
         statusGlb.innerHTML = `
           <span style="color:#56d364; font-weight:700;">
             <i class="bi bi-check-circle-fill me-1"></i>Completado — ${ok} exitoso${ok!==1?"s":""}
@@ -912,7 +1123,6 @@ function _pollBatch(batchId, checkboxes) {
                          font-weight:700; display:inline-flex; align-items:center; gap:.35rem;">
             <i class="bi bi-file-earmark-bar-graph"></i> Ver reporte
           </button>`;
-        btnEjec.disabled = false;
         _mostrarReporte(data, batchId);
       }
     } catch (e) { clearInterval(iv); btnEjec.disabled = false; }
@@ -956,59 +1166,108 @@ function _mostrarReporte(data, batchId) {
       <div style="font-size:2.2rem; font-weight:900; color:${c}; line-height:1;">${v}</div>
     </div>`).join("");
 
-  // Tabla detalle
-  document.getElementById("rep-tbody").innerHTML = items.map((it, idx) => {
-    const ok  = it.estado === "OK";
-    const bg  = ok ? "rgba(26,58,42,.6)" : "rgba(58,26,26,.6)";
-    const bdClr = ok ? "#2ea043" : "#5a1f1f";
-    const logId = `rlog-${idx}`;
-    const errAmigable = !ok ? _traducirError(it.error) : "";
-    return `
-    <tr style="border-bottom:1px solid #21262d;">
-      <td style="padding:.6rem .8rem; color:#8b949e; text-align:center; background:${bg}; border-left:3px solid ${bdClr};">${idx+1}</td>
-      <td style="padding:.6rem .8rem; background:${bg};">
-        <span style="background:#21262d; border-radius:6px; padding:.15rem .5rem; font-weight:700; font-size:.82rem;">${it.color}</span>
-      </td>
-      <td style="padding:.6rem .8rem; color:#e6edf3; background:${bg}; font-weight:600;">${it.color_nombre||""}</td>
-      <td style="padding:.6rem .8rem; background:${bg};">
-        ${ok
-          ? `<span style="display:inline-flex; align-items:center; gap:.35rem; background:#1a3a2a; border:1px solid #2ea043; border-radius:20px; padding:.2rem .65rem; font-size:.75rem; font-weight:700; color:#56d364;">
-               <i class="bi bi-check-circle-fill"></i>Exitoso</span>`
-          : `<span style="display:inline-flex; align-items:center; gap:.35rem; background:#3a1a1a; border:1px solid #f85149; border-radius:20px; padding:.2rem .65rem; font-size:.75rem; font-weight:700; color:#ffa198;">
-               <i class="bi bi-x-circle-fill"></i>Error</span>`}
-      </td>
-      <td style="padding:.6rem .8rem; background:${bg};">
-        ${it.zfer_nuevo
-          ? `<a href="/zfer/${it.zfer_nuevo}" style="color:#58a6ff; font-weight:700; font-size:.82rem; text-decoration:none;">${it.zfer_nuevo}</a>`
-          : '<span style="color:#484f58;">—</span>'}
-      </td>
-      <td style="padding:.6rem .8rem; background:${bg};">
-        ${ok
-          ? `<div style="color:#484f58; font-size:.75rem;">${it.zfor_nuevo||"—"}</div>`
-          : `<div style="font-size:.72rem; color:#c87067; max-width:200px; line-height:1.35;">${errAmigable}</div>
-             <button onclick="document.getElementById('${logId}').style.display=document.getElementById('${logId}').style.display==='none'?'block':'none'"
-               style="font-size:.65rem; color:#484f58; background:transparent; border:none; cursor:pointer; padding:0; text-decoration:underline; margin-top:.2rem;">
-               Ver detalle técnico
-             </button>
-             <pre id="${logId}" style="display:none; margin:.3rem 0 0; background:#0d1117; border-radius:6px; padding:.5rem; font-size:.63rem; color:#6e7681; max-height:120px; overflow-y:auto; white-space:pre-wrap;">${(it.log||[]).join("\n")}</pre>`}
-      </td>
-      <td style="padding:.6rem .8rem; text-align:center; color:#8b949e; font-size:.78rem; background:${bg};">${it.duracion_seg||0}s</td>
-    </tr>`;
-  }).join("");
+  // Tabs: contar por tipo
+  const nColor   = items.filter(i => (i.tipo||"color") === "color").length;
+  const nFormula = items.filter(i => i.tipo === "formula").length;
+  const cntColor = document.getElementById("rep-tab-cnt-color");
+  const cntForm  = document.getElementById("rep-tab-cnt-formula");
+  if (cntColor)  cntColor.textContent  = nColor;
+  if (cntForm)   cntForm.textContent   = nFormula;
+  // Mostrar col Fórmula si hay items de fórmula
+  const thForm = document.getElementById("rep-th-formula");
+  if (thForm) thForm.style.display = nFormula > 0 ? "" : "none";
+
+  // Función interna para renderizar filas
+  function _renderRows(filteredItems) {
+    return filteredItems.map((it, idx) => {
+      const ok     = it.estado === "OK";
+      const tipo   = it.tipo || "color";
+      const bg     = ok ? "rgba(26,58,42,.6)" : "rgba(58,26,26,.6)";
+      const bdClr  = ok ? "#2ea043" : "#5a1f1f";
+      const logId  = `rlog-${idx}-${tipo}`;
+      const errAmigable = !ok ? _traducirError(it.error) : "";
+      const tipoBadge = tipo === "formula"
+        ? `<span style="background:#1e1030; border:1px solid #6e40c9; color:#bc8cff; border-radius:6px; padding:.1rem .45rem; font-size:.72rem; font-weight:700; white-space:nowrap;">
+             <i class="bi bi-flask me-1"></i>Fórmula</span>`
+        : `<span style="background:#0d1e2e; border:1px solid #1f6feb; color:#79c0ff; border-radius:6px; padding:.1rem .45rem; font-size:.72rem; font-weight:700; white-space:nowrap;">
+             <i class="bi bi-palette me-1"></i>Color</span>`;
+      const formulaCell = nFormula > 0
+        ? `<td style="padding:.6rem .8rem; background:${bg}; color:#bc8cff; font-size:.8rem; font-weight:700;">
+             ${tipo === "formula" ? (it.formula_nueva||"—") : "—"}</td>`
+        : "";
+      return `
+      <tr class="rep-row-${tipo}" style="border-bottom:1px solid #21262d;">
+        <td style="padding:.6rem .8rem; color:#8b949e; text-align:center; background:${bg}; border-left:3px solid ${bdClr};">${idx+1}</td>
+        <td style="padding:.6rem .8rem; background:${bg};">${tipoBadge}</td>
+        <td style="padding:.6rem .8rem; background:${bg};">
+          <span style="background:#21262d; border-radius:6px; padding:.15rem .5rem; font-weight:700; font-size:.82rem;">${it.color}</span>
+        </td>
+        <td style="padding:.6rem .8rem; color:#e6edf3; background:${bg}; font-weight:600;">${it.color_nombre||""}</td>
+        ${formulaCell}
+        <td style="padding:.6rem .8rem; background:${bg};">
+          ${ok
+            ? `<span style="display:inline-flex; align-items:center; gap:.35rem; background:#1a3a2a; border:1px solid #2ea043; border-radius:20px; padding:.2rem .65rem; font-size:.75rem; font-weight:700; color:#56d364;">
+                 <i class="bi bi-check-circle-fill"></i>Exitoso</span>`
+            : `<span style="display:inline-flex; align-items:center; gap:.35rem; background:#3a1a1a; border:1px solid #f85149; border-radius:20px; padding:.2rem .65rem; font-size:.75rem; font-weight:700; color:#ffa198;">
+                 <i class="bi bi-x-circle-fill"></i>Error</span>`}
+        </td>
+        <td style="padding:.6rem .8rem; background:${bg};">
+          ${it.zfer_nuevo
+            ? `<a href="/zfer/${it.zfer_nuevo}" style="color:#58a6ff; font-weight:700; font-size:.82rem; text-decoration:none;">${it.zfer_nuevo}</a>`
+            : '<span style="color:#484f58;">—</span>'}
+        </td>
+        <td style="padding:.6rem .8rem; background:${bg};">
+          ${ok
+            ? `<div style="color:#484f58; font-size:.75rem;">${it.zfor_nuevo||"—"}</div>`
+            : `<div style="font-size:.72rem; color:#c87067; max-width:200px; line-height:1.35;">${errAmigable}</div>
+               <button onclick="document.getElementById('${logId}').style.display=document.getElementById('${logId}').style.display==='none'?'block':'none'"
+                 style="font-size:.65rem; color:#484f58; background:transparent; border:none; cursor:pointer; padding:0; text-decoration:underline; margin-top:.2rem;">
+                 Ver detalle técnico
+               </button>
+               <pre id="${logId}" style="display:none; margin:.3rem 0 0; background:#0d1117; border-radius:6px; padding:.5rem; font-size:.63rem; color:#6e7681; max-height:120px; overflow-y:auto; white-space:pre-wrap;">${(it.log||[]).join("\n")}</pre>`}
+        </td>
+        <td style="padding:.6rem .8rem; text-align:center; color:#8b949e; font-size:.78rem; background:${bg};">${it.duracion_seg||0}s</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // Renderizar tab activo (default: todos)
+  const tbody = document.getElementById("rep-tbody");
+  tbody.innerHTML = _renderRows(items);
+  tbody._allItems = items;
+
+  // Lógica de tabs
+  document.querySelectorAll(".rep-tab").forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(".rep-tab").forEach(b => {
+        b.style.background = "transparent";
+        b.style.fontWeight = "600";
+      });
+      btn.style.background = "#21262d";
+      btn.style.fontWeight = "800";
+      const tab = btn.dataset.tab;
+      const filtered = tab === "todos" ? items
+        : items.filter(i => (i.tipo||"color") === tab);
+      tbody.innerHTML = _renderRows(filtered);
+    };
+  });
 
   // Sección errores detallados
   const errSec = document.getElementById("rep-errores-sec");
   const errItems = items.filter(i => i.estado === "ERROR");
   if (errItems.length) {
     errSec.style.display = "block";
-    document.getElementById("rep-errores").innerHTML = errItems.map((it, idx) => `
+    document.getElementById("rep-errores").innerHTML = errItems.map((it, idx) => {
+      const tipo = it.tipo || "color";
+      const titulo = tipo === "formula"
+        ? `Fórmula ${it.formula_nueva||""} — ${it.color} ${it.color_nombre}`
+        : `Color ${it.color} — ${it.color_nombre}`;
+      return `
       <div style="background:#1c1016; border:1px solid #5a1f1f; border-radius:12px;
                   padding:1.1rem 1.3rem; margin-bottom:.8rem;">
         <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.6rem;">
           <i class="bi bi-exclamation-triangle-fill" style="color:#f85149; font-size:1.1rem;"></i>
-          <span style="font-weight:800; color:#ffa198; font-size:.9rem;">
-            Color ${it.color} — ${it.color_nombre}
-          </span>
+          <span style="font-weight:800; color:#ffa198; font-size:.9rem;">${titulo}</span>
         </div>
         <div style="background:#2a1010; border-radius:8px; padding:.7rem 1rem; margin-bottom:.7rem;">
           <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:.6px; color:#f85149; margin-bottom:.3rem;">Qué pasó</div>
@@ -1022,12 +1281,17 @@ function _mostrarReporte(data, batchId) {
                font-size:.68rem; color:#6e7681; max-height:220px; overflow-y:auto;
                white-space:pre-wrap;">${(it.log||[]).join("\n")||"(sin log)"}</pre>
         </details>
-      </div>`).join("");
+      </div>`;
+    }).join("");
   } else {
     errSec.style.display = "none";
   }
 
   document.getElementById("btn-dl-excel").href = `/api/sap/reporte/${batchId}`;
+  const hint = document.getElementById("rep-excel-hint");
+  if (hint) hint.textContent = nFormula > 0
+    ? "5 hojas: Resumen · Detalle · Det. Fórmula · Errores · Log"
+    : "4 hojas: Resumen · Detalle · Errores · Log completo";
   document.getElementById("modal-reporte").style.display = "flex";
 }
 
@@ -1048,7 +1312,8 @@ function _renderFormulaCards(formulas) {
   cont.innerHTML = formulas.map((fa, i) => {
     const idx = i + 1;
     const filas = fa.colores.map(c => `
-      <tr style="border-bottom:1px solid #161b22;"
+      <tr id="fc-row-${idx}-${c.color}"
+          style="border-bottom:1px solid #161b22;"
           onmouseover="this.style.background='rgba(188,140,255,.06)'"
           onmouseout="this.style.background=''">
         <td style="padding:.5rem .8rem; text-align:center;">
@@ -1062,6 +1327,11 @@ function _renderFormulaCards(formulas) {
         <td style="padding:.5rem .8rem; font-weight:600;">${c.color_nombre}</td>
         <td style="padding:.5rem .8rem; color:var(--muted); font-size:.82rem; font-weight:600;">${c.zpla}</td>
         <td style="padding:.5rem .8rem; color:#484f58; font-size:.78rem;">${c.differentials || '—'}</td>
+        <td id="fc-estado-${idx}-${c.color}" style="padding:.5rem .8rem;">
+          <span style="color:#484f58; font-size:.72rem;">
+            <i class="bi bi-arrow-repeat paso-spinner"></i>
+          </span>
+        </td>
       </tr>`).join("");
 
     return `
@@ -1073,6 +1343,7 @@ function _renderFormulaCards(formulas) {
         <span class="tag" style="background:#1e1030; border:1px solid #6e40c9; color:#bc8cff; font-size:.72rem;">
           ${fa.colores.length} color(es)
         </span>
+        <span id="fc-resumen-${idx}" style="font-size:.72rem; color:#484f58; margin-left:.3rem;"></span>
         <i class="bi bi-chevron-down ms-auto" id="fc-chv-${idx}" style="color:var(--muted); transition:transform .2s;"></i>
       </div>
       <div id="fc-body-${idx}" style="display:none;">
@@ -1089,6 +1360,7 @@ function _renderFormulaCards(formulas) {
                 <th style="padding:.5rem .8rem;">Nombre</th>
                 <th style="padding:.5rem .8rem;">ZPLA</th>
                 <th style="padding:.5rem .8rem;">Diferencial</th>
+                <th style="padding:.5rem .8rem;">Estado</th>
               </tr>
             </thead>
             <tbody>${filas}</tbody>
@@ -1116,8 +1388,94 @@ function _renderFormulaCards(formulas) {
 
   // Registrar eventos de checkboxes dinámicos
   document.querySelectorAll(".chk-fc").forEach(chk => {
-    chk.addEventListener("change", () => _fcActualizarCnt(parseInt(chk.dataset.fidx)));
+    chk.addEventListener("change", () => {
+      _fcActualizarCnt(parseInt(chk.dataset.fidx));
+      _actualizarContadorCola();
+    });
   });
+
+  // Verificar duplicados para todas las fórmulas/colores en segundo plano
+  _verificarDuplicadosFormulas(formulas);
+}
+
+async function _verificarDuplicadosFormulas(formulas) {
+  // Construir lista de todos los items a verificar
+  const items = [];
+  formulas.forEach((fa, i) => {
+    fa.colores.forEach(c => {
+      items.push({
+        tipo: "formula",
+        color: c.color,
+        color_nombre: c.color_nombre,
+        formula_nueva: fa.formula,
+        _fidx: i + 1,
+      });
+    });
+  });
+  if (!items.length) return;
+
+  try {
+    const r = await fetch("/api/sap/verificar_duplicados", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ zfer_base: ZFER_BASE, items }),
+    });
+    const data = await r.json();
+    if (!data.ok) return;
+
+    // Contadores por fórmula para el resumen del header
+    const contadores = {};  // fidx → {existe: 0, disponible: 0}
+
+    (data.results || []).forEach(res => {
+      const fidx  = res._fidx;
+      const color = res.color;
+      const el    = document.getElementById(`fc-estado-${fidx}-${color}`);
+      const chk   = document.querySelector(`.chk-fc[data-fidx="${fidx}"][data-color="${color}"]`);
+      const row   = document.getElementById(`fc-row-${fidx}-${color}`);
+
+      if (!contadores[fidx]) contadores[fidx] = {existe: 0, disponible: 0};
+
+      if (res.ya_existe) {
+        contadores[fidx].existe++;
+        if (el) el.innerHTML = `
+          <span style="display:inline-flex; align-items:center; gap:.3rem;
+                background:#1c1e10; border:1px solid #9e6a03; border-radius:6px;
+                padding:.15rem .5rem; font-size:.72rem; font-weight:700; color:#e3b341; white-space:nowrap;">
+            <i class="bi bi-check2-circle"></i>Ya existe
+          </span>
+          <a href="/zfer/${res.zfer_existente}" target="_blank"
+             style="display:block; color:#58a6ff; font-size:.7rem; font-weight:700;
+                    text-decoration:none; margin-top:.15rem;">
+            ${res.zfer_existente}
+          </a>`;
+        // Deshabilitar checkbox y marcar fila visualmente
+        if (chk) { chk.disabled = true; chk.checked = false; }
+        if (row) row.style.opacity = "0.55";
+      } else {
+        contadores[fidx].disponible++;
+        if (el) el.innerHTML = `
+          <span style="display:inline-flex; align-items:center; gap:.3rem;
+                background:#1a3a2a; border:1px solid #2ea043; border-radius:6px;
+                padding:.15rem .5rem; font-size:.72rem; font-weight:700; color:#56d364; white-space:nowrap;">
+            <i class="bi bi-plus-circle"></i>Disponible
+          </span>`;
+      }
+    });
+
+    // Actualizar resumen en el header de cada tarjeta
+    Object.entries(contadores).forEach(([fidx, cnt]) => {
+      const resEl = document.getElementById(`fc-resumen-${fidx}`);
+      if (!resEl) return;
+      const parts = [];
+      if (cnt.disponible > 0) parts.push(`<span style="color:#56d364;">${cnt.disponible} disponible${cnt.disponible!==1?"s":""}</span>`);
+      if (cnt.existe    > 0) parts.push(`<span style="color:#e3b341;">${cnt.existe} ya existe${cnt.existe!==1?"n":""}</span>`);
+      resEl.innerHTML = parts.join(" · ");
+      // Actualizar contadores de selección después de deshabilitar checkboxes
+      _fcActualizarCnt(parseInt(fidx));
+    });
+  } catch(e) {
+    // Silencioso — no bloquear la UI si falla la verificación
+    console.warn("verificar duplicados fórmulas:", e);
+  }
 }
 
 function _toggleFC(idx) {
@@ -1132,6 +1490,7 @@ function _toggleFC(idx) {
 function _fcSelAll(idx, checked) {
   document.querySelectorAll(`.chk-fc-${idx}`).forEach(c => { c.checked = checked; });
   _fcActualizarCnt(idx);
+  _actualizarContadorCola();
 }
 
 function _fcActualizarCnt(idx) {
@@ -1152,7 +1511,8 @@ async function _fcEjecutar(idx, formula) {
   btn.disabled   = true;
   if (statusEl) statusEl.textContent = "Preparando…";
 
-  const combinaciones = Array.from(checks).map(c => ({
+  const cola = Array.from(checks).map(c => ({
+    tipo:          "formula",
     zfer:          ZFER_BASE,
     color:         c.dataset.color,
     color_nombre:  c.dataset.colorNombre,
@@ -1164,13 +1524,13 @@ async function _fcEjecutar(idx, formula) {
     formula_nueva: formula,
   }));
 
-  if (statusEl) statusEl.textContent = `Enviando ${combinaciones.length} combinación(es) a SAP…`;
+  if (statusEl) statusEl.textContent = `Enviando ${cola.length} combinación(es) a SAP…`;
 
   try {
-    const r = await fetch("/api/sap/ejecutar_formula_sin_acero", {
+    const r = await fetch("/api/sap/ejecutar_cola", {
       method:  "POST",
       headers: {"Content-Type": "application/json"},
-      body:    JSON.stringify({ combinaciones }),
+      body:    JSON.stringify({ cola }),
     });
     const d = await r.json();
     if (!d.ok) {
@@ -1178,13 +1538,9 @@ async function _fcEjecutar(idx, formula) {
       btn.disabled = false;
       return;
     }
-    if (statusEl) statusEl.textContent = `✓ Procesando batch ${d.batch_id} (${d.total} items)…`;
-    // Reusar el panel de estado del batch de color si existe
-    const batchPanel = document.getElementById("batch-status");
-    if (batchPanel) {
-      batchPanel.dataset.batchId = d.batch_id;
-      batchPanel.style.display = "block";
-    }
+    if (statusEl) statusEl.textContent = `<i class="bi bi-arrow-repeat paso-spinner me-1"></i>Procesando ${d.total} item(s)…`;
+    _pollBatch(d.batch_id, [], Array.from(checks));
+    btn.disabled = false;
   } catch (err) {
     if (statusEl) statusEl.textContent = `Error de red: ${err}`;
     btn.disabled = false;

@@ -456,7 +456,7 @@ def q_zfer_head(material: str):
         return dict(zip(cols, row)) if row else None
     except Exception as e:
         return {"_error": str(e)}
-
+    
 
 @lru_cache(maxsize=400)
 def q_atributos(material: str) -> dict:
@@ -1421,6 +1421,194 @@ def api_sap_ejecutar_formula_sin_acero():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/sap/verificar_duplicados", methods=["POST"])
+@login_required
+def api_sap_verificar_duplicados():
+    """
+    Recibe lista de items {tipo, zfer, color, formula_nueva?} y devuelve
+    cuáles ya existen en SAP (mismo vehicle_code + formula + tipo_pieza + color).
+    """
+    try:
+        data  = request.get_json(force=True)
+        zfer_base = data.get("zfer_base", "").strip()
+        items     = data.get("items", [])
+        if not zfer_base or not items:
+            return jsonify({"ok": True, "results": []})
+
+        with get_conn() as cn:
+            cur = cn.cursor()
+
+            # 1. Obtener atributos del ZFER base (vehicle_code, version, formula, tipo_pieza)
+            cur.execute("""
+                SELECT MAX(CASE WHEN ATNAM='Z_VEHICLE_CODE' THEN ATWRT END) AS VC,
+                       MAX(CASE WHEN ATNAM='Z_AGP_VERSION'  THEN ATWRT END) AS VERSION,
+                       MAX(CASE WHEN ATNAM='Z_FORMULA_CODE' THEN ATWRT END) AS FORMULA,
+                       MAX(CASE WHEN ATNAM='Z_PIECE_TYPE'   THEN ATWRT END) AS TIPO_PIEZA
+                FROM dbo.ODATA_ZFER_CLASS_001
+                WHERE MATERIAL=?
+                  AND ATNAM IN ('Z_VEHICLE_CODE','Z_AGP_VERSION','Z_FORMULA_CODE','Z_PIECE_TYPE')
+            """, zfer_base)
+            row = cur.fetchone()
+            if not row or not row[0]:
+                return jsonify({"ok": True, "results": [], "warn": "ZFER base sin atributos en BD"})
+
+            vehicle_code = str(row[0] or "").strip()
+            version      = str(row[1] or "").strip()
+            formula_base = str(row[2] or "").strip()
+            tipo_pieza   = str(row[3] or "").strip()
+
+            # 2. Buscar ZFERs activos en CO01 con mismo vehicle_code+version+tipo_pieza+formula+color
+            #    Excluye el propio ZFER base de los resultados.
+            _SQL_EXIST = """
+                SELECT b.MATERIAL
+                FROM (
+                    SELECT MATERIAL,
+                           MAX(CASE WHEN ATNAM='Z_VEHICLE_CODE' THEN ATWRT END) AS VC,
+                           MAX(CASE WHEN ATNAM='Z_AGP_VERSION'  THEN ATWRT END) AS VERSION,
+                           MAX(CASE WHEN ATNAM='Z_FORMULA_CODE' THEN ATWRT END) AS FORMULA,
+                           MAX(CASE WHEN ATNAM='Z_PIECE_TYPE'   THEN ATWRT END) AS TIPO_PIEZA,
+                           MAX(CASE WHEN ATNAM='Z_COLOR'        THEN ATWRT END) AS COLOR
+                    FROM dbo.ODATA_ZFER_CLASS_001
+                    WHERE ATNAM IN ('Z_VEHICLE_CODE','Z_AGP_VERSION',
+                                    'Z_FORMULA_CODE','Z_PIECE_TYPE','Z_COLOR')
+                    GROUP BY MATERIAL
+                ) b
+                JOIN dbo.ODATA_ZFER_HEAD h ON h.MATERIAL = b.MATERIAL
+                WHERE h.STATUS IS NULL AND h.CENTRO = 'CO01'
+                  AND b.MATERIAL  <> ?
+                  AND b.VC        = ?
+                  AND b.VERSION   = ?
+                  AND b.TIPO_PIEZA= ?
+                  AND b.FORMULA   = ?
+                  AND b.COLOR     = ?
+            """
+
+            results = []
+            for it in items:
+                tipo    = it.get("tipo", "color")
+                color   = str(it.get("color", "")).strip()
+                # fórmula: para cambio de fórmula usa la nueva; para color usa la del base
+                formula = str(it.get("formula_nueva", formula_base)).strip() \
+                          if tipo == "formula" else formula_base
+
+                cur.execute(_SQL_EXIST, zfer_base, vehicle_code, version,
+                            tipo_pieza, formula, color)
+                rows     = cur.fetchall()
+                existing = [str(r[0]) for r in rows]
+
+                results.append({
+                    **it,
+                    "ya_existe":        len(existing) > 0,
+                    "zfer_existente":   existing[0] if existing else None,
+                    "todos_existentes": existing,
+                })
+
+        return jsonify({"ok": True, "results": results,
+                        "vehicle_code": vehicle_code,
+                        "version":      version,
+                        "formula_base": formula_base,
+                        "tipo_pieza":   tipo_pieza})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/sap/ejecutar_cola", methods=["POST"])
+@login_required
+def api_sap_ejecutar_cola():
+    """Cola unificada: mezcla items de tipo 'color' y 'formula' en secuencia."""
+    try:
+        data = request.get_json(force=True)
+        import uuid as _uuid, datetime as _dt
+
+        cola = data.get("cola", [])
+        if not cola:
+            return jsonify({"ok": False, "error": "Cola vacía"}), 400
+
+        batch_id = str(_uuid.uuid4())[:8]
+        _sap_jobs[batch_id] = {
+            "estado":       "EN_PROCESO",
+            "total":        len(cola),
+            "procesados":   0,
+            "items":        [],
+            "zfer_base":    cola[0].get("zfer", "") if cola else "",
+            "pn_base":      cola[0].get("pn_base", "") if cola else "",
+            "franja":       cola[0].get("franja", "") if cola else "",
+            "fecha_inicio": _dt.datetime.now().isoformat(timespec="seconds"),
+            "fecha_fin":    None,
+            "tipo":         "mixto",
+            "usuario_sap":  _usuario_actual() or "PROGRAING",
+        }
+
+        def _run_cola():
+            from sap_auto import (procesar_combinacion as _pc,
+                                  procesar_combinacion_formula_sin_acero as _pf)
+            import datetime as _dt2
+            for c in cola:
+                tipo    = c.get("tipo", "color")
+                zfer    = c.get("zfer", "").strip()
+                color   = c.get("color", "").strip()
+                formula = c.get("formula_nueva", "").strip()
+                t0      = _dt2.datetime.now()
+
+                def _step_cb(paso_num, desc, _tipo=tipo, _color=color, _formula=formula):
+                    _sap_jobs[batch_id]["_current"] = {
+                        "tipo": _tipo, "color": _color, "formula": _formula,
+                        "paso": paso_num, "desc": desc,
+                    }
+
+                if tipo == "formula":
+                    res = _pf(
+                        zfer, formula, color,
+                        c.get("color_nombre", color),
+                        c.get("franja", "00") or "00",
+                        c.get("pn_base", ""),
+                        c.get("zpla", ""),
+                        nivel      = c.get("nivel", ""),
+                        tipo_pieza = c.get("tipo_pieza", ""),
+                        step_callback=_step_cb,
+                    )
+                else:
+                    res = _pc(
+                        zfer, color,
+                        c.get("color_nombre", color),
+                        c.get("franja", "00") or "00",
+                        c.get("pn_base", ""),
+                        c.get("zpla", ""),
+                        nivel      = c.get("nivel", ""),
+                        tipo_pieza = c.get("tipo_pieza", ""),
+                        step_callback=_step_cb,
+                    )
+
+                job = _sap_jobs[batch_id]
+                job["items"].append({
+                    "tipo":          tipo,
+                    "color":         color,
+                    "color_nombre":  c.get("color_nombre", color),
+                    "formula_nueva": formula,
+                    "pn_base":       c.get("pn_base", ""),
+                    "zpla_entrada":  c.get("zpla", ""),
+                    "estado":        res.estado,
+                    "zfer_nuevo":    res.zfer_nuevo,
+                    "zfor_nuevo":    res.zfor_nuevo,
+                    "zpla":          res.zpla,
+                    "posiciones":    res.posiciones_bom,
+                    "error":         res.error,
+                    "duracion_seg":  res.duracion_seg,
+                    "fecha_inicio":  t0.isoformat(timespec="seconds"),
+                    "fecha_fin":     _dt2.datetime.now().isoformat(timespec="seconds"),
+                    "log":           res.log,
+                })
+                job["procesados"] += 1
+            _sap_jobs[batch_id]["estado"]    = "COMPLETADO"
+            _sap_jobs[batch_id]["fecha_fin"] = _dt2.datetime.now().isoformat(timespec="seconds")
+            _sap_jobs[batch_id]["_current"]  = None
+
+        threading.Thread(target=_run_cola, daemon=True).start()
+        return jsonify({"ok": True, "batch_id": batch_id, "total": len(cola)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/sap/estado/<batch_id>")
 @login_required
 def api_sap_estado(batch_id: str):
@@ -1441,6 +1629,7 @@ def api_sap_estado(batch_id: str):
         "fecha_fin":    job.get("fecha_fin", ""),
         "usuario_sap":  job.get("usuario_sap", "PROGRAING"),
         "_current":     job.get("_current"),
+        "tipo_batch":   job.get("tipo", "color"),
         "log":          [],
     })
 
@@ -1510,11 +1699,19 @@ def api_sap_reporte(batch_id: str):
         t.alignment = Alignment(horizontal="center", vertical="center")
 
         # Info batch
+        tipo_batch = job.get("tipo", "color")
+        n_color    = sum(1 for i in items if (i.get("tipo") or "color") == "color")
+        n_formula  = sum(1 for i in items if i.get("tipo") == "formula")
+        tipo_lbl   = "Mixto (Color + Fórmula)" if tipo_batch == "mixto" else \
+                     ("Fórmula sin acero" if tipo_batch == "formula_sin_acero" else "Cambio de Color")
         meta = [
             ("Batch ID",        batch_id),
+            ("Tipo de proceso",  tipo_lbl),
             ("ZFER Base",       job.get("zfer_base", "—")),
             ("PN Base",         job.get("pn_base", "—")),
             ("Franja",          job.get("franja", "—")),
+            ("Items Color",     n_color),
+            ("Items Fórmula",   n_formula),
             ("Usuario SAP",     job.get("usuario_sap", "PROGRAING")),
             ("Fecha Inicio",    job.get("fecha_inicio", "—")),
             ("Fecha Fin",       job.get("fecha_fin", "—")),
@@ -1558,7 +1755,8 @@ def api_sap_reporte(batch_id: str):
         t2.fill  = H_FILL; t2.alignment = cnt
         ws2.row_dimensions[1].height = 28
 
-        cols2 = ["#", "Color Código", "Color Nombre", "Estado",
+        tiene_formula = any(i.get("tipo") == "formula" for i in items)
+        cols2 = ["#", "Tipo", "Color Código", "Color Nombre", "Fórmula Nueva", "Estado",
                  "ZFER Nuevo", "ZFOR Nuevo", "ZPLA Usado",
                  "Posiciones BOM", "Duración (s)"]
         add_header_row(ws2, cols2, row=2)
@@ -1566,11 +1764,14 @@ def api_sap_reporte(batch_id: str):
         for i, item in enumerate(items, 1):
             r    = i + 2
             es   = item.get("estado", "")
+            tipo = item.get("tipo", "color")
             fill = OK_FILL if es == "OK" else ERR_FILL if es == "ERROR" else HDR_FILL
             vals = [
                 i,
+                "🎨 Color" if tipo == "color" else "🧪 Fórmula",
                 item.get("color", ""),
                 item.get("color_nombre", ""),
+                item.get("formula_nueva", "—") if tipo == "formula" else "—",
                 es,
                 item.get("zfer_nuevo", ""),
                 item.get("zfor_nuevo", ""),
@@ -1585,13 +1786,62 @@ def api_sap_reporte(batch_id: str):
                 cell = ws2.cell(row=r, column=c, value=v)
                 cell.fill   = fill
                 cell.border = brd
-                cell.alignment = cnt if c in (1, 4, 9) else lft
-                if c == 4:
+                cell.alignment = cnt if c in (1, 6, 11) else lft
+                if c == 6:
                     cell.font = fnt_ok if es == "OK" else fnt_err
+                elif c == 2:
+                    cell.font = Font(name="Calibri",
+                                     color="79C0FF" if tipo == "color" else "BC8CFF",
+                                     bold=True, size=10)
                 else:
                     cell.font = fnt_norm
 
-        set_col_widths(ws2, [5, 14, 30, 12, 18, 18, 18, 28, 14])
+        set_col_widths(ws2, [5, 14, 14, 30, 16, 12, 18, 18, 18, 28, 14])
+
+        # ════════════════════════════════════════════════════════════════════
+        # HOJA 3b — DETALLE FÓRMULA (solo si hay items de fórmula)
+        # ════════════════════════════════════════════════════════════════════
+        items_formula = [it for it in items if it.get("tipo") == "formula"]
+        if items_formula:
+            wsf = wb.create_sheet("DETALLE_FÓRMULA")
+            wsf.sheet_view.showGridLines = False
+            wsf.merge_cells("A1:J1")
+            tf = wsf["A1"]
+            tf.value = "DETALLE — CAMBIOS DE FÓRMULA"
+            tf.font  = Font(name="Calibri", bold=True, color="BC8CFF", size=13)
+            tf.fill  = H_FILL; tf.alignment = cnt
+            wsf.row_dimensions[1].height = 28
+
+            cols_f = ["#", "Fórmula Nueva", "Color Código", "Color Nombre", "Estado",
+                      "ZFER Nuevo", "ZFOR Nuevo", "ZPLA Usado", "Posiciones BOM", "Duración (s)"]
+            add_header_row(wsf, cols_f, row=2)
+
+            for i, item in enumerate(items_formula, 1):
+                r  = i + 2
+                es = item.get("estado", "")
+                fill = OK_FILL if es == "OK" else ERR_FILL if es == "ERROR" else HDR_FILL
+                vals = [
+                    i,
+                    item.get("formula_nueva", ""),
+                    item.get("color", ""),
+                    item.get("color_nombre", ""),
+                    es,
+                    item.get("zfer_nuevo", ""),
+                    item.get("zfor_nuevo", ""),
+                    item.get("zpla", ""),
+                    ", ".join(
+                        p["pos"] if isinstance(p, dict) else str(p)
+                        for p in item.get("posiciones", [])
+                    ),
+                    item.get("duracion_seg", 0),
+                ]
+                for c, v in enumerate(vals, 1):
+                    cell = wsf.cell(row=r, column=c, value=v)
+                    cell.fill   = fill
+                    cell.border = brd
+                    cell.alignment = cnt if c in (1, 5, 10) else lft
+                    cell.font = (fnt_ok if es == "OK" else fnt_err) if c == 5 else fnt_norm
+            set_col_widths(wsf, [5, 16, 14, 30, 12, 18, 18, 18, 28, 14])
 
         # ════════════════════════════════════════════════════════════════════
         # HOJA 3 — ERRORES (solo si hay)
@@ -1606,16 +1856,19 @@ def api_sap_reporte(batch_id: str):
             t3.fill  = H_FILL; t3.alignment = cnt
             ws3.row_dimensions[1].height = 28
 
-            add_header_row(ws3, ["Color", "Color Nombre", "Error", "Log completo"], row=2)
-            set_col_widths(ws3, [14, 30, 60, 80])
+            add_header_row(ws3, ["Tipo", "Color / Fórmula", "Nombre", "Error", "Log completo"], row=2)
+            set_col_widths(ws3, [12, 18, 30, 60, 80])
 
             fila_err = 3
             for item in items:
                 if item.get("estado") != "ERROR":
                     continue
-                log_txt = "\n".join(item.get("log", []))
+                log_txt  = "\n".join(item.get("log", []))
+                tipo_lbl = "Fórmula" if item.get("tipo") == "formula" else "Color"
+                id_lbl   = (item.get("formula_nueva") or item.get("color", "")) if item.get("tipo") == "formula" else item.get("color", "")
                 for c, v in enumerate([
-                    item.get("color", ""),
+                    tipo_lbl,
+                    id_lbl,
                     item.get("color_nombre", ""),
                     item.get("error", ""),
                     log_txt,
@@ -1641,16 +1894,17 @@ def api_sap_reporte(batch_id: str):
         t4.font  = Font(name="Calibri", bold=True, color="8B949E", size=13)
         t4.fill  = H_FILL; t4.alignment = cnt
         ws4.row_dimensions[1].height = 28
-        add_header_row(ws4, ["Color", "Estado", "Línea de log"], row=2)
-        set_col_widths(ws4, [14, 12, 120])
+        add_header_row(ws4, ["Tipo", "Color / Fórmula", "Estado", "Línea de log"], row=2)
+        set_col_widths(ws4, [10, 18, 12, 120])
 
         fila_log = 3
         for item in items:
-            es    = item.get("estado", "")
-            fill  = OK_FILL if es == "OK" else ERR_FILL if es == "ERROR" else HDR_FILL
-            color = item.get("color", "")
+            es       = item.get("estado", "")
+            fill     = OK_FILL if es == "OK" else ERR_FILL if es == "ERROR" else HDR_FILL
+            tipo_lbl = "Fórmula" if item.get("tipo") == "formula" else "Color"
+            id_lbl   = (item.get("formula_nueva") or item.get("color", "")) if item.get("tipo") == "formula" else item.get("color", "")
             for linea in item.get("log", []):
-                for c, v in enumerate([color, es, linea], 1):
+                for c, v in enumerate([tipo_lbl, id_lbl, es, linea], 1):
                     cell = ws4.cell(row=fila_log, column=c, value=v)
                     cell.fill   = fill
                     cell.border = brd
