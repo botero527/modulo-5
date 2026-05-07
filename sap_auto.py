@@ -15,6 +15,7 @@ Parámetros que vienen de la BD (ya resueltos por app.py):
 """
 
 import os
+import re
 import win32com.client
 import time
 import pyodbc
@@ -28,7 +29,7 @@ T_RAPIDO = 1.5
 T_MEDIO  = 3.5
 T_LENTO  = 7.0
 
-_SAP_USER = os.environ.get("SAP_USER", "FESPITIA") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -36,6 +37,16 @@ _DB_LOCAL_STR = (
     r"SERVER=localhost\SQLEXPRESS;"
     "DATABASE=MODULO_5;"
     "Trusted_Connection=yes;"
+)
+
+# ── BD SAP (Azure) — solo lectura, para buscar planos ─────────────────────────
+_DB_SAP_STR = (
+    "DRIVER={ODBC Driver 17 for SQL Server};"
+    "SERVER=agpcolsap.database.windows.net;"
+    "DATABASE=DB_COL_SAP;"
+    "UID=Viewer;"
+    "PWD=AgpconsCol2023;"
+    "Encrypt=yes;TrustServerCertificate=no;Connection Timeout=20;"
 )
 
 
@@ -1222,33 +1233,33 @@ class AutomatizadorSAP:
         try:
             cn  = pyodbc.connect(_DB_LOCAL_STR, autocommit=True)
             cur = cn.cursor()
-            # Asegurar que batch_id sea varchar (migrar columna si es uniqueidentifier)
+            # Migrar batch_id a varchar si aún es uniqueidentifier (dos pasos separados)
             try:
                 cur.execute(
-                    "IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS "
-                    "WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='M5_LogEjecucion' "
-                    "AND COLUMN_NAME='batch_id' AND DATA_TYPE='uniqueidentifier') "
-                    "ALTER TABLE dbo.M5_LogEjecucion ALTER COLUMN batch_id varchar(50) NULL"
+                    "ALTER TABLE dbo.M5_LogEjecucion "
+                    "ALTER COLUMN batch_id varchar(50) NULL"
                 )
             except Exception:
-                pass
+                pass  # ya es varchar o tabla no existe — ignorar
+
+            _vals = (
+                str(res.batch_id)[:50],
+                str(res.zfer_base or "")[:50],
+                str(getattr(res, "tipo_pieza", "") or "")[:50],
+                str(getattr(res, "formula",    "") or "")[:50],
+                str(res.color_codigo or "")[:20],
+                str(getattr(res, "acero",      "") or "")[:50],
+                str(res.estado or "")[:20],
+                str(res.error)[:2000] if res.error else None,
+                res.fecha_inicio,
+                res.fecha_fin,
+            )
             cur.execute(
                 "INSERT INTO dbo.M5_LogEjecucion "
                 "(batch_id, pedido_origen, tipo_pieza, formula, color_codigo, acero_variante, "
                 " estado, detalle_error, fecha_inicio, fecha_fin) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    str(res.batch_id)[:50],
-                    str(res.zfer_base or "")[:50],
-                    str(getattr(res, "tipo_pieza", "") or "")[:50],
-                    str(getattr(res, "formula",    "") or "")[:50],
-                    str(res.color_codigo or "")[:20],
-                    str(getattr(res, "acero",      "") or "")[:50],
-                    str(res.estado or "")[:20],
-                    str(res.error)[:2000] if res.error else None,
-                    res.fecha_inicio,
-                    res.fecha_fin,
-                )
+                _vals
             )
             cn.close()
         except Exception as e:
@@ -1585,11 +1596,68 @@ class AutomatizadorSAP:
 
     # ── MM02 — Cambio de plano (tab ZU04) ────────────────────────────────────
 
-    def mm02_cambiar_plano(self, zfer: str, nuevo_plano: str = None):
+    def _buscar_plano_bd(self, doknr_actual: str) -> tuple:
         """
-        Navega a MM02 → btn[30] → tabpZU04 → radGF_ALLE → lee DOKNR y quita 'SP' → guarda.
-        Flujo confirmado por VBS cambio plano_acero 1.vbs.
+        Dado el DOKNR leído de MM02 (puede tener SP y/o letra al final),
+        busca en ODATA_ZFER_RUTAS_JPG el PLANO más reciente sin SP,
+        ordenado por ULTIMA_MOD DESC para siempre tomar la versión vigente.
+        Returns: (plano_nuevo: str | None, mensaje: str)
         """
+        # Quitar SP y cualquier sufijo de letra(s) para obtener la base de búsqueda
+        # Ej: "M1344 000 001 A SP" → "M1344 000 001"
+        #     "M1344 000 001 SP"   → "M1344 000 001"
+        base = re.sub(r'(\s+[A-Z]+)?\s+SP\s*$', '', doknr_actual, flags=re.IGNORECASE).strip()
+        if not base:
+            return None, f"DOKNR '{doknr_actual}' no tiene base reconocible"
+
+        try:
+            cn  = pyodbc.connect(_DB_SAP_STR, autocommit=True)
+            cur = cn.cursor()
+            # TOP 1 con NOT LIKE '% SP' excluye SP y "X SP" en un solo query,
+            # ordenado por ULTIMA_MOD DESC → siempre la revisión más reciente
+            cur.execute(
+                "SELECT TOP 1 DOCUMENTO, PLANO "
+                "FROM dbo.ODATA_ZFER_RUTAS_JPG "
+                "WHERE DOCUMENTO LIKE ? "
+                "  AND DOCUMENTO NOT LIKE '% SP' "
+                "ORDER BY ULTIMA_MOD DESC",
+                f"%{base}%"
+            )
+            row = cur.fetchone()
+            cn.close()
+        except Exception as e:
+            return None, f"Error BD al buscar plano: {e}"
+
+        if not row:
+            return None, (
+                f"⚠ PLANO NO ACTUALIZADO — No se encontró ninguna versión sin SP "
+                f"para '{base}' en ODATA_ZFER_RUTAS_JPG. "
+                f"Revisa que el plano exista en la BD o que no tenga SP en todas sus versiones."
+            )
+
+        doc_elegido  = str(row[0] or "").strip()
+        plano_elegido = str(row[1] or "").strip()
+
+        if not plano_elegido:
+            return None, (
+                f"⚠ PLANO NO ACTUALIZADO — Se encontró DOCUMENTO='{doc_elegido}' "
+                f"pero la columna PLANO está vacía en BD."
+            )
+
+        return plano_elegido, f"Plano actualizado: '{doc_elegido}' → '{plano_elegido}'"
+
+    def mm02_cambiar_plano(self, zfer: str, res: "ResultadoItem" = None) -> bool:
+        """
+        Navega a MM02 → btn[30] → tabpZU04 → radGF_ALLE → lee DOKNR actual →
+        busca en ODATA_ZFER_RUTAS_JPG el plano más reciente sin SP →
+        reemplaza DOKNR con ese plano → guarda.
+        Retorna True si guardó, False si omitió (sin romper el flujo).
+        """
+        def _warn(msg):
+            print(f"    [WARN] mm02_cambiar_plano: {msg}")
+            if res:
+                res._log(f"  [PLANO] ADVERTENCIA: {msg}")
+
         print(f"    MM02 plano: procesando {zfer}")
         try:
             _subZU04 = ("wnd[0]/usr/tabsTABSPR1/tabpZU04"
@@ -1598,7 +1666,7 @@ class AutomatizadorSAP:
                         "/subDOCU:SAPLCV140:0204")
             _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
 
-            # /nmm02 → Enter → material → Enter → Enter (dos enters para pasar pantallas)
+            # /nmm02 → material → Enter × 2
             self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
@@ -1617,20 +1685,35 @@ class AutomatizadorSAP:
             self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
             self._esperar(T_RAPIDO)
 
-            # Leer DOKNR actual y quitarle "SP" si no se pasó plano explícito
-            if not nuevo_plano:
-                try:
-                    doknr_actual = self.session.findById(_grid_docu).getCellValue(0, "DOKNR")
-                    nuevo_plano = doknr_actual.replace("SP", "").replace("sp", "")
-                    print(f"    MM02 plano: DOKNR='{doknr_actual}' → '{nuevo_plano}'")
-                except Exception as e:
-                    print(f"    [WARN] No pudo leer DOKNR: {e}")
-                    return
-            if not nuevo_plano:
-                print(f"    [WARN] mm02_cambiar_plano: sin plano, omitiendo")
-                return
+            # Leer DOKNR actual
+            try:
+                doknr_actual = self.session.findById(_grid_docu).getCellValue(0, "DOKNR")
+                print(f"    MM02 plano: DOKNR actual='{doknr_actual}'")
+            except Exception as e:
+                _warn(f"No pudo leer DOKNR: {e}")
+                return False
 
-            # modifyCell → currentCellColumn → pressEnter → popup → guardar
+            if not doknr_actual or not str(doknr_actual).strip():
+                _warn("DOKNR vacío en MM02, omitiendo cambio de plano")
+                return False
+
+            # Buscar plano en BD
+            nuevo_plano, msg_bd = self._buscar_plano_bd(str(doknr_actual).strip())
+            print(f"    MM02 plano BD: {msg_bd}")
+            if res:
+                res._log(f"  [PLANO] {msg_bd}")
+
+            if not nuevo_plano:
+                # No encontró plano válido → continuar sin cambiar, ya logueado
+                return False
+
+            if nuevo_plano == str(doknr_actual).strip():
+                print(f"    MM02 plano: sin cambio necesario ('{nuevo_plano}')")
+                if res:
+                    res._log(f"  [PLANO] Sin cambio necesario ('{nuevo_plano}')")
+                return True
+
+            # Reemplazar DOKNR → popup validación → guardar
             self.session.findById(_grid_docu).modifyCell(0, "DOKNR", nuevo_plano)
             self.session.findById(_grid_docu).currentCellColumn = "DOKNR"
             self.session.findById(_grid_docu).pressEnter()
@@ -1643,8 +1726,12 @@ class AutomatizadorSAP:
             self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
             self._esperar(T_LENTO)
             print(f"    MM02 plano guardado: {zfer} → '{nuevo_plano}'")
+            if res:
+                res._log(f"  [PLANO] Guardado: '{doknr_actual}' → '{nuevo_plano}'")
+            return True
         except Exception as e:
-            print(f"    [WARN] mm02_cambiar_plano: {e}")
+            _warn(str(e))
+            return False
 
     # ── CEWB — Eliminar posición acero ───────────────────────────────────────
 
@@ -2043,7 +2130,7 @@ class AutomatizadorSAP:
                 self.mm02_desactivar_diferencial_06(mat)
 
             # 5c — Plano: solo para ZFER nuevo (no ZFOR)
-            self.mm02_cambiar_plano(zfer_nuevo)
+            self.mm02_cambiar_plano(zfer_nuevo, res)
 
             # PASO 6 — CEWB: eliminar posición acero del ZFER nuevo
             _cb(6, f"Eliminando posición acero {pos_acero} en CEWB (ZFER={zfer_nuevo})")
