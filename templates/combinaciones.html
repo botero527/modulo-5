@@ -1048,7 +1048,8 @@ function _pollBatch(batchId, colorChecks, formulaChecks) {
   formulaChecks = formulaChecks || [];
   const itemDone = new Set();  // "color:{val}" o "formula:{formula}:{color}"
 
-  const iv = setInterval(async () => {
+  let _pollMs = 3000;  // empieza rápido, sube a máx 8s
+  const _poll = async () => {
     try {
       const resp = await fetch(`/api/sap/estado/${batchId}`);
       const data = await resp.json();
@@ -1107,7 +1108,7 @@ function _pollBatch(batchId, colorChecks, formulaChecks) {
         style="color:#79c0ff;"></i> Procesando ${data.procesados||0} de ${total}…`;
 
       if (data.estado === "COMPLETADO") {
-        clearInterval(iv);
+        _done = true;
         const ok  = (data.items||[]).filter(i => i.estado === "OK").length;
         const err = (data.items||[]).filter(i => i.estado === "ERROR").length;
         btnEjec.disabled = false;
@@ -1124,9 +1125,15 @@ function _pollBatch(batchId, colorChecks, formulaChecks) {
             <i class="bi bi-file-earmark-bar-graph"></i> Ver reporte
           </button>`;
         _mostrarReporte(data, batchId);
+        return;
       }
-    } catch (e) { clearInterval(iv); btnEjec.disabled = false; }
-  }, 5000);
+      // Reprogramar con backoff
+      _pollMs = Math.min(_pollMs * 1.4, 8000);
+      setTimeout(_poll, _pollMs);
+    } catch (e) { if (!_done) { btnEjec.disabled = false; } }
+  };
+  let _done = false;
+  _poll();
 }
 
 // ── Modal Reporte ─────────────────────────────────────────────────────────────
@@ -1461,6 +1468,25 @@ async function _verificarDuplicadosFormulas(formulas) {
       }
     });
 
+    // Limpiar spinners que quedaron sin respuesta → marcar como Disponible
+    document.querySelectorAll("[id^='fc-estado-']").forEach(el => {
+      if (el.querySelector(".paso-spinner")) {
+        el.innerHTML = `
+          <span style="display:inline-flex; align-items:center; gap:.3rem;
+                background:#1a3a2a; border:1px solid #2ea043; border-radius:6px;
+                padding:.15rem .5rem; font-size:.72rem; font-weight:700; color:#56d364; white-space:nowrap;">
+            <i class="bi bi-plus-circle"></i>Disponible
+          </span>`;
+        // Sumar al contador del fidx correspondiente
+        const parts = el.id.split("-");  // fc-estado-{fidx}-...
+        const fidx = parseInt(parts[2]);
+        if (!isNaN(fidx)) {
+          if (!contadores[fidx]) contadores[fidx] = {existe: 0, disponible: 0};
+          contadores[fidx].disponible++;
+        }
+      }
+    });
+
     // Actualizar resumen en el header de cada tarjeta
     Object.entries(contadores).forEach(([fidx, cnt]) => {
       const resEl = document.getElementById(`fc-resumen-${fidx}`);
@@ -1469,11 +1495,14 @@ async function _verificarDuplicadosFormulas(formulas) {
       if (cnt.disponible > 0) parts.push(`<span style="color:#56d364;">${cnt.disponible} disponible${cnt.disponible!==1?"s":""}</span>`);
       if (cnt.existe    > 0) parts.push(`<span style="color:#e3b341;">${cnt.existe} ya existe${cnt.existe!==1?"n":""}</span>`);
       resEl.innerHTML = parts.join(" · ");
-      // Actualizar contadores de selección después de deshabilitar checkboxes
       _fcActualizarCnt(parseInt(fidx));
     });
   } catch(e) {
-    // Silencioso — no bloquear la UI si falla la verificación
+    // Si falla el fetch, limpiar todos los spinners a Disponible para no bloquear la UI
+    document.querySelectorAll("[id^='fc-estado-']").forEach(el => {
+      if (el.querySelector(".paso-spinner"))
+        el.innerHTML = `<span style="color:#484f58; font-size:.72rem;">—</span>`;
+    });
     console.warn("verificar duplicados fórmulas:", e);
   }
 }

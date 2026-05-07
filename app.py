@@ -457,7 +457,6 @@ def q_zfer_head(material: str):
     except Exception as e:
         return {"_error": str(e)}
     
-
 @lru_cache(maxsize=400)
 def q_atributos(material: str) -> dict:
     """Tabla 2: ODATA_ZFER_CLASS_001 — atributos de clasificación."""
@@ -1095,26 +1094,29 @@ def combinaciones(material: str):
 
     pn_parsed = _parsear_partnumber(partnumber)
 
-    # Buscar variantes existentes vía PARTNUMBER (método preciso)
-    if pn_parsed:
-        variantes = q_variantes_por_pn(
+    # Las 3 queries independientes en paralelo
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        fut_variantes = ex.submit(
+            q_variantes_por_pn,
             pn_parsed["vehiculo"], pn_parsed["version"],
             pn_parsed["formula"],  pn_parsed["pieza"]
+        ) if pn_parsed else None
+        fut_zplas = ex.submit(
+            q_zplas_compatibles, formula_code, piece_type, shade_band, differentials
         )
-    else:
-        variantes = []
+        fut_formulas = ex.submit(
+            q_formulas_por_pieza, piece_type, nivel, subproducto, formula_code
+        )
+
+    variantes    = fut_variantes.result() if fut_variantes else []
+    zplas        = fut_zplas.result()
+    formulas_alt = fut_formulas.result()
 
     if variantes and "_error" in variantes[0]:
         return render_template("index.html",
             error=f"Error BD variantes: {variantes[0]['_error']}")
-
-    # Buscar ZPLAs compatibles (fórmula + tipo pieza + franja + diferencial)
-    zplas = q_zplas_compatibles(formula_code, piece_type, shade_band, differentials)
     if zplas and "_error" in zplas[0]:
         zplas = []
-
-    # Fórmulas alternativas para combinaciones por fórmula
-    formulas_alt = q_formulas_por_pieza(piece_type, nivel, subproducto, formula_code)
     if formulas_alt and "_error" in formulas_alt[0]:
         formulas_alt = []
     # Mapa color → ZFER existente
@@ -1457,45 +1459,70 @@ def api_sap_verificar_duplicados():
             formula_base = str(row[2] or "").strip()
             tipo_pieza   = str(row[3] or "").strip()
 
-            # 2. Buscar ZFERs activos en CO01 con mismo vehicle_code+version+tipo_pieza+formula+color
-            #    Excluye el propio ZFER base de los resultados.
-            _SQL_EXIST = """
-                SELECT b.MATERIAL
+            # 2. Batch: construir pares únicos (formula, color) para un solo query
+            pares = []
+            item_keys = []  # (tipo, color, formula) por item para lookup
+            for it in items:
+                tipo    = it.get("tipo", "color")
+                color   = str(it.get("color", "")).strip()
+                formula = str(it.get("formula_nueva", formula_base)).strip() \
+                          if tipo == "formula" else formula_base
+                item_keys.append((tipo, color, formula))
+                pares.append((formula, color))
+
+            # Query única: trae todos los ZFERs activos de este vehicle+version+tipo_pieza
+            # filtrando solo las combinaciones (formula, color) que nos interesan.
+            # Usamos OR de pares para evitar N queries.
+            formulas_unicas = list({p[0] for p in pares})
+            colores_unicos  = list({p[1] for p in pares})
+
+            placeholders_f = ",".join("?" * len(formulas_unicas))
+            placeholders_c = ",".join("?" * len(colores_unicos))
+
+            # Pre-filtro con semi-joins: solo agrupa materiales que comparten
+            # vehicle_code + version + tipo_pieza, reduciendo el escaneo masivamente.
+            _SQL_BATCH = f"""
+                SELECT b.MATERIAL, b.FORMULA, b.COLOR
                 FROM (
                     SELECT MATERIAL,
-                           MAX(CASE WHEN ATNAM='Z_VEHICLE_CODE' THEN ATWRT END) AS VC,
-                           MAX(CASE WHEN ATNAM='Z_AGP_VERSION'  THEN ATWRT END) AS VERSION,
                            MAX(CASE WHEN ATNAM='Z_FORMULA_CODE' THEN ATWRT END) AS FORMULA,
-                           MAX(CASE WHEN ATNAM='Z_PIECE_TYPE'   THEN ATWRT END) AS TIPO_PIEZA,
                            MAX(CASE WHEN ATNAM='Z_COLOR'        THEN ATWRT END) AS COLOR
                     FROM dbo.ODATA_ZFER_CLASS_001
-                    WHERE ATNAM IN ('Z_VEHICLE_CODE','Z_AGP_VERSION',
-                                    'Z_FORMULA_CODE','Z_PIECE_TYPE','Z_COLOR')
+                    WHERE MATERIAL <> ?
+                      AND ATNAM IN ('Z_FORMULA_CODE','Z_COLOR')
+                      AND MATERIAL IN (
+                          SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001
+                          WHERE ATNAM='Z_VEHICLE_CODE' AND ATWRT=?
+                      )
+                      AND MATERIAL IN (
+                          SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001
+                          WHERE ATNAM='Z_AGP_VERSION' AND ATWRT=?
+                      )
+                      AND MATERIAL IN (
+                          SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001
+                          WHERE ATNAM='Z_PIECE_TYPE' AND ATWRT=?
+                      )
                     GROUP BY MATERIAL
                 ) b
                 JOIN dbo.ODATA_ZFER_HEAD h ON h.MATERIAL = b.MATERIAL
                 WHERE h.STATUS IS NULL AND h.CENTRO = 'CO01'
-                  AND b.MATERIAL  <> ?
-                  AND b.VC        = ?
-                  AND b.VERSION   = ?
-                  AND b.TIPO_PIEZA= ?
-                  AND b.FORMULA   = ?
-                  AND b.COLOR     = ?
+                  AND b.FORMULA IN ({placeholders_f})
+                  AND b.COLOR   IN ({placeholders_c})
             """
+            cur.execute(_SQL_BATCH,
+                        zfer_base, vehicle_code, version, tipo_pieza,
+                        *formulas_unicas, *colores_unicos)
 
+            # Indexar resultados: (formula, color) → [material, ...]
+            found: dict = {}
+            for r in cur.fetchall():
+                key = (str(r[1] or "").strip(), str(r[2] or "").strip())
+                found.setdefault(key, []).append(str(r[0]))
+
+            # Cruzar con cada item original
             results = []
-            for it in items:
-                tipo    = it.get("tipo", "color")
-                color   = str(it.get("color", "")).strip()
-                # fórmula: para cambio de fórmula usa la nueva; para color usa la del base
-                formula = str(it.get("formula_nueva", formula_base)).strip() \
-                          if tipo == "formula" else formula_base
-
-                cur.execute(_SQL_EXIST, zfer_base, vehicle_code, version,
-                            tipo_pieza, formula, color)
-                rows     = cur.fetchall()
-                existing = [str(r[0]) for r in rows]
-
+            for it, (tipo, color, formula) in zip(items, item_keys):
+                existing = found.get((formula, color), [])
                 results.append({
                     **it,
                     "ya_existe":        len(existing) > 0,
