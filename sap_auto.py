@@ -1230,37 +1230,55 @@ class AutomatizadorSAP:
     # ── BD: log ───────────────────────────────────────────────────────────────
 
     def _log_bd(self, res: "ResultadoItem"):
+        _SQL_INSERT = (
+            "INSERT INTO dbo.M5_LogEjecucion "
+            "(batch_id, pedido_origen, tipo_pieza, formula, color_codigo, acero_variante, "
+            " estado, detalle_error, fecha_inicio, fecha_fin) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        _vals = (
+            str(res.batch_id)[:50],
+            str(res.zfer_base or "")[:50],
+            str(getattr(res, "tipo_pieza", "") or "")[:50],
+            str(getattr(res, "formula",    "") or "")[:50],
+            str(res.color_codigo or "")[:20],
+            str(getattr(res, "acero",      "") or "")[:50],
+            str(res.estado or "")[:20],
+            str(res.error)[:2000] if res.error else None,
+            res.fecha_inicio,
+            res.fecha_fin,
+        )
         try:
             cn  = pyodbc.connect(_DB_LOCAL_STR, autocommit=True)
             cur = cn.cursor()
-            # Migrar batch_id a varchar si aún es uniqueidentifier (dos pasos separados)
             try:
-                cur.execute(
-                    "ALTER TABLE dbo.M5_LogEjecucion "
-                    "ALTER COLUMN batch_id varchar(50) NULL"
-                )
-            except Exception:
-                pass  # ya es varchar o tabla no existe — ignorar
-
-            _vals = (
-                str(res.batch_id)[:50],
-                str(res.zfer_base or "")[:50],
-                str(getattr(res, "tipo_pieza", "") or "")[:50],
-                str(getattr(res, "formula",    "") or "")[:50],
-                str(res.color_codigo or "")[:20],
-                str(getattr(res, "acero",      "") or "")[:50],
-                str(res.estado or "")[:20],
-                str(res.error)[:2000] if res.error else None,
-                res.fecha_inicio,
-                res.fecha_fin,
-            )
-            cur.execute(
-                "INSERT INTO dbo.M5_LogEjecucion "
-                "(batch_id, pedido_origen, tipo_pieza, formula, color_codigo, acero_variante, "
-                " estado, detalle_error, fecha_inicio, fecha_fin) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                _vals
-            )
+                cur.execute(_SQL_INSERT, _vals)
+            except Exception as e_ins:
+                # Si falla por uniqueidentifier (8169), migrar columna y reintentar
+                if "8169" in str(e_ins) or "uniqueidentifier" in str(e_ins).lower():
+                    try:
+                        # Quitar constraint DEFAULT si existe antes de alterar tipo
+                        cur.execute("""
+                            DECLARE @cn NVARCHAR(256)
+                            SELECT @cn = dc.name
+                            FROM sys.default_constraints dc
+                            JOIN sys.columns c ON c.default_object_id = dc.object_id
+                            JOIN sys.tables t  ON t.object_id = c.object_id
+                            WHERE t.name = 'M5_LogEjecucion'
+                              AND c.name = 'batch_id'
+                              AND SCHEMA_NAME(t.schema_id) = 'dbo'
+                            IF @cn IS NOT NULL
+                                EXEC('ALTER TABLE dbo.M5_LogEjecucion DROP CONSTRAINT [' + @cn + ']')
+                        """)
+                        cur.execute(
+                            "ALTER TABLE dbo.M5_LogEjecucion "
+                            "ALTER COLUMN batch_id varchar(50) NULL"
+                        )
+                        cur.execute(_SQL_INSERT, _vals)
+                    except Exception as e_mig:
+                        print(f"    [WARN] log_bd migración: {e_mig}")
+                else:
+                    print(f"    [WARN] log_bd: {e_ins}")
             cn.close()
         except Exception as e:
             print(f"    [WARN] log_bd: {e}")
@@ -1635,16 +1653,16 @@ class AutomatizadorSAP:
                 f"Revisa que el plano exista en la BD o que no tenga SP en todas sus versiones."
             )
 
-        doc_elegido  = str(row[0] or "").strip()
-        plano_elegido = str(row[1] or "").strip()
+        doc_elegido = str(row[0] or "").strip()
 
-        if not plano_elegido:
+        if not doc_elegido:
             return None, (
-                f"⚠ PLANO NO ACTUALIZADO — Se encontró DOCUMENTO='{doc_elegido}' "
-                f"pero la columna PLANO está vacía en BD."
+                f"⚠ PLANO NO ACTUALIZADO — Se encontró fila pero columna DOCUMENTO está vacía en BD."
             )
 
-        return plano_elegido, f"Plano actualizado: '{doc_elegido}' → '{plano_elegido}'"
+        # Se devuelve el DOCUMENTO (nombre del plano) para escribir en el campo DOKNR de MM02.
+        # Ej: "M0606 065 001" — no la ruta del archivo (columna PLANO).
+        return doc_elegido, f"Plano actualizado: DOKNR ← '{doc_elegido}'"
 
     def mm02_cambiar_plano(self, zfer: str, res: "ResultadoItem" = None) -> bool:
         """
@@ -2143,10 +2161,17 @@ class AutomatizadorSAP:
             # PASO 7 — Volver a pantalla inicial (ZMME0001) para siguiente combinación
             _cb(7, "Volviendo a pantalla inicial")
             try:
+                # Cerrar cualquier popup pendiente antes de navegar
+                for _btn in ("wnd[1]/tbar[0]/btn[0]", "wnd[1]/usr/btnSPOP-OPTION1"):
+                    try:
+                        self.session.findById(_btn).press()
+                        self._esperar(T_RAPIDO)
+                    except Exception:
+                        pass
                 self._navegar("ZMME0001")
                 self._esperar(T_MEDIO)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"    [WARN] PASO 7 navegación: {e}")
 
             res.estado    = "OK"
             res.fecha_fin = datetime.datetime.now()
