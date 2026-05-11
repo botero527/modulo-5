@@ -14,7 +14,7 @@ finally:
 
 
     #para validacion de quite de clase 06 en mm02 
-"""""
+"""
     <c>
 If Not IsObject(application) Then
    Set SapGuiAuto  = GetObject("SAPGUI")
@@ -53,7 +53,12 @@ session.findById("wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]").selected =
 session.findById("wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]").setFocus
 session.findById("wnd[1]").sendVKey 2
 session.findById("wnd[1]").close
-"""""
+"""
 
 
 print("error 200")
+
+
+SystemError staticmethod set: AssertionError
+
+print (f"sss{sorted}")

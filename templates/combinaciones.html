@@ -612,13 +612,38 @@
 
   <!-- Encabezado + filtros -->
   <div class="card mb-3" style="border-color:#2d2150;">
-    <div class="card-header" style="border-bottom:1px solid #2d2150;">
-      <i class="bi bi-arrow-left-right me-2" style="color:#bc8cff;"></i>
-      <span style="font-weight:800;">Cambio de Fórmula</span>
-      <span style="color:var(--muted); font-size:.8rem; margin-left:.5rem;">
-        Fórmula base: <strong style="color:var(--accent);">{{ formula_code }}</strong>
-        &nbsp;·&nbsp;Pieza: <strong>{{ piece_type }}</strong>
-      </span>
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2"
+         style="border-bottom:1px solid #2d2150;">
+      <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">
+        <i class="bi bi-arrow-left-right" style="color:#bc8cff;"></i>
+        <span style="font-weight:800;">Cambio de Fórmula</span>
+        <span style="color:var(--muted); font-size:.8rem;">
+          Fórmula base: <strong style="color:var(--accent);">{{ formula_code }}</strong>
+          &nbsp;·&nbsp;Pieza: <strong>{{ piece_type }}</strong>
+        </span>
+      </div>
+
+      <!-- ── Ruta de carpeta por fórmula ─────────────────────────────── -->
+      <div style="display:flex; align-items:center; gap:.4rem; min-width:0;">
+        <div style="display:flex; align-items:center; gap:.35rem; min-width:0;
+                    background:#0d1117; border:1px solid #2d2150; border-radius:8px;
+                    padding:.25rem .5rem .25rem .7rem; font-size:.75rem; color:#8b949e; max-width:340px;">
+          <i class="bi bi-folder2" style="color:#e3b341; flex-shrink:0; font-size:.8rem;"></i>
+          <span id="ruta-texto" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+                flex:1; min-width:0;" title="">Cargando…</span>
+          <button onclick="_rutaEditar()" title="Editar ruta de carpeta"
+                  style="background:none; border:none; color:#58a6ff; cursor:pointer;
+                         padding:0 .15rem; font-size:.8rem; flex-shrink:0; line-height:1;">
+            <i class="bi bi-pencil-square"></i>
+          </button>
+        </div>
+        <button id="ruta-btn-abrir" onclick="_rutaAbrir()" title="Abrir carpeta"
+                style="display:none; background:#0d1117; border:1px solid #2d2150; border-radius:8px;
+                       color:#56d364; padding:.25rem .55rem; font-size:.75rem; cursor:pointer;
+                       white-space:nowrap; flex-shrink:0;">
+          <i class="bi bi-folder-symlink me-1"></i>Abrir
+        </button>
+      </div>
     </div>
     <div class="card-body" style="padding:.9rem 1.2rem;">
       <div style="display:flex; gap:.8rem; flex-wrap:wrap; align-items:flex-end;">
@@ -1617,5 +1642,121 @@ document.getElementById("btn-buscar-formulas")?.addEventListener("click", buscar
 
 // Carga inicial con los valores del ZFER
 buscarFormulasAlt();
+</script>
+
+<!-- ── Modal editar ruta de carpeta ─────────────────────────────────────── -->
+<div id="modal-ruta" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.65);
+     z-index:9000; align-items:center; justify-content:center;">
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:14px;
+              padding:1.5rem 1.8rem; max-width:540px; width:90%; box-shadow:0 8px 40px rgba(0,0,0,.6);">
+    <div style="font-size:1rem; font-weight:800; color:#e6edf3; margin-bottom:.8rem;">
+      <i class="bi bi-folder-plus me-2" style="color:#e3b341;"></i>Ruta de carpeta — {{ material }}
+    </div>
+    <div style="font-size:.76rem; color:#8b949e; margin-bottom:.6rem;">
+      Pega la ruta completa (red o local). El botón Explorar ayuda a confirmar el nombre de la carpeta:
+    </div>
+    <div style="display:flex; gap:.4rem; margin-bottom:.6rem;">
+      <input id="ruta-input" type="text" placeholder="\\servidor\carpeta\proyecto  ó  C:\ruta\local"
+             style="flex:1; background:#0d1117; border:1px solid #30363d; border-radius:8px;
+                    color:#e6edf3; padding:.5rem .8rem; font-size:.8rem; font-family:monospace;">
+      <label title="Seleccionar carpeta"
+             style="background:#21262d; border:1px solid #30363d; border-radius:8px;
+                    color:#e3b341; padding:.5rem .75rem; cursor:pointer; font-size:.82rem;
+                    display:flex; align-items:center; gap:.3rem; white-space:nowrap; flex-shrink:0;">
+        <i class="bi bi-folder2-open"></i>Explorar
+        <input type="file" id="ruta-explorer" webkitdirectory style="display:none;"
+               onchange="_rutaDesdeExplorer(this)">
+      </label>
+    </div>
+    <input id="ruta-desc-input" type="text" placeholder="Descripción opcional (ej: Planos técnicos AUDI Q4)"
+           style="width:100%; background:#0d1117; border:1px solid #30363d; border-radius:8px;
+                  color:#e6edf3; padding:.45rem .8rem; font-size:.76rem; margin-bottom:.9rem;
+                  box-sizing:border-box;">
+    <div style="display:flex; gap:.6rem; justify-content:flex-end;">
+      <button onclick="document.getElementById('modal-ruta').style.display='none'"
+              style="background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:8px;
+                     padding:.38rem 1rem; font-size:.8rem; cursor:pointer;">Cancelar</button>
+      <button onclick="_rutaGuardar()"
+              style="background:#9e6a03; color:#fff; border:none; border-radius:8px;
+                     padding:.38rem 1.1rem; font-size:.8rem; font-weight:700; cursor:pointer;">
+        <i class="bi bi-floppy me-1"></i>Guardar</button>
+    </div>
+    <div id="ruta-modal-msg" style="font-size:.73rem; margin-top:.5rem; min-height:.9rem;"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const _ZFER = "{{ material }}";
+  let _rutaActual = "";
+
+  // Cargar ruta al abrir la página
+  fetch(`/api/ruta/${_ZFER}`)
+    .then(r => r.json())
+    .then(d => { _rutaActual = d.ruta || ""; _rutaRenderizar(d); })
+    .catch(() => { const el = document.getElementById("ruta-texto"); if(el) el.textContent = "Sin ruta"; });
+
+  window._rutaRenderizar = function(d) {
+    const texto   = document.getElementById("ruta-texto");
+    const btnAbrir = document.getElementById("ruta-btn-abrir");
+    if (!texto) return;
+    if (d.ruta) {
+      texto.textContent = d.ruta;
+      texto.title = d.descripcion ? `${d.ruta}\n${d.descripcion}` : d.ruta;
+      texto.style.color = "#e6edf3";
+      if (btnAbrir) btnAbrir.style.display = "flex";
+    } else {
+      texto.textContent = "Sin ruta — clic en ✏";
+      texto.style.color = "#484f58";
+      if (btnAbrir) btnAbrir.style.display = "none";
+    }
+  };
+
+  window._rutaEditar = function() {
+    document.getElementById("ruta-input").value = _rutaActual;
+    document.getElementById("ruta-desc-input").value = "";
+    document.getElementById("ruta-modal-msg").textContent = "";
+    document.getElementById("modal-ruta").style.display = "flex";
+    document.getElementById("ruta-input").focus();
+  };
+
+  window._rutaDesdeExplorer = function(input) {
+    if (input.files && input.files.length > 0) {
+      const partes = input.files[0].webkitRelativePath.split("/");
+      document.getElementById("ruta-input").value = partes[0];
+    }
+  };
+
+  window._rutaAbrir = function() {
+    if (_rutaActual) {
+      window.open("file:///" + _rutaActual.replace(/\\/g, "/"), "_blank");
+    }
+  };
+
+  window._rutaGuardar = async function() {
+    const ruta = document.getElementById("ruta-input").value.trim();
+    const desc = document.getElementById("ruta-desc-input").value.trim();
+    const msg  = document.getElementById("ruta-modal-msg");
+    if (!ruta) { msg.style.color="#ffa198"; msg.textContent="La ruta no puede estar vacía."; return; }
+    msg.style.color="#8b949e"; msg.textContent="Guardando…";
+    try {
+      const r = await fetch(`/api/ruta/${_ZFER}`, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ ruta, descripcion: desc }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        _rutaActual = ruta;
+        _rutaRenderizar({ ruta, descripcion: desc });
+        msg.style.color="#56d364"; msg.textContent="✓ Guardada";
+        setTimeout(() => document.getElementById("modal-ruta").style.display="none", 800);
+      } else {
+        msg.style.color="#ffa198"; msg.textContent = d.error || "Error al guardar";
+      }
+    } catch(e) {
+      msg.style.color="#ffa198"; msg.textContent = "Error de red: " + e.message;
+    }
+  };
+})();
 </script>
 {% endblock %}

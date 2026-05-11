@@ -1988,6 +1988,75 @@ def api_vehiculo_lookup():
         return jsonify({"vehiculo": "", "error": str(e)}), 200
 
 
+# ── BD Local (rutas ZFER) ─────────────────────────────────────────────────────
+_DB_LOCAL_STR = (
+    "DRIVER={ODBC Driver 17 for SQL Server};"
+    r"SERVER=localhost\SQLEXPRESS;"
+    "DATABASE=MODULO_5;"
+    "Trusted_Connection=yes;"
+)
+
+def _get_conn_local():
+    return pyodbc.connect(_DB_LOCAL_STR, autocommit=True)
+
+
+@app.route("/api/ruta/<zfer>", methods=["GET"])
+@login_required
+def api_ruta_get(zfer: str):
+    """Devuelve la ruta de carpeta guardada para un ZFER."""
+    zfer = zfer.strip()
+    try:
+        cn  = _get_conn_local()
+        cur = cn.cursor()
+        cur.execute(
+            "SELECT ruta, descripcion, modificado_el "
+            "FROM dbo.M5_RutasZFER WHERE zfer = ?", zfer
+        )
+        row = cur.fetchone()
+        cn.close()
+        if row:
+            return jsonify({
+                "ok": True,
+                "zfer": zfer,
+                "ruta": str(row[0] or ""),
+                "descripcion": str(row[1] or ""),
+                "modificado_el": str(row[2])[:19] if row[2] else "",
+            })
+        return jsonify({"ok": True, "zfer": zfer, "ruta": "", "descripcion": "", "modificado_el": ""})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/ruta/<zfer>", methods=["POST"])
+@login_required
+def api_ruta_set(zfer: str):
+    """Guarda (upsert) la ruta de carpeta para un ZFER."""
+    zfer = zfer.strip()
+    body = request.get_json(force=True) or {}
+    ruta = str(body.get("ruta", "")).strip()[:500]
+    desc = str(body.get("descripcion", "")).strip()[:200]
+    if not ruta:
+        return jsonify({"ok": False, "error": "ruta vacía"}), 400
+    try:
+        cn  = _get_conn_local()
+        cur = cn.cursor()
+        cur.execute("""
+            MERGE dbo.M5_RutasZFER AS t
+            USING (SELECT ? AS zfer, ? AS ruta, ? AS descripcion) AS s
+              ON t.zfer = s.zfer
+            WHEN MATCHED THEN
+                UPDATE SET ruta = s.ruta, descripcion = s.descripcion,
+                           modificado_el = GETDATE()
+            WHEN NOT MATCHED THEN
+                INSERT (zfer, ruta, descripcion)
+                VALUES (s.zfer, s.ruta, s.descripcion);
+        """, zfer, ruta, desc)
+        cn.close()
+        return jsonify({"ok": True, "zfer": zfer, "ruta": ruta})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
 @app.after_request
 def _set_content_length(response):
     # Prevent browser tab from showing infinite spinner on dynamic HTML pages
