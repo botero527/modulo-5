@@ -70,6 +70,8 @@ class ResultadoItem:
     formula:        str   = ""
     tipo_pieza:     str   = ""
     acero:          str   = ""
+    color_nombre:   str   = ""
+    tipo:           str   = ""   # "color" | "formula"
 
     @property
     def duracion_seg(self) -> float:
@@ -1230,55 +1232,50 @@ class AutomatizadorSAP:
     # ── BD: log ───────────────────────────────────────────────────────────────
 
     def _log_bd(self, res: "ResultadoItem"):
+        # Extraer plano anterior/nuevo del log del resultado
+        plano_ant, plano_nvo = "", ""
+        for line in (res.log or []):
+            if "[PLANO] Guardado:" in line:
+                # "  [PLANO] Guardado: 'X' → 'Y'"
+                try:
+                    parts = line.split("'")
+                    plano_ant = parts[1][:100] if len(parts) > 1 else ""
+                    plano_nvo = parts[3][:100] if len(parts) > 3 else ""
+                except Exception:
+                    pass
+
         _SQL_INSERT = (
             "INSERT INTO dbo.M5_LogEjecucion "
-            "(batch_id, pedido_origen, tipo_pieza, formula, color_codigo, acero_variante, "
-            " estado, detalle_error, fecha_inicio, fecha_fin) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "(batch_id, pedido_origen, tipo_pieza, formula, color_codigo, color_nombre, "
+            " acero_variante, tipo, zfer_nuevo, zfor_nuevo, zpla, "
+            " estado, detalle_error, duracion_seg, plano_anterior, plano_nuevo, "
+            " fecha_inicio, fecha_fin) "
+            "VALUES (?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?)"
         )
         _vals = (
             str(res.batch_id)[:50],
-            str(res.zfer_base or "")[:50],
-            str(getattr(res, "tipo_pieza", "") or "")[:50],
-            str(getattr(res, "formula",    "") or "")[:50],
-            str(res.color_codigo or "")[:20],
-            str(getattr(res, "acero",      "") or "")[:50],
+            str(res.zfer_base or "")[:50],          # pedido_origen nvarchar(50)
+            str(getattr(res, "tipo_pieza",   "") or "")[:20],   # nvarchar(20)
+            str(getattr(res, "formula",      "") or "")[:20],   # nvarchar(20)
+            str(res.color_codigo or "")[:50],       # color_codigo nvarchar(50)
+            str(getattr(res, "color_nombre", "") or "")[:100],  # varchar(100)
+            str(getattr(res, "acero",        "") or "")[:5],    # acero_variante nvarchar(5)
+            str(getattr(res, "tipo",         "") or "")[:20],   # varchar(20)
+            str(res.zfer_nuevo or "")[:20],
+            str(res.zfor_nuevo or "")[:20],
+            str(res.zpla or "")[:20],
             str(res.estado or "")[:20],
             str(res.error)[:2000] if res.error else None,
+            res.duracion_seg or None,
+            plano_ant or None,
+            plano_nvo or None,
             res.fecha_inicio,
             res.fecha_fin,
         )
         try:
             cn  = pyodbc.connect(_DB_LOCAL_STR, autocommit=True)
             cur = cn.cursor()
-            try:
-                cur.execute(_SQL_INSERT, _vals)
-            except Exception as e_ins:
-                # Si falla por uniqueidentifier (8169), migrar columna y reintentar
-                if "8169" in str(e_ins) or "uniqueidentifier" in str(e_ins).lower():
-                    try:
-                        # Quitar constraint DEFAULT si existe antes de alterar tipo
-                        cur.execute("""
-                            DECLARE @cn NVARCHAR(256)
-                            SELECT @cn = dc.name
-                            FROM sys.default_constraints dc
-                            JOIN sys.columns c ON c.default_object_id = dc.object_id
-                            JOIN sys.tables t  ON t.object_id = c.object_id
-                            WHERE t.name = 'M5_LogEjecucion'
-                              AND c.name = 'batch_id'
-                              AND SCHEMA_NAME(t.schema_id) = 'dbo'
-                            IF @cn IS NOT NULL
-                                EXEC('ALTER TABLE dbo.M5_LogEjecucion DROP CONSTRAINT [' + @cn + ']')
-                        """)
-                        cur.execute(
-                            "ALTER TABLE dbo.M5_LogEjecucion "
-                            "ALTER COLUMN batch_id varchar(50) NULL"
-                        )
-                        cur.execute(_SQL_INSERT, _vals)
-                    except Exception as e_mig:
-                        print(f"    [WARN] log_bd migración: {e_mig}")
-                else:
-                    print(f"    [WARN] log_bd: {e_ins}")
+            cur.execute(_SQL_INSERT, _vals)
             cn.close()
         except Exception as e:
             print(f"    [WARN] log_bd: {e}")
