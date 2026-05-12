@@ -717,7 +717,7 @@ class AutomatizadorSAP:
                     pass
         except Exception:
             pass
-        
+
         # Fallback GuiTableControl clásico
         if not filas:
             try:
@@ -774,7 +774,7 @@ class AutomatizadorSAP:
         """
         if clases_dict is None:
             clases_dict = {}
-
+            
         # Soporte retrocompatible: si llega lista de strings en vez de dicts
         posiciones = [
             p if isinstance(p, dict) else {"pos": p, "tipo": 5, "msg": ""}

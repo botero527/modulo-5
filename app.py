@@ -82,8 +82,40 @@ def _conn_str():
         "Encrypt=yes;TrustServerCertificate=no;Connection Timeout=20;"
     )
 
-def get_conn():
-    return pyodbc.connect(_conn_str(), autocommit=True)
+# ── Pool de conexiones (evita reconexión TCP en cada query) ───────────────────
+import queue as _queue
+
+_conn_pool: "_queue.Queue[pyodbc.Connection]" = _queue.Queue(maxsize=12)
+
+class _PooledConn:
+    """Wrapper que devuelve la conexión al pool en lugar de cerrarla."""
+    __slots__ = ("_c",)
+    def __init__(self, c): self._c = c
+    def cursor(self): return self._c.cursor()
+    def execute(self, *a, **kw): return self._c.execute(*a, **kw)
+    def close(self):
+        try:
+            _conn_pool.put_nowait(self._c)
+        except _queue.Full:
+            try: self._c.close()
+            except Exception: pass
+    # Soporte para "with get_conn() as cn:" que usan algunos endpoints
+    def __enter__(self): return self
+    def __exit__(self, *_): self.close()
+
+def get_conn() -> "_PooledConn":
+    """Obtiene una conexión del pool; crea una nueva si el pool está vacío."""
+    try:
+        c = _conn_pool.get_nowait()
+        try:
+            c.execute("SELECT 1")   # health-check rápido
+        except Exception:
+            try: c.close()
+            except Exception: pass
+            c = pyodbc.connect(_conn_str(), autocommit=True)
+    except _queue.Empty:
+        c = pyodbc.connect(_conn_str(), autocommit=True)
+    return _PooledConn(c)
 
 
 # ── Catálogos ─────────────────────────────────────────────────────────────────
@@ -535,71 +567,50 @@ def _parsear_partnumber(pn: str) -> dict | None:
 def q_variantes_por_pn(vehiculo: str, version: str, formula: str, pieza: str) -> list:
     """
     Busca ZFERs activos (no ZZ) en CO01 cuyo PARTNUMBER comparte vehiculo+version+
-    formula+pieza con cualquier color. Usa LIKE con ESCAPE para buscar en ODATA_ZFER_CLASS_001.
+    formula+pieza con cualquier color. Una sola query con JOINs.
     """
     try:
         conn = get_conn()
         cur  = conn.cursor()
-        # ESCAPE '!' — usar ! como caracter de escape (evita problemas con \ en pyodbc)
         def _esc(s):
             return s.replace("!", "!!").replace("%", "!%").replace("_", "!_")
         pattern = "!_".join([_esc(vehiculo), _esc(version), _esc(formula), "%", _esc(pieza)])
 
         cur.execute("""
-            SELECT c.MATERIAL, c.ATWRT AS partnumber
+            SELECT
+                c.MATERIAL,
+                c.ATWRT                                    AS partnumber,
+                MAX(CASE WHEN a.ATNAM='Z_COLOR'      THEN a.ATWRT END) AS color,
+                MAX(CASE WHEN a.ATNAM='Z_SHADE_BAND' THEN a.ATWRT END) AS franja,
+                h.STATUS,
+                h.TEXTO_BREVE_MATERIAL
             FROM   dbo.ODATA_ZFER_CLASS_001 c
             JOIN   dbo.ODATA_ZFER_HEAD h
                 ON h.MATERIAL = c.MATERIAL AND h.CENTRO = 'CO01'
+            LEFT JOIN dbo.ODATA_ZFER_CLASS_001 a
+                ON a.MATERIAL = c.MATERIAL AND a.CENTRO = 'CO01'
+               AND a.ATNAM IN ('Z_COLOR', 'Z_SHADE_BAND')
             WHERE  c.CENTRO = 'CO01'
               AND  c.ATNAM  = 'Z_AGP_PARTNUMBER'
               AND  c.ATWRT  LIKE ? ESCAPE '!'
               AND  UPPER(ISNULL(h.STATUS,'')) != 'ZZ'
+            GROUP BY c.MATERIAL, c.ATWRT, h.STATUS, h.TEXTO_BREVE_MATERIAL
             ORDER BY c.MATERIAL
         """, (pattern,))
-
-        materiales_pn = {r[0]: r[1] for r in cur.fetchall()}
-        if not materiales_pn:
-            conn.close()
-            return []
-
-        mats = list(materiales_pn.keys())
-        ph   = ",".join(["?"] * len(mats))
-
-        # Atributos de color y franja
-        cur.execute(f"""
-            SELECT MATERIAL, ATNAM, ATWRT
-            FROM   dbo.ODATA_ZFER_CLASS_001
-            WHERE  CENTRO = 'CO01' AND MATERIAL IN ({ph})
-              AND  ATNAM IN ('Z_COLOR', 'Z_SHADE_BAND')
-        """, mats)
-        pivot = {}
-        for mat, atnam, atwrt in cur.fetchall():
-            pivot.setdefault(mat, {})[atnam] = str(atwrt).strip() if atwrt is not None else ""
-
-        # Status y descripción
-        cur.execute(f"""
-            SELECT MATERIAL, STATUS, TEXTO_BREVE_MATERIAL
-            FROM   dbo.ODATA_ZFER_HEAD
-            WHERE  CENTRO = 'CO01' AND MATERIAL IN ({ph})
-        """, mats)
-        head_d = {r[0]: {"status": str(r[1]).strip() if r[1] is not None else "",
-                          "texto":  str(r[2]).strip() if r[2] is not None else ""}
-                  for r in cur.fetchall()}
+        rows = cur.fetchall()
         conn.close()
 
         resultado = []
-        for mat in sorted(mats):
-            d = pivot.get(mat, {})
-            h = head_d.get(mat, {})
-            color_raw = d.get("Z_COLOR", "")
+        for mat, pn, color_raw, franja_raw, status, texto in rows:
+            cr = str(color_raw).strip() if color_raw else ""
             resultado.append({
                 "material":     mat,
-                "partnumber":   materiales_pn[mat],
-                "color_raw":    color_raw,
-                "color_nombre": COLORES.get(color_raw, color_raw) if color_raw else "—",
-                "franja_raw":   d.get("Z_SHADE_BAND", ""),
-                "status":       h.get("status", ""),
-                "texto":        h.get("texto",  ""),
+                "partnumber":   pn,
+                "color_raw":    cr,
+                "color_nombre": COLORES.get(cr, cr) if cr else "—",
+                "franja_raw":   str(franja_raw).strip() if franja_raw else "",
+                "status":       str(status).strip() if status else "",
+                "texto":        str(texto).strip() if texto else "",
             })
         return resultado
     except Exception as e:
@@ -1084,21 +1095,17 @@ def detalle_zfer(material: str):
         plano          = plano,
     )
 
-@app.route("/combinaciones/<material>")
-@login_required
-def combinaciones(material: str):
-    material = material.strip()
+def _cargar_datos_zfer(material: str, nivel: str = "", subproducto: str = "") -> dict:
+    """Carga head + attrs + 3 queries en paralelo para un ZFER. Retorna dict listo para template."""
+    # Stage 1: head y attrs en paralelo (evitan 1 round-trip secuencial)
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fut_head  = ex.submit(q_zfer_head, material)
+        fut_attrs = ex.submit(q_atributos, material)
+    head  = fut_head.result()
+    attrs = fut_attrs.result()
 
-    head = q_zfer_head(material)
-    if head is None:
-        return render_template("index.html",
-            error=f"ZFER '{material}' no encontrado o STATUS = ZZ (inactivo).")
-    if "_error" in head:
-        return render_template("index.html",
-            error=f"Error de conexión BD: {head['_error']}")
-
-    attrs = q_atributos(material)
-#aa hahah  hdh hadh sajddh shjdh  hjsdkjh  PARA LIBERAR ESTRES HPTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    if head is None or (isinstance(head, dict) and "_error" in head):
+        return {"_error": head}
 
     formula_code  = attrs.get("Z_FORMULA_CODE",         "")
     piece_type    = attrs.get("Z_PIECE_TYPE",            "")
@@ -1108,102 +1115,113 @@ def combinaciones(material: str):
     vehicle_model = attrs.get("Z_VEHICLE_MODEL",         "")
     thickness     = attrs.get("Z_COMMERCIAL_THICKNESS",  "")
     differentials = attrs.get("Z_BEHAVIOR_DIFFERENTIALS","")
-    nivel         = attrs.get("Z_AGP_LEVEL", "")
-    subproducto   = attrs.get("Z_SUBPRODUCT", "")
+    nivel         = nivel or attrs.get("Z_AGP_LEVEL",    "")
+    subproducto   = subproducto or attrs.get("Z_SUBPRODUCT", "")
+    pn_parsed     = _parsear_partnumber(partnumber)
 
-    pn_parsed = _parsear_partnumber(partnumber)
-
-    # Las 3 queries independientes en paralelo
+    # Stage 2: 3 queries dependientes de attrs, en paralelo
     with ThreadPoolExecutor(max_workers=3) as ex:
         fut_variantes = ex.submit(
             q_variantes_por_pn,
             pn_parsed["vehiculo"], pn_parsed["version"],
             pn_parsed["formula"],  pn_parsed["pieza"]
         ) if pn_parsed else None
-        fut_zplas = ex.submit(
-            q_zplas_compatibles, formula_code, piece_type, shade_band, differentials
-        )
-        fut_formulas = ex.submit(
-            q_formulas_por_pieza, piece_type, nivel, subproducto, formula_code
-        )
+        fut_zplas    = ex.submit(q_zplas_compatibles, formula_code, piece_type, shade_band, differentials)
+        fut_formulas = ex.submit(q_formulas_por_pieza, piece_type, nivel, subproducto, formula_code)
 
     variantes    = fut_variantes.result() if fut_variantes else []
     zplas        = fut_zplas.result()
     formulas_alt = fut_formulas.result()
 
-    if variantes and "_error" in variantes[0]:
-        return render_template("index.html",
-            error=f"Error BD variantes: {variantes[0]['_error']}")
-    if zplas and "_error" in zplas[0]:
-        zplas = []
-    if formulas_alt and "_error" in formulas_alt[0]:
-        formulas_alt = []
-    # Mapa color → ZFER existente
+    if variantes    and "_error" in variantes[0]:    variantes    = []
+    if zplas        and "_error" in zplas[0]:        zplas        = []
+    if formulas_alt and "_error" in formulas_alt[0]: formulas_alt = []
+
     colores_con_zfer = {v["color_raw"]: v for v in variantes if v.get("color_raw")}
-    # Mapa color → lista de ZPLAs (puede haber varios por color con distintos diferenciales)
     colores_con_zpla: dict = {}
     for z in zplas:
         colores_con_zpla.setdefault(z["color"], []).append(z)
-    # Matriz completa: un item por color del catálogo (excepto NA)
+
     matrix = []
     for cod, nombre in COLORES.items():
         if cod not in _COLORES_ACTIVOS:
             continue
         zfer_v    = colores_con_zfer.get(cod)
-        zpla_list = colores_con_zpla.get(cod, [])  
-        if zfer_v:
-            estado = "EXISTE"
-        elif zpla_list:
-            estado = "DISPONIBLE"
-        else:
-            estado = "SIN_ZPLA"
+        zpla_list = colores_con_zpla.get(cod, [])
+        estado = "EXISTE" if zfer_v else ("DISPONIBLE" if zpla_list else "SIN_ZPLA")
         matrix.append({
-            "color_codigo":  cod,
-            "color_nombre":  nombre,
-            "estado":        estado,
-            "zfer":          zfer_v["material"]           if zfer_v    else "",
-            "zfer_texto":    zfer_v["texto"]              if zfer_v    else "",
-            "zfer_pn":       zfer_v["partnumber"]         if zfer_v    else "",
-            "zpla":          zpla_list[0]["material"]     if zpla_list else "",
-            "zpla_count":    len(zpla_list),
-            "zpla_list":     [z["material"] for z in zpla_list],
-            "es_base":       cod == color_base,
+            "color_codigo": cod, "color_nombre": nombre, "estado": estado,
+            "zfer":      zfer_v["material"]       if zfer_v    else "",
+            "zfer_texto":zfer_v["texto"]          if zfer_v    else "",
+            "zfer_pn":   zfer_v["partnumber"]     if zfer_v    else "",
+            "zpla":      zpla_list[0]["material"] if zpla_list else "",
+            "zpla_count":len(zpla_list),
+            "zpla_list": [z["material"] for z in zpla_list],
+            "es_base":   cod == color_base,
         })
-    n_existe     = sum(1 for c in matrix if c["estado"] == "EXISTE")
-    n_disponible = sum(1 for c in matrix if c["estado"] == "DISPONIBLE")
-    n_sin_zpla   = sum(1 for c in matrix if c["estado"] == "SIN_ZPLA")
 
-    # Patrón LIKE usado para la búsqueda (para mostrar en UI)
-    if pn_parsed:
-        pn_pattern_ui = "_".join([
-            pn_parsed["vehiculo"], pn_parsed["version"],
-            pn_parsed["formula"], "**", pn_parsed["pieza"]
-        ])
-    else:
-        pn_pattern_ui = ""
+    pn_pattern_ui = "_".join([pn_parsed["vehiculo"], pn_parsed["version"],
+                               pn_parsed["formula"], "**", pn_parsed["pieza"]]) if pn_parsed else ""
+    return dict(
+        head=head, attrs=attrs, formula_code=formula_code, piece_type=piece_type,
+        piece_nombre=PIEZAS.get(piece_type, piece_type), color_base=color_base,
+        shade_band=shade_band, partnumber=partnumber, vehicle_model=vehicle_model,
+        thickness=thickness, differentials=differentials, nivel=nivel, subproducto=subproducto,
+        pn_parsed=pn_parsed, pn_pattern_ui=pn_pattern_ui,
+        variantes=variantes, zplas=zplas, formulas_alt=formulas_alt, matrix=matrix,
+        n_existe=sum(1 for c in matrix if c["estado"]=="EXISTE"),
+        n_disponible=sum(1 for c in matrix if c["estado"]=="DISPONIBLE"),
+        n_sin_zpla=sum(1 for c in matrix if c["estado"]=="SIN_ZPLA"),
+    )
+
+
+@app.route("/combinaciones/<material>")
+@login_required
+def combinaciones(material: str):
+    material      = material.strip()
+    sim_material  = request.args.get("simetrico", "").strip()
+
+    # Cargar ZFER principal y simétrico en paralelo si aplica
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fut_main = ex.submit(_cargar_datos_zfer, material)
+        fut_sim  = ex.submit(_cargar_datos_zfer, sim_material) if sim_material else None
+
+    d = fut_main.result()
+    if d.get("_error"):
+        err = d["_error"]
+        msg = f"ZFER '{material}' no encontrado o STATUS = ZZ (inactivo)." if err is None else f"Error BD: {err}"
+        return render_template("index.html", error=msg)
+
+    sim = fut_sim.result() if fut_sim else None
+    if sim and sim.get("_error"):
+        sim = None  # simétrico no disponible: carga normal sin panel lateral
+
     return render_template("combinaciones.html",
         material       = material,
-        head           = head,
-        vehicle_model  = vehicle_model,
-        formula_code   = formula_code,
-        piece_type     = piece_type,
-        piece_nombre   = PIEZAS.get(piece_type, piece_type),
-        color_base     = color_base,
-        shade_band     = shade_band,
-        thickness      = thickness,
-        differentials  = differentials,
-        nivel          = nivel,
-        partnumber     = partnumber,
-        pn_parsed      = pn_parsed,
-        pn_pattern_ui  = pn_pattern_ui,
-        variantes      = variantes,
-        zplas          = zplas,
-        matrix         = matrix,
-        n_existe       = n_existe,
-        n_disponible   = n_disponible,
-        n_sin_zpla     = n_sin_zpla,
-        formulas_alt   = formulas_alt,
-        subproducto    = subproducto,
+        head           = d["head"],
+        vehicle_model  = d["vehicle_model"],
+        formula_code   = d["formula_code"],
+        piece_type     = d["piece_type"],
+        piece_nombre   = d["piece_nombre"],
+        color_base     = d["color_base"],
+        shade_band     = d["shade_band"],
+        thickness      = d["thickness"],
+        differentials  = d["differentials"],
+        nivel          = d["nivel"],
+        subproducto    = d["subproducto"],
+        partnumber     = d["partnumber"],
+        pn_parsed      = d["pn_parsed"],
+        pn_pattern_ui  = d["pn_pattern_ui"],
+        variantes      = d["variantes"],
+        zplas          = d["zplas"],
+        matrix         = d["matrix"],
+        n_existe       = d["n_existe"],
+        n_disponible   = d["n_disponible"],
+        n_sin_zpla     = d["n_sin_zpla"],
+        formulas_alt   = d["formulas_alt"],
+        # Panel simétrico
+        sim_material   = sim_material if sim else "",
+        sim            = sim,
     )
 
 
@@ -1223,6 +1241,61 @@ def api_formulas_alt():
     if result and "_error" in result[0]:
         return jsonify({"error": result[0]["_error"]}), 500
     return jsonify(result)
+
+
+@app.route("/api/colores_disponibles/<material>")
+@login_required
+def api_colores_disponibles(material: str):
+    """Retorna solo los colores DISPONIBLE (tienen ZPLA, no existen aún) para un ZFER.
+    Usado para mostrar inline en la sección de fórmulas del panel simétrico."""
+    material = material.strip()
+    attrs = q_atributos(material)
+    if "_error" in attrs:
+        return jsonify({"ok": False, "colores": []})
+    formula_code  = attrs.get("Z_FORMULA_CODE", "")
+    piece_type    = attrs.get("Z_PIECE_TYPE",   "")
+    shade_band    = attrs.get("Z_SHADE_BAND",   "00") or "00"
+    differentials = attrs.get("Z_BEHAVIOR_DIFFERENTIALS", "")
+    partnumber    = attrs.get("Z_AGP_PARTNUMBER", "")
+    pn_parsed     = _parsear_partnumber(partnumber)
+    shade_band_val = attrs.get("Z_SHADE_BAND", "00") or "00"
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fut_variantes = ex.submit(
+            q_variantes_por_pn,
+            pn_parsed["vehiculo"], pn_parsed["version"],
+            pn_parsed["formula"],  pn_parsed["pieza"]
+        ) if pn_parsed else None
+        fut_zplas = ex.submit(q_zplas_compatibles, formula_code, piece_type, shade_band_val, differentials)
+
+    variantes = fut_variantes.result() if fut_variantes else []
+    zplas     = fut_zplas.result()
+    if variantes and "_error" in variantes[0]: variantes = []
+    if zplas     and "_error" in zplas[0]:     zplas     = []
+
+    colores_con_zfer = {v["color_raw"]: v for v in variantes if v.get("color_raw")}
+    colores_con_zpla: dict = {}
+    for z in zplas:
+        colores_con_zpla.setdefault(z["color"], []).append(z)
+
+    disponibles = []
+    for cod in _COLORES_ACTIVOS:
+        if cod in colores_con_zfer:
+            continue   # ya existe
+        zpla_list = colores_con_zpla.get(cod, [])
+        if not zpla_list:
+            continue   # sin zpla
+        nombre = COLORES.get(cod, cod)
+        disponibles.append({
+            "color_codigo": cod,
+            "color_nombre": nombre,
+            "zpla":         zpla_list[0]["material"],
+        })
+    disponibles.sort(key=lambda x: x["color_codigo"])
+    return jsonify({"ok": True, "colores": disponibles,
+                    "franja": shade_band, "partnumber": partnumber,
+                    "nivel": attrs.get("Z_AGP_LEVEL",""),
+                    "piece_type": piece_type})
 
 
 @app.route("/api/bloquear", methods=["POST"])
@@ -2086,69 +2159,565 @@ def api_ruta_set(zfer: str):
 @app.route("/api/simetria/<zfer>")
 @login_required
 def api_simetria_buscar(zfer: str):
+    """
+    Busca el ZFER simétrico (par LH/RH).
+    Estrategia 1 (rápida): LIKE en PARTNUMBER — 1 sola query, usa q_atributos cacheado.
+    Estrategia 2 (fallback): INTERSECT con 4 atributos clave si no hay partnumber.
+    """
     zfer = zfer.strip()
-    _ATNAMES = ('Z_VEHICLE_CODE','Z_AGP_VERSION','Z_FORMULA_CODE','Z_COLOR',
-                'Z_SHADE_BAND','Z_BEHAVIOR_DIFFERENTIALS','Z_AGP_LEVEL',
-                'Z_SUBPRODUCT','Z_COMMERCIAL_THICKNESS','Z_PIECE_TYPE')
     try:
-        with get_conn() as cn:
-            cur = cn.cursor()
+        # q_atributos tiene lru_cache — si el usuario ya cargó el ZFER, es gratis (0ms)
+        attrs = q_atributos(zfer)
+        if not attrs or "_error" in attrs:
+            return jsonify({"ok": True, "aplica": False, "encontrados": []})
 
-            # 1. Leer atributos del ZFER actual
-            cur.execute(f"""
-                SELECT ATNAM, ATWRT FROM dbo.ODATA_ZFER_CLASS_001
-                WHERE MATERIAL=? AND CENTRO='CO01'
-                  AND ATNAM IN ({','.join('?' for _ in _ATNAMES)})
-            """, zfer, *_ATNAMES)
-            attrs = {r[0]: str(r[1] or "").strip() for r in cur.fetchall()}
+        piece_code      = attrs.get("Z_PIECE_TYPE", "").split(",")[0].strip().zfill(3)
+        pieza_contraria = _PARES_SIMETRIA.get(piece_code)
+        if not pieza_contraria:
+            return jsonify({"ok": True, "aplica": False,
+                            "motivo": f"Pieza '{piece_code}' sin simétrico definido",
+                            "encontrados": []})
 
-            piece_code      = attrs.get("Z_PIECE_TYPE","").split(",")[0].strip().zfill(3)
-            pieza_contraria = _PARES_SIMETRIA.get(piece_code)
-            if not pieza_contraria:
-                return jsonify({"ok": True, "aplica": False,
-                                "motivo": f"Pieza '{piece_code}' no tiene simétrico definido"})
+        _NO_SIM = {"ok": True, "aplica": True,
+                   "pieza_contraria": pieza_contraria, "encontrados": []}
 
-            # 2. INTERSECT: cada atributo filtra por índice — sin GROUP BY ni pivot
-            #    El resultado ya es solo los MATERIAL que cumplen TODO
-            intersects = []
-            params_i   = []
-            for atnam, val in attrs.items():
-                if atnam == "Z_PIECE_TYPE" or not val:
-                    continue
-                intersects.append(
-                    "SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
-                    f"WHERE CENTRO='CO01' AND ATNAM='{atnam}' AND ATWRT=?"
-                )
-                params_i.append(val)
-
-            # Último INTERSECT: pieza contraria (puede ser "001,002" → usamos LIKE)
-            intersects.append(
-                "SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
-                "WHERE CENTRO='CO01' AND ATNAM='Z_PIECE_TYPE' AND ATWRT LIKE ?"
-            )
-            params_i.append(f"%{pieza_contraria}%")
-
-            intersect_sql = "\nINTERSECT\n".join(intersects)
-
-            cur.execute(f"""
-                SELECT TOP 3 m.MATERIAL, h.TEXTO_BREVE_MATERIAL
-                FROM ({intersect_sql}) m
-                JOIN dbo.ODATA_ZFER_HEAD h ON h.MATERIAL = m.MATERIAL AND h.CENTRO = 'CO01'
-                WHERE m.MATERIAL <> ?
+        # ── Estrategia 1: LIKE en PARTNUMBER (1 query, muy rápida) ────────────
+        pn_parsed = _parsear_partnumber(attrs.get("Z_AGP_PARTNUMBER", ""))
+        if pn_parsed:
+            def _e(s): return s.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+            pat = "!_".join([_e(pn_parsed["vehiculo"]), _e(pn_parsed["version"]),
+                              _e(pn_parsed["formula"]),  _e(pn_parsed["color"]), "%"])
+            conn = get_conn()
+            cur  = conn.cursor()
+            cur.execute("""
+                SELECT TOP 5 c.MATERIAL, h.TEXTO_BREVE_MATERIAL,
+                       (SELECT TOP 1 ATWRT FROM dbo.ODATA_ZFER_CLASS_001
+                        WHERE MATERIAL=c.MATERIAL AND CENTRO='CO01'
+                          AND ATNAM='Z_PIECE_TYPE') AS piece_type
+                FROM dbo.ODATA_ZFER_CLASS_001 c
+                JOIN dbo.ODATA_ZFER_HEAD h
+                    ON h.MATERIAL=c.MATERIAL AND h.CENTRO='CO01'
+                WHERE c.CENTRO='CO01' AND c.ATNAM='Z_AGP_PARTNUMBER'
+                  AND c.ATWRT LIKE ? ESCAPE '!'
+                  AND c.MATERIAL <> ?
                   AND UPPER(ISNULL(h.STATUS,'')) != 'ZZ'
-                ORDER BY TRY_CAST(m.MATERIAL AS BIGINT) DESC
-            """, *params_i, zfer)
-            filas = cur.fetchall()
+                ORDER BY TRY_CAST(c.MATERIAL AS BIGINT) DESC
+            """, pat, zfer)
+            rows = cur.fetchall()
+            conn.close()
 
-        resultados = [
-            {"zfer": str(r[0]), "desc": str(r[1] or ""), "pieza_contraria": pieza_contraria}
-            for r in filas
-        ]
+            resultados = []
+            for mat, desc, pt in rows:
+                pts = [p.strip().zfill(3) for p in (pt or "").split(",") if p.strip()]
+                if pieza_contraria in pts:
+                    resultados.append({"zfer": str(mat), "desc": str(desc or ""),
+                                       "pieza_contraria": pieza_contraria})
+            if resultados:
+                return jsonify({"ok": True, "aplica": True,
+                                "pieza_contraria": pieza_contraria,
+                                "encontrados": resultados})
+            # Sin resultados por PN → intentar fallback solo si tiene atributos clave
+            if not attrs.get("Z_VEHICLE_CODE") and not attrs.get("Z_FORMULA_CODE"):
+                return jsonify(_NO_SIM)
+
+        # ── Estrategia 2: INTERSECT con los 4 atributos más discriminantes ────
+        key_map = {
+            "Z_VEHICLE_CODE": attrs.get("Z_VEHICLE_CODE", ""),
+            "Z_FORMULA_CODE": attrs.get("Z_FORMULA_CODE", ""),
+            "Z_COLOR":        attrs.get("Z_COLOR",        ""),
+            "Z_AGP_LEVEL":    attrs.get("Z_AGP_LEVEL",    ""),
+        }
+        intersects, params_i = [], []
+        for atnam, val in key_map.items():
+            if not val:
+                continue
+            intersects.append(
+                f"SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
+                f"WHERE CENTRO='CO01' AND ATNAM='{atnam}' AND ATWRT=?"
+            )
+            params_i.append(val)
+        intersects.append(
+            "SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
+            "WHERE CENTRO='CO01' AND ATNAM='Z_PIECE_TYPE' AND ATWRT LIKE ?"
+        )
+        params_i.append(f"%{pieza_contraria}%")
+
+        if len(intersects) < 2:
+            return jsonify(_NO_SIM)
+
+        intersect_sql = "\nINTERSECT\n".join(intersects)
+        conn = get_conn()
+        cur  = conn.cursor()
+        cur.execute(f"""
+            SELECT TOP 3 m.MATERIAL, h.TEXTO_BREVE_MATERIAL
+            FROM ({intersect_sql}) m
+            JOIN dbo.ODATA_ZFER_HEAD h ON h.MATERIAL=m.MATERIAL AND h.CENTRO='CO01'
+            WHERE m.MATERIAL <> ?
+              AND UPPER(ISNULL(h.STATUS,'')) != 'ZZ'
+            ORDER BY TRY_CAST(m.MATERIAL AS BIGINT) DESC
+        """, *params_i, zfer)
+        filas = cur.fetchall()
+        conn.close()
+
+        resultados = [{"zfer": str(r[0]), "desc": str(r[1] or ""),
+                       "pieza_contraria": pieza_contraria} for r in filas]
         return jsonify({"ok": True, "aplica": True,
                         "pieza_contraria": pieza_contraria,
                         "encontrados": resultados})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 200
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── COLA DE HOMOLOGACIONES SAP ────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+import time as _time
+from datetime import datetime as _dt
+
+def _cola_proximo_bloque() -> dict | None:
+    """Retorna el bloque PENDIENTE más próximo con timer activo. None si no hay."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("""
+                SELECT TOP 1 id, bloque_num, hora_prog, timer_activo,
+                       (SELECT COUNT(*) FROM dbo.M5_Cola WHERE bloque_id=b.id AND estado='PENDIENTE') AS n
+                FROM dbo.M5_Bloques b
+                WHERE estado='PENDIENTE' AND timer_activo=1
+                ORDER BY hora_prog ASC
+            """)
+            r = cur.fetchone()
+            if not r: return None
+            return {"id": r[0], "bloque_num": r[1],
+                    "hora_prog": r[2].strftime("%d/%m/%Y %H:%M") if r[2] else "",
+                    "pendientes": r[4]}
+    except Exception:
+        return None
+
+
+def _cola_archivar_y_limpiar(bloque_id: int):
+    """Al completar un bloque: mueve los items ejecutados de M5_Cola → M5_LogEjecuciones y los elimina."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            # Copiar todo lo ejecutado (OK o ERROR) al log permanente
+            cur.execute("""
+                INSERT INTO dbo.M5_LogEjecuciones
+                    (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
+                     formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg, ejecutado_el)
+                SELECT
+                    bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
+                    formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg,
+                    ISNULL(ejecutado_el, GETDATE())
+                FROM dbo.M5_Cola
+                WHERE bloque_id = ? AND estado IN ('OK','ERROR')
+            """, bloque_id)
+            archivados = cur.rowcount
+            # Eliminar de la cola temporal
+            cur.execute("DELETE FROM dbo.M5_Cola WHERE bloque_id=? AND estado IN ('OK','ERROR')",
+                        bloque_id)
+            print(f"[COLA] bloque {bloque_id}: {archivados} items archivados → M5_LogEjecuciones")
+    except Exception as e:
+        print(f"[COLA] error archivando bloque {bloque_id}: {e}")
+
+
+def _cola_ejecutar_bloque(bloque_id: int):
+    """Saca los items PENDIENTE del bloque y los envía a SAP."""
+    import importlib
+    ok_n, err_n = 0, 0   # inicializar ANTES de cualquier try para evitar UnboundLocalError
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("UPDATE dbo.M5_Bloques SET estado='EJECUTANDO' WHERE id=?", bloque_id)
+            cur.execute("""
+                SELECT id, zfer_base, tipo, color, color_nombre, zpla, franja,
+                       pn_base, nivel, tipo_pieza, formula_nueva
+                FROM dbo.M5_Cola
+                WHERE bloque_id=? AND estado='PENDIENTE'
+            """, bloque_id)
+            rows = cur.fetchall()
+
+        if not rows:
+            with _get_conn_local() as cn:
+                cn.cursor().execute("UPDATE dbo.M5_Bloques SET estado='COMPLETADO' WHERE id=?", bloque_id)
+            return
+
+        cola = [{"tipo": r[2], "zfer": r[1], "color": r[3], "color_nombre": r[4],
+                 "zpla": r[5], "franja": r[6] or "00", "pn_base": r[7] or "",
+                 "nivel": r[8] or "", "tipo_pieza": r[9] or "", "formula_nueva": r[10] or "",
+                 "_cola_id": r[0]} for r in rows]
+
+        try:
+            sap = importlib.import_module("sap_auto")
+            # Usar funciones libres del módulo (no instancia — ver sap_auto.py)
+            _proc_color   = getattr(sap, "procesar_combinacion",               None)
+            _proc_formula = getattr(sap, "procesar_combinacion_formula_sin_acero", None)
+            if not _proc_color or not _proc_formula:
+                # Intentar con instancia si existen
+                cls = getattr(sap, "AutomatizadorSAP", None) or getattr(sap, "AutoSAP", None)
+                if cls:
+                    bot = cls()
+                    _proc_color   = getattr(bot, "procesar_combinacion",               None) or getattr(bot, "procesar", None)
+                    _proc_formula = getattr(bot, "procesar_combinacion_formula_sin_acero", None) or getattr(bot, "procesar_formula_sin_acero", None)
+
+            for item in cola:
+                try:
+                    if item["tipo"].lower() == "formula" and _proc_formula:
+                        res = _proc_formula(
+                            item["zfer"], item["color"], item.get("formula_nueva",""),
+                            item.get("zpla",""), item.get("franja","00"),
+                            item.get("pn_base",""), item.get("nivel",""), item.get("tipo_pieza","")
+                        )
+                    elif _proc_color:
+                        res = _proc_color(
+                            item["zfer"], item["color"], item.get("zpla",""),
+                            item.get("franja","00"), item.get("pn_base",""),
+                            item.get("nivel",""), item.get("tipo_pieza","")
+                        )
+                    else:
+                        raise RuntimeError("No se encontró función de procesamiento en sap_auto")
+                    estado_item = "OK" if getattr(res, "estado", "") == "OK" else "ERROR"
+                    zfer_nuevo  = getattr(res, "zfer_nuevo", "") or ""
+                    error_msg   = getattr(res, "error",     "") or ""
+                except Exception as ex:
+                    estado_item, zfer_nuevo, error_msg = "ERROR", "", str(ex)
+
+                with _get_conn_local() as cn:
+                    cn.cursor().execute("""
+                        UPDATE dbo.M5_Cola
+                        SET estado=?, ejecutado_el=GETDATE(), zfer_nuevo=?, error_msg=?
+                        WHERE id=?
+                    """, estado_item, zfer_nuevo or None, error_msg[:500] or None, item["_cola_id"])
+
+                if estado_item == "OK": ok_n += 1
+                else:                  err_n += 1
+
+        except Exception as sap_ex:
+            err_n = len(cola)
+            with _get_conn_local() as cn:
+                cn.cursor().execute("""
+                    UPDATE dbo.M5_Cola SET estado='ERROR', error_msg=?
+                    WHERE bloque_id=? AND estado='PENDIENTE'
+                """, str(sap_ex)[:500], bloque_id)
+            print(f"[COLA] error SAP en bloque {bloque_id}: {sap_ex}")
+
+        with _get_conn_local() as cn:
+            cur2 = cn.cursor()
+            cur2.execute("""
+                UPDATE dbo.M5_Bloques
+                SET estado='COMPLETADO', ejecutado_el=GETDATE(), ok_count=?, error_count=?
+                WHERE id=?
+            """, ok_n, err_n, bloque_id)
+            # Si no quedó ningún bloque PENDIENTE, crear uno nuevo para mañana 7am
+            cur2.execute("SELECT COUNT(*) FROM dbo.M5_Bloques WHERE estado='PENDIENTE'")
+            if cur2.fetchone()[0] == 0:
+                from datetime import timedelta as _td
+                manana7 = (_dt.now() + _td(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
+                cur2.execute("SELECT ISNULL(MAX(bloque_num),0)+1 FROM dbo.M5_Bloques")
+                nuevo_num = cur2.fetchone()[0]
+                cur2.execute(
+                    "INSERT INTO dbo.M5_Bloques (bloque_num, hora_prog, timer_activo) VALUES (?,?,1)",
+                    nuevo_num, manana7
+                )
+        # Mover ejecutados de M5_Cola → M5_LogEjecuciones y limpiar cola temporal
+        _cola_archivar_y_limpiar(bloque_id)
+        print(f"[COLA] bloque {bloque_id} completado: OK={ok_n} ERR={err_n}")
+
+    except Exception as e:
+        print(f"[COLA] error ejecutando bloque {bloque_id}: {e}")
+
+
+def _cola_scheduler():
+    """Hilo de fondo: cada 60s revisa bloques vencidos."""
+    while True:
+        _time.sleep(60)
+        try:
+            with _get_conn_local() as cn:
+                cur = cn.cursor()
+                cur.execute("""
+                    SELECT id FROM dbo.M5_Bloques
+                    WHERE estado='PENDIENTE' AND timer_activo=1
+                      AND hora_prog <= GETDATE()
+                """)
+                vencidos = [r[0] for r in cur.fetchall()]
+            for bid in vencidos:
+                threading.Thread(target=_cola_ejecutar_bloque, args=(bid,), daemon=True).start()
+        except Exception as e:
+            print(f"[COLA] scheduler error: {e}")
+
+# Arrancar hilo scheduler al iniciar la app
+_t_cola = threading.Thread(target=_cola_scheduler, daemon=True)
+_t_cola.start()
+
+
+@app.route("/api/cola/estado")
+@login_required
+def api_cola_estado():
+    """Estado actual de la cola: próximo bloque + total pendientes."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            # Próximo bloque pendiente con timer activo
+            cur.execute("""
+                SELECT TOP 1 b.id, b.bloque_num, b.hora_prog, b.timer_activo,
+                       COUNT(c.id) AS n_items
+                FROM dbo.M5_Bloques b
+                LEFT JOIN dbo.M5_Cola c ON c.bloque_id=b.id AND c.estado='PENDIENTE'
+                WHERE b.estado='PENDIENTE' AND b.timer_activo=1
+                GROUP BY b.id, b.bloque_num, b.hora_prog, b.timer_activo
+                ORDER BY b.hora_prog ASC
+            """)
+            bloque = cur.fetchone()
+            # Total en cola (todos los bloques)
+            cur.execute("SELECT COUNT(*) FROM dbo.M5_Cola WHERE estado='PENDIENTE'")
+            total = cur.fetchone()[0]
+            # Timer activo o no (si todos los bloques tienen timer=0)
+            cur.execute("SELECT COUNT(*) FROM dbo.M5_Bloques WHERE timer_activo=1 AND estado='PENDIENTE'")
+            timer_on = cur.fetchone()[0] > 0
+
+        if bloque:
+            hora_str = bloque[2].strftime("%d/%m/%Y %H:%M") if bloque[2] else ""
+            ya_paso  = bloque[2] < _dt.now() if bloque[2] else False
+            return jsonify({
+                "ok": True, "timer_activo": bool(bloque[3]),
+                "bloque_id": bloque[0], "bloque_num": bloque[1],
+                "hora_prog": hora_str, "ya_paso": ya_paso,
+                "pendientes": bloque[4], "total_pendientes": total,
+            })
+        return jsonify({"ok": True, "timer_activo": timer_on,
+                        "bloque_num": None, "hora_prog": None,
+                        "pendientes": 0, "total_pendientes": total})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "total_pendientes": 0})
+
+
+@app.route("/api/cola/agregar", methods=["POST"])
+@login_required
+def api_cola_agregar():
+    """Agrega items al próximo bloque disponible. Si timer OFF → ejecuta inmediato."""
+    body  = request.get_json() or {}
+    items = body.get("items", [])
+    if not items:
+        return jsonify({"ok": False, "error": "No hay ítems"}), 400
+
+    usuario = _usuario_actual()
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            # Buscar bloque PENDIENTE (nunca EJECUTANDO) — cualquier hora, timer on/off
+            cur.execute("""
+                SELECT TOP 1 id, bloque_num, hora_prog
+                FROM dbo.M5_Bloques
+                WHERE estado='PENDIENTE'
+                ORDER BY hora_prog ASC
+            """)
+            bloque = cur.fetchone()
+
+            if not bloque:
+                # No hay bloque PENDIENTE → crear uno para mañana 7am
+                from datetime import timedelta
+                manana7 = (_dt.now() + timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
+                cur.execute("SELECT ISNULL(MAX(bloque_num),0)+1 FROM dbo.M5_Bloques")
+                nuevo_num = cur.fetchone()[0]
+                cur.execute("""
+                    INSERT INTO dbo.M5_Bloques (bloque_num, hora_prog, timer_activo)
+                    OUTPUT INSERTED.id, INSERTED.bloque_num, INSERTED.hora_prog
+                    VALUES (?, ?, 1)
+                """, nuevo_num, manana7)
+                row = cur.fetchone()
+                bloque_id, bloque_num, hora_prog = row[0], row[1], row[2]
+            else:
+                bloque_id, bloque_num, hora_prog = bloque[0], bloque[1], bloque[2]
+
+            # Insertar items
+            for it in items:
+                desc = f"{it.get('tipo','COLOR').upper()} · {it.get('zfer','')} · color {it.get('color','')} · {it.get('formula_nueva','')}"
+                cur.execute("""
+                    INSERT INTO dbo.M5_Cola
+                    (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
+                     pn_base, nivel, tipo_pieza, formula_nueva, descripcion)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                """, bloque_id,
+                    str(it.get("zfer",""))[:20], str(it.get("tipo","color")).upper()[:20],
+                    str(it.get("color",""))[:10], str(it.get("color_nombre",""))[:100],
+                    str(it.get("zpla",""))[:20], str(it.get("franja","00"))[:5],
+                    str(it.get("pn_base",""))[:50], str(it.get("nivel",""))[:10],
+                    str(it.get("tipo_pieza",""))[:10], str(it.get("formula_nueva",""))[:30],
+                    desc[:200])
+
+        hora_str = hora_prog.strftime("%d/%m/%Y %H:%M") if hora_prog else ""
+        return jsonify({"ok": True, "bloque_id": bloque_id, "bloque_num": bloque_num,
+                        "hora_prog": hora_str, "n_agregados": len(items)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/cola/bloques")
+@login_required
+def api_cola_bloques():
+    """Lista todos los bloques con sus items."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("""
+                SELECT b.id, b.bloque_num, b.hora_prog, b.timer_activo, b.estado,
+                       b.creado_el, b.ejecutado_el, b.ok_count, b.error_count,
+                       COUNT(c.id) AS total_items,
+                       SUM(CASE WHEN c.estado='PENDIENTE'  THEN 1 ELSE 0 END) AS pend,
+                       SUM(CASE WHEN c.estado='OK'         THEN 1 ELSE 0 END) AS ok_n,
+                       SUM(CASE WHEN c.estado='ERROR'      THEN 1 ELSE 0 END) AS err_n
+                FROM dbo.M5_Bloques b
+                LEFT JOIN dbo.M5_Cola c ON c.bloque_id = b.id
+                GROUP BY b.id, b.bloque_num, b.hora_prog, b.timer_activo, b.estado,
+                         b.creado_el, b.ejecutado_el, b.ok_count, b.error_count
+                ORDER BY b.hora_prog DESC
+            """)
+            bloques_rows = cur.fetchall()
+            # Fetch items per bloque
+            bloque_ids = [r[0] for r in bloques_rows]
+            items_map: dict = {}
+            if bloque_ids:
+                placeholders = ",".join("?" * len(bloque_ids))
+                cur.execute(f"""
+                    SELECT bloque_id, zfer_base, tipo, color, color_nombre, zpla, formula_nueva,
+                           estado, zfer_nuevo, error_msg
+                    FROM dbo.M5_Cola WHERE bloque_id IN ({placeholders})
+                    ORDER BY id
+                """, *bloque_ids)
+                for row in cur.fetchall():
+                    bid = row[0]
+                    items_map.setdefault(bid, []).append({
+                        "zfer_base": row[1], "tipo": row[2], "color": row[3],
+                        "color_nombre": row[4], "zpla": row[5], "formula_nueva": row[6],
+                        "estado": row[7], "zfer_nuevo": row[8], "error_msg": row[9],
+                    })
+            bloques = []
+            for r in bloques_rows:
+                bloques.append({
+                    "id": r[0], "bloque_num": r[1],
+                    "hora_prog": r[2].isoformat() if r[2] else "",
+                    "ejecutado_el": r[6].isoformat() if r[6] else None,
+                    "timer_activo": bool(r[3]), "estado": r[4],
+                    "ok_count": r[7], "error_count": r[8],
+                    "total_items": r[9] or 0, "pendientes": r[10] or 0,
+                    "items": items_map.get(r[0], []),
+                })
+            return jsonify({"ok": True, "bloques": bloques})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/cola/bloque/<int:bloque_id>/ejecutar", methods=["POST"])
+@login_required
+def api_cola_ejecutar_bloque(bloque_id: int):
+    """Dispara la ejecución manual de un bloque. Valida que tenga ítems pendientes."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("""
+                SELECT b.estado, COUNT(c.id) AS n_pend
+                FROM dbo.M5_Bloques b
+                LEFT JOIN dbo.M5_Cola c ON c.bloque_id=b.id AND c.estado='PENDIENTE'
+                WHERE b.id=?
+                GROUP BY b.estado
+            """, bloque_id)
+            row = cur.fetchone()
+        if not row:
+            return jsonify({"ok": False, "error": "Bloque no encontrado"})
+        estado_bloque, n_pend = row[0], row[1] or 0
+        if estado_bloque == "EJECUTANDO":
+            return jsonify({"ok": False, "error": "El bloque ya está ejecutándose"})
+        if n_pend == 0:
+            return jsonify({"ok": False, "error": "El bloque no tiene ítems pendientes"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+    threading.Thread(target=_cola_ejecutar_bloque, args=(bloque_id,), daemon=True).start()
+    return jsonify({"ok": True, "mensaje": f"Bloque {bloque_id} iniciado ({n_pend} ítems)"})
+
+
+@app.route("/api/cola/bloque/<int:bloque_id>/timer", methods=["POST"])
+@login_required
+def api_cola_toggle_timer(bloque_id: int):
+    """Activa/desactiva el timer de un bloque."""
+    body = request.get_json() or {}
+    activo = 1 if body.get("activo") else 0
+    try:
+        with _get_conn_local() as cn:
+            cn.cursor().execute("UPDATE dbo.M5_Bloques SET timer_activo=? WHERE id=?", activo, bloque_id)
+        return jsonify({"ok": True, "timer_activo": bool(activo)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/cola/bloque/<int:bloque_id>/hora", methods=["POST"])
+@login_required
+def api_cola_cambiar_hora(bloque_id: int):
+    """Cambia la hora programada de un bloque."""
+    body = request.get_json() or {}
+    hora_str = (body.get("hora") or body.get("hora_prog", "")).strip().rstrip("Z")
+    try:
+        # Normalizar: quitar zona horaria y milisegundos, dejar solo YYYY-MM-DDTHH:MM
+        hora_str_norm = hora_str[:16]  # "2025-01-15T07:00"
+        hora = _dt.strptime(hora_str_norm, "%Y-%m-%dT%H:%M")
+        with _get_conn_local() as cn:
+            cn.cursor().execute("UPDATE dbo.M5_Bloques SET hora_prog=? WHERE id=? AND estado='PENDIENTE'",
+                                hora, bloque_id)
+        return jsonify({"ok": True, "hora_prog": hora.strftime("%d/%m/%Y %H:%M")})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/cola/bloque/<int:bloque_id>/vaciar", methods=["POST"])
+@login_required
+def api_cola_vaciar_bloque(bloque_id: int):
+    """Elimina los ítems PENDIENTE de un bloque (no los ya ejecutados)."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("DELETE FROM dbo.M5_Cola WHERE bloque_id=? AND estado='PENDIENTE'", bloque_id)
+            deleted = cur.rowcount
+            # Si el bloque queda vacío y sigue PENDIENTE, eliminarlo también
+            cur.execute("""
+                DELETE FROM dbo.M5_Bloques WHERE id=? AND estado='PENDIENTE'
+                AND NOT EXISTS (SELECT 1 FROM dbo.M5_Cola WHERE bloque_id=?)
+            """, bloque_id, bloque_id)
+        return jsonify({"ok": True, "deleted": deleted})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/cola/historial")
+@login_required
+def api_cola_historial():
+    """Últimas ejecuciones del log permanente (M5_LogEjecuciones)."""
+    limit = min(int(request.args.get("limit", 100)), 500)
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute(f"""
+                SELECT TOP {limit}
+                    id, bloque_id, zfer_base, tipo, color, color_nombre, zpla,
+                    formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg, ejecutado_el
+                FROM dbo.M5_LogEjecuciones
+                ORDER BY ejecutado_el DESC
+            """)
+            rows = cur.fetchall()
+        log = [{"id": r[0], "bloque_id": r[1], "zfer_base": r[2], "tipo": r[3],
+                "color": r[4], "color_nombre": r[5], "zpla": r[6],
+                "formula_nueva": r[7], "tipo_pieza": r[8], "zfer_nuevo": r[9],
+                "estado": r[10], "error_msg": r[11],
+                "ejecutado_el": r[12].strftime("%d/%m/%Y %H:%M") if r[12] else ""}
+               for r in rows]
+        return jsonify({"ok": True, "log": log})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "log": []})
+
+
+@app.route("/cola")
+@login_required
+def cola_page():
+    return render_template("cola.html")
 
 
 @app.after_request

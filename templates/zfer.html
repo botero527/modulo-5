@@ -320,7 +320,10 @@ new Chart(document.getElementById('chartMercados'), {
     .then(d => {
       const chip = document.getElementById("simetria-chip");
       if (!d.encontrados || d.encontrados.length === 0) {
-        chip.style.display = "none";
+        chip.style.background  = "#161b22";
+        chip.style.borderColor = "#30363d";
+        chip.style.color       = "#484f58";
+        chip.innerHTML = `<i class="bi bi-symmetry-horizontal" style="opacity:.4;"></i>&nbsp;Sin simétrico`;
         return;
       }
       const z = d.encontrados[0];
@@ -332,7 +335,13 @@ new Chart(document.getElementById('chartMercados'), {
         `Simétrico:&nbsp;<a href="/zfer/${z.zfer}" style="color:#bc8cff; font-weight:700; text-decoration:underline;">${z.zfer}</a>` +
         (z.desc ? `&nbsp;<span style="color:#484f58; font-size:.72rem;">${z.desc}</span>` : '');
     })
-    .catch(() => { document.getElementById("simetria-chip").style.display = "none"; });
+    .catch(() => {
+      const chip = document.getElementById("simetria-chip");
+      chip.style.background  = "#161b22";
+      chip.style.borderColor = "#30363d";
+      chip.style.color       = "#484f58";
+      chip.innerHTML = `<i class="bi bi-symmetry-horizontal" style="opacity:.4;"></i>&nbsp;Sin simétrico`;
+    });
 })();
 </script>
 {% endblock %}

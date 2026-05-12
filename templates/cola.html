@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+{% block title %}Cola de Homologaciones — AGP Intelligence{% endblock %}
+
+{% block content %}
+<style>
+  .bloque-card { background:var(--card-bg); border:1px solid var(--border); border-radius:14px; margin-bottom:1.5rem; overflow:hidden; }
+  .bloque-header { padding:.85rem 1.4rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.6rem; border-bottom:1px solid var(--border); }
+  .bloque-badge-pend { background:#1c2340; color:#79c0ff; border:1px solid #1f6feb; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
+  .bloque-badge-ok   { background:#1c2e1c; color:#56d364; border:1px solid #2ea043; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
+  .bloque-badge-err  { background:#2d1f1f; color:#ffa198; border:1px solid #f85149; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
+  .bloque-badge-eje  { background:#2d1f1f; color:#e3b341; border:1px solid #9e6a03; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
+
+  .item-row { display:flex; align-items:center; gap:.7rem; padding:.55rem 1.4rem; border-bottom:1px solid #1c2128; font-size:.85rem; }
+  .item-row:last-child { border-bottom:none; }
+  .item-zfer { font-weight:700; color:var(--accent); min-width:100px; font-size:.82rem; }
+  .item-tipo { background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:20px; font-size:.7rem; font-weight:600; padding:.1rem .5rem; }
+  .item-color { background:#1c2340; color:#79c0ff; border:1px solid #1f6feb; border-radius:20px; font-size:.7rem; font-weight:600; padding:.1rem .5rem; }
+  .item-estado-pend { color:#8b949e; font-size:.72rem; }
+  .item-estado-ok   { color:#56d364; font-size:.72rem; }
+  .item-estado-err  { color:#ffa198; font-size:.72rem; }
+
+  .hora-input { background:#21262d; border:1px solid #30363d; color:var(--text); border-radius:7px; padding:.25rem .6rem; font-size:.82rem; width:130px; outline:none; }
+  .hora-input:focus { border-color:var(--accent); }
+
+  .btn-sm-purple { background:#2d1f3d; border:1px solid #8957e5; color:#d2a8ff; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; transition:background .15s; white-space:nowrap; }
+  .btn-sm-purple:hover { background:#3d2557; }
+  .btn-sm-go { background:#1c2e1c; border:1px solid #2ea043; color:#56d364; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; transition:background .15s; white-space:nowrap; }
+  .btn-sm-go:hover { background:#243624; }
+  .btn-sm-red { background:#2d1f1f; border:1px solid #f85149; color:#ffa198; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; transition:background .15s; }
+  .btn-sm-red:hover { background:#3d2626; }
+
+  .timer-toggle { display:inline-flex; align-items:center; gap:.4rem; cursor:pointer; font-size:.78rem; }
+  .timer-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .timer-on  { background:#56d364; box-shadow:0 0 6px #56d364; }
+  .timer-off { background:#484f58; }
+
+  .paso-spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(0,194,255,.25); border-top-color:var(--accent); border-radius:50%; animation:_spin .75s linear infinite; }
+  @keyframes _spin { to { transform:rotate(360deg); } }
+
+  .empty-state { text-align:center; padding:4rem 2rem; color:#484f58; }
+  .empty-state i { font-size:3rem; display:block; margin-bottom:.75rem; }
+</style>
+
+<!-- ── Header ──────────────────────────────────────────────────────────── -->
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+  <a href="/" class="back-link"><i class="bi bi-arrow-left me-1"></i>Inicio</a>
+  <div style="flex:1;">
+    <h4 style="margin:0; font-weight:800; color:var(--text);">
+      <i class="bi bi-clock-history me-2" style="color:#7c3aed;"></i>Cola de Homologaciones SAP
+    </h4>
+    <div style="font-size:.8rem; color:var(--muted); margin-top:.15rem;">
+      Homologaciones programadas · se ejecutan automáticamente en la hora del bloque
+    </div>
+  </div>
+  <div id="prox-bloque-chip" style="background:#1a102e; border:1px solid #2d2150; border-radius:10px; padding:.45rem 1rem; font-size:.82rem; color:#8b949e; display:flex; align-items:center; gap:.5rem;">
+    <span class="paso-spinner" style="width:10px;height:10px;border-width:2px;"></span> Cargando…
+  </div>
+  <button onclick="_colaRefrescar()" style="background:#21262d; border:1px solid #30363d; color:var(--muted); border-radius:8px; padding:.4rem .85rem; font-size:.82rem; cursor:pointer;">
+    <i class="bi bi-arrow-clockwise"></i>
+  </button>
+</div>
+
+<!-- ── Tabs: Cola pendiente / Historial ───────────────────────────────── -->
+<div style="display:flex; gap:.4rem; margin-bottom:1.2rem; border-bottom:1px solid #21262d; padding-bottom:.6rem;">
+  <button id="tab-cola" onclick="_tabSwitch('cola')"
+          style="background:#1c2340; color:#79c0ff; border:1px solid #1f6feb; border-radius:8px;
+                 padding:.35rem 1rem; font-size:.83rem; font-weight:700; cursor:pointer;">
+    <i class="bi bi-clock-history me-1"></i>Cola pendiente
+  </button>
+  <button id="tab-hist" onclick="_tabSwitch('hist')"
+          style="background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:8px;
+                 padding:.35rem 1rem; font-size:.83rem; font-weight:600; cursor:pointer;">
+    <i class="bi bi-journal-check me-1"></i>Historial de ejecuciones
+  </button>
+</div>
+
+<!-- ── Bloques pendientes ─────────────────────────────────────────────── -->
+<div id="tab-pane-cola">
+  <div id="bloques-container">
+    <div class="empty-state">
+      <span class="paso-spinner" style="width:28px;height:28px;border-width:3px;"></span>
+      <div style="margin-top:1rem; font-size:.95rem;">Cargando bloques…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Historial de ejecuciones ───────────────────────────────────────── -->
+<div id="tab-pane-hist" style="display:none;">
+  <div id="historial-container">
+    <div class="empty-state">
+      <i class="bi bi-journal-check"></i>
+      <div style="font-size:.9rem;">Haz clic en "Historial" para cargar</div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const _COLA_URL = '/api/cola';
+
+async function _colaRefrescar() {
+  await Promise.all([_cargarBloques(), _cargarProxBloque()]);
+}
+
+async function _cargarProxBloque() {
+  try {
+    const d = await fetch(`${_COLA_URL}/estado`).then(r => r.json());
+    const chip = document.getElementById('prox-bloque-chip');
+    if (d.bloque_num) {
+      const hora = d.hora_prog || '—';
+      const timer = d.timer_activo
+        ? `<span class="timer-dot timer-on" title="Timer activo"></span>`
+        : `<span class="timer-dot timer-off" title="Timer apagado"></span>`;
+      const yaPasoLabel = d.ya_paso ? `<span style="color:#e3b341;font-size:.72rem;"> (hora pasada)</span>` : '';
+      chip.innerHTML = `${timer} <b style="color:#bc8cff;">Bloque ${d.bloque_num}</b>&nbsp;·&nbsp;${hora}${yaPasoLabel}&nbsp;·&nbsp;<span style="color:#79c0ff;">${d.total_pendientes || 0} pendientes</span>`;
+    } else {
+      chip.innerHTML = `<i class="bi bi-inbox" style="color:#484f58;"></i> <span style="color:#484f58;">Sin bloques pendientes</span>`;
+    }
+  } catch(e) {
+    document.getElementById('prox-bloque-chip').innerHTML = '<span style="color:#f85149;">Error cargando estado</span>';
+  }
+}
+
+async function _cargarBloques() {
+  const cont = document.getElementById('bloques-container');
+  try {
+    const data = await fetch(`${_COLA_URL}/bloques`).then(r => r.json());
+    if (!data.bloques || data.bloques.length === 0) {
+      cont.innerHTML = `<div class="empty-state">
+        <i class="bi bi-inbox"></i>
+        <div style="font-size:1rem; color:#484f58;">No hay bloques en cola</div>
+        <div style="font-size:.82rem; margin-top:.4rem;">Agrega colores o fórmulas desde la página de Combinaciones</div>
+      </div>`;
+      return;
+    }
+
+    let html = '';
+    for (const b of data.bloques) {
+      const hora = new Date(b.hora_prog).toLocaleString('es-CO', {dateStyle:'medium', timeStyle:'short'});
+      const estadoBadge = _estadoBadge(b.estado);
+      const timerLabel = b.timer_activo
+        ? `<span class="timer-toggle" onclick="_toggleTimer(${b.id}, this)"><span class="timer-dot timer-on"></span>Timer activo</span>`
+        : `<span class="timer-toggle" onclick="_toggleTimer(${b.id}, this)"><span class="timer-dot timer-off"></span>Timer apagado</span>`;
+
+      const itemsHtml = (b.items || []).map(it => _itemRow(it)).join('');
+      const itemsEmpty = !b.items || b.items.length === 0
+        ? `<div style="padding:1rem 1.4rem; color:#484f58; font-size:.85rem;">Sin ítems en este bloque</div>` : '';
+
+      const accionesHtml = b.estado === 'PENDIENTE' ? `
+        <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">
+          <input type="datetime-local" class="hora-input" id="hora-inp-${b.id}"
+                 value="${_toDatetimeLocal(b.hora_prog)}"
+                 onchange="_cambiarHora(${b.id}, this.value)">
+          <span style="font-size:.72rem; color:#484f58;">hora prog.</span>
+          <button class="btn-sm-go" onclick="_ejecutarBloque(${b.id})"><i class="bi bi-play-fill me-1"></i>Ejecutar ahora</button>
+          <button class="btn-sm-red" onclick="_eliminarBloque(${b.id})"><i class="bi bi-trash me-1"></i>Vaciar</button>
+        </div>` : `<div style="font-size:.78rem; color:#484f58;">${b.ejecutado_el ? 'Ejecutado: ' + new Date(b.ejecutado_el).toLocaleString('es-CO') : ''} ${b.ok_count != null ? '· OK: '+b.ok_count : ''} ${b.error_count ? '· Errores: '+b.error_count : ''}</div>`;
+
+      html += `
+      <div class="bloque-card" id="bloque-card-${b.id}">
+        <div class="bloque-header">
+          <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;">
+            <span style="font-size:1rem; font-weight:800; color:#bc8cff;">
+              <i class="bi bi-layers-fill me-1"></i>Bloque ${b.bloque_num}
+            </span>
+            ${estadoBadge}
+            ${timerLabel}
+            <span style="font-size:.8rem; color:var(--muted);">
+              <i class="bi bi-clock me-1"></i>${hora}
+            </span>
+            <span style="font-size:.78rem; color:#79c0ff; background:#1c2340; border:1px solid #1f6feb; border-radius:20px; padding:.1rem .55rem;">
+              ${b.total_items || 0} ítems
+            </span>
+          </div>
+          <div>${accionesHtml}</div>
+        </div>
+        <div id="items-bloque-${b.id}">
+          ${itemsHtml}${itemsEmpty}
+        </div>
+      </div>`;
+    }
+    cont.innerHTML = html;
+  } catch(e) {
+    cont.innerHTML = `<div class="alert-err"><i class="bi bi-exclamation-triangle me-2"></i>Error cargando bloques: ${e.message}</div>`;
+  }
+}
+
+function _itemRow(it) {
+  const tipoLabel = it.tipo === 'color' ? 'Color' : 'Fórmula';
+  const detalle = it.tipo === 'color'
+    ? `<span class="item-color">${it.color_nombre || it.color || '—'}</span>`
+    : `<span class="item-tipo" style="background:#1c2e1c;color:#56d364;border-color:#2ea043;">${it.formula_nueva || '—'}</span>`;
+  const estadoHtml = it.estado === 'OK'
+    ? `<span class="item-estado-ok"><i class="bi bi-check-circle-fill me-1"></i>OK ${it.zfer_nuevo ? '→ '+it.zfer_nuevo : ''}</span>`
+    : it.estado === 'ERROR'
+    ? `<span class="item-estado-err"><i class="bi bi-x-circle-fill me-1"></i>${it.error_msg || 'Error'}</span>`
+    : `<span class="item-estado-pend"><i class="bi bi-hourglass me-1"></i>Pendiente</span>`;
+
+  return `<div class="item-row">
+    <span class="item-zfer">${it.zfer_base}</span>
+    <span class="item-tipo">${tipoLabel}</span>
+    ${detalle}
+    ${it.zpla ? `<span style="font-size:.72rem; color:#484f58;">ZPLA: ${it.zpla}</span>` : ''}
+    <span style="flex:1;"></span>
+    ${estadoHtml}
+  </div>`;
+}
+
+function _estadoBadge(estado) {
+  const m = {
+    'PENDIENTE': ['bloque-badge-pend', 'Pendiente'],
+    'EJECUTANDO': ['bloque-badge-eje', 'Ejecutando…'],
+    'COMPLETADO': ['bloque-badge-ok', 'Completado'],
+    'ERROR': ['bloque-badge-err', 'Error'],
+  };
+  const [cls, lbl] = m[estado] || ['bloque-badge-pend', estado];
+  return `<span class="${cls}">${lbl}</span>`;
+}
+
+function _toDatetimeLocal(isoStr) {
+  if (!isoStr) return '';
+  // strip seconds/ms and convert to local ISO format for datetime-local input
+  const d = new Date(isoStr);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function _toggleTimer(bloqueId, el) {
+  try {
+    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/timer`, {method:'POST'}).then(r => r.json());
+    if (d.ok) {
+      const dot = el.querySelector('.timer-dot');
+      if (d.timer_activo) {
+        dot.className = 'timer-dot timer-on'; el.childNodes[1].textContent = 'Timer activo';
+      } else {
+        dot.className = 'timer-dot timer-off'; el.childNodes[1].textContent = 'Timer apagado';
+      }
+    }
+  } catch(e) { alert('Error al cambiar timer'); }
+}
+
+async function _cambiarHora(bloqueId, val) {
+  if (!val) return;
+  // convert datetime-local value to ISO
+  const iso = new Date(val).toISOString();
+  try {
+    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/hora`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({hora: iso})
+    }).then(r => r.json());
+    if (d.ok) {
+      _colaRefrescar();
+    } else {
+      alert(d.error || 'Error al cambiar hora');
+    }
+  } catch(e) { alert('Error'); }
+}
+
+async function _ejecutarBloque(bloqueId) {
+  if (!confirm('¿Ejecutar este bloque ahora?\nSe iniciará la automatización SAP con los ítems pendientes.')) return;
+  const card = document.getElementById(`bloque-card-${bloqueId}`);
+  if (card) card.style.opacity = '.6';
+  try {
+    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/ejecutar`, {method:'POST'}).then(r => r.json());
+    if (d.ok) {
+      // Bloque pasó a EJECUTANDO, refrescar en 2s para mostrar estado
+      setTimeout(_colaRefrescar, 2000);
+    } else {
+      alert(d.error || 'No se puede ejecutar');
+      if (card) card.style.opacity = '1';
+    }
+  } catch(e) { alert('Error de red'); if (card) card.style.opacity = '1'; }
+}
+
+async function _eliminarBloque(bloqueId) {
+  if (!confirm('¿Vaciar todos los ítems pendientes de este bloque? No se puede deshacer.')) return;
+  try {
+    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/vaciar`, {method:'POST'}).then(r => r.json());
+    if (d.ok) _colaRefrescar();
+    else alert(d.error || 'Error');
+  } catch(e) { alert('Error'); }
+}
+
+// Update navbar badge on all pages
+async function _colaActualizarBadge() {
+  try {
+    const d = await fetch(`${_COLA_URL}/estado`).then(r => r.json());
+    const b = document.getElementById('cola-navbar-badge');
+    if (!b) return;
+    if (d.total_pendientes > 0) {
+      b.textContent = d.total_pendientes;
+      b.style.display = 'inline-block';
+    } else {
+      b.style.display = 'none';
+    }
+  } catch(e) {}
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+let _tabActual = 'cola';
+function _tabSwitch(tab) {
+  _tabActual = tab;
+  const isCola = tab === 'cola';
+  document.getElementById('tab-pane-cola').style.display = isCola ? '' : 'none';
+  document.getElementById('tab-pane-hist').style.display = isCola ? 'none' : '';
+  const btnCola = document.getElementById('tab-cola');
+  const btnHist = document.getElementById('tab-hist');
+  if (isCola) {
+    btnCola.style.background = '#1c2340'; btnCola.style.color = '#79c0ff'; btnCola.style.borderColor = '#1f6feb';
+    btnHist.style.background = '#21262d'; btnHist.style.color = '#8b949e'; btnHist.style.borderColor = '#30363d';
+  } else {
+    btnHist.style.background = '#1c2e1c'; btnHist.style.color = '#56d364'; btnHist.style.borderColor = '#2ea043';
+    btnCola.style.background = '#21262d'; btnCola.style.color = '#8b949e'; btnCola.style.borderColor = '#30363d';
+    _cargarHistorial();
+  }
+}
+
+// ── Historial ─────────────────────────────────────────────────────────────
+async function _cargarHistorial() {
+  const cont = document.getElementById('historial-container');
+  cont.innerHTML = `<div class="empty-state"><span class="paso-spinner" style="width:24px;height:24px;border-width:3px;"></span><div style="margin-top:.8rem;">Cargando historial…</div></div>`;
+  try {
+    const d = await fetch(`${_COLA_URL}/historial?limit=200`).then(r => r.json());
+    if (!d.ok || !d.log.length) {
+      cont.innerHTML = `<div class="empty-state"><i class="bi bi-journal-x"></i><div>Sin ejecuciones registradas aún</div></div>`;
+      return;
+    }
+    const rows = d.log.map(r => {
+      const esBadge = r.estado === 'OK'
+        ? `<span class="bloque-badge-ok">OK</span>`
+        : `<span class="bloque-badge-err">ERROR</span>`;
+      const detalle = r.tipo === 'COLOR'
+        ? `<span class="item-color">${r.color_nombre || r.color || '—'}</span>`
+        : `<span class="item-tipo" style="background:#1c2e1c;color:#56d364;border-color:#2ea043;">${r.formula_nueva || '—'}</span>`;
+      const zferNuevo = r.zfer_nuevo ? `<span style="color:var(--accent);font-size:.72rem;">→ ${r.zfer_nuevo}</span>` : '';
+      const errMsg = r.error_msg ? `<span style="color:#ffa198;font-size:.7rem;" title="${r.error_msg}"><i class="bi bi-exclamation-circle me-1"></i>${r.error_msg.substring(0,60)}${r.error_msg.length>60?'…':''}</span>` : '';
+      return `<div class="item-row">
+        <span class="item-zfer">${r.zfer_base}</span>
+        <span class="item-tipo">${r.tipo}</span>
+        ${detalle}
+        ${zferNuevo}
+        <span style="flex:1;"></span>
+        ${esBadge}
+        ${errMsg}
+        <span style="color:#484f58;font-size:.7rem;">${r.ejecutado_el}</span>
+      </div>`;
+    }).join('');
+
+    const okN  = d.log.filter(r => r.estado === 'OK').length;
+    const errN = d.log.filter(r => r.estado === 'ERROR').length;
+    cont.innerHTML = `
+      <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem; flex-wrap:wrap;">
+        <span class="bloque-badge-ok" style="font-size:.82rem; padding:.3rem .8rem;">✓ ${okN} exitosas</span>
+        ${errN ? `<span class="bloque-badge-err" style="font-size:.82rem; padding:.3rem .8rem;">✗ ${errN} con error</span>` : ''}
+        <span style="color:#484f58; font-size:.78rem;">Últimas ${d.log.length} ejecuciones</span>
+      </div>
+      <div class="bloque-card" style="overflow:hidden;">${rows}</div>`;
+  } catch(e) {
+    cont.innerHTML = `<div class="alert-err">Error cargando historial: ${e.message}</div>`;
+  }
+}
+
+// Auto-refresh every 30s while on this page (solo la tab activa)
+_colaRefrescar();
+_colaActualizarBadge();
+setInterval(() => {
+  _colaActualizarBadge();
+  if (_tabActual === 'cola') _colaRefrescar();
+}, 30000);
+</script>
+{% endblock %}

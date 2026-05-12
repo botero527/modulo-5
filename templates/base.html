@@ -176,6 +176,13 @@
        onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">
       <i class="bi bi-funnel-fill"></i>Explorador
     </a>
+    <a href="/cola" id="cola-nav-link" style="color:var(--muted); font-size:.85rem; text-decoration:none; display:flex; align-items:center; gap:.35rem; transition:color .15s; position:relative;"
+       onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">
+      <i class="bi bi-clock-history"></i>Cola SAP
+      <span id="cola-navbar-badge" style="display:none; background:#7c3aed; color:#fff; font-size:.62rem;
+            font-weight:800; border-radius:10px; padding:.05rem .38rem; line-height:1.4; min-width:16px;
+            text-align:center; position:absolute; top:-5px; right:-10px;"></span>
+    </a>
     <span class="nav-meta"><i class="bi bi-database me-1"></i>DB_COL_SAP &nbsp;·&nbsp; CO01</span>
     {% if usuario_actual %}
     <div style="display:flex; align-items:center; gap:.5rem; border-left:1px solid #21262d; padding-left:.9rem;">

@@ -122,108 +122,167 @@
   </span>
 </div>
 
-<!-- ── Matriz de combinaciones — 4 columnas temáticas ───────────────────────── -->
+<!-- ── Macro: render panel de colores ───────────────────────────────────────── -->
+{% macro render_panel_colores(mx, compact=false, zfer_id='') %}
 {% set _GRUPOS = [
-  {'titulo': 'Incoloro',  'icono': 'bi-circle',              'color_titulo': '#8b949e', 'codigos': ['00','01']},
-  {'titulo': 'Claros',    'icono': 'bi-sun',                 'color_titulo': '#e3b341', 'codigos': ['05','06','19']},
-  {'titulo': 'Medio',     'icono': 'bi-circle-half',         'color_titulo': '#58a6ff', 'codigos': ['10','18','20','22']},
-  {'titulo': 'Dark',      'icono': 'bi-moon-stars-fill',     'color_titulo': '#bc8cff', 'codigos': ['13','21','23']},
+  {'titulo': 'Incoloro', 'icono': 'bi-circle',          'ct': '#8b949e', 'codigos': ['00','01']},
+  {'titulo': 'Claros',   'icono': 'bi-sun',              'ct': '#e3b341', 'codigos': ['05','06','19']},
+  {'titulo': 'Medio',    'icono': 'bi-circle-half',      'ct': '#58a6ff', 'codigos': ['10','18','20','22']},
+  {'titulo': 'Dark',     'icono': 'bi-moon-stars-fill',  'ct': '#bc8cff', 'codigos': ['13','21','23']},
 ] %}
-{% set _matrix_map = {} %}
-{% for c in matrix %}{% if _matrix_map.update({c.color_codigo: c}) %}{% endif %}{% endfor %}
+{% set mx_map = {} %}
+{% for c in mx %}{% if mx_map.update({c.color_codigo: c}) %}{% endif %}{% endfor %}
 
-<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:2rem; align-items:start;">
+{% if compact %}
+  {# Modo compacto (panel simétrico): 2×2 #}
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:.6rem; align-items:start;">
+{% else %}
+  {# Modo normal: 4 columnas #}
+  <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:.8rem; align-items:start;">
+{% endif %}
+
 {% for grp in _GRUPOS %}
-  <div style="display:flex; flex-direction:column; gap:.6rem;">
-
-    <!-- Encabezado de grupo -->
-    <div style="display:flex; align-items:center; gap:.45rem; padding:.35rem .6rem;
-                background:#0d1117; border:1px solid #21262d; border-radius:10px;
-                border-bottom:2px solid {{ grp.color_titulo }};">
-      <i class="bi {{ grp.icono }}" style="color:{{ grp.color_titulo }}; font-size:.9rem;"></i>
-      <span style="font-size:.78rem; font-weight:800; text-transform:uppercase; letter-spacing:1px;
-                   color:{{ grp.color_titulo }};">{{ grp.titulo }}</span>
+  <div style="display:flex; flex-direction:column; gap:.5rem;">
+    <div style="display:flex; align-items:center; gap:.4rem; padding:.3rem .55rem;
+                background:#0d1117; border:1px solid #21262d; border-radius:9px;
+                border-bottom:2px solid {{ grp.ct }};">
+      <i class="bi {{ grp.icono }}" style="color:{{ grp.ct }}; font-size:.82rem;"></i>
+      <span style="font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.9px;
+                   color:{{ grp.ct }};">{{ grp.titulo }}</span>
     </div>
-
-    <!-- Cards del grupo -->
     {% for cod in grp.codigos %}
-    {% set c = _matrix_map.get(cod) %}
+    {% set c = mx_map.get(cod) %}
     {% if c %}
-
       {% if c.estado == 'EXISTE' %}
-        {% set card_bg = '#0d2318' %}{% set card_border = '#2ea043' %}
-        {% set badge_color = '#56d364' %}{% set badge_bg = '#1c2e1c' %}{% set badge_border = '#2ea043' %}
-        {% set badge_label = 'EXISTE' %}{% set icon = 'bi-check-circle-fill' %}
+        {% set cbg='#0d2318' %}{% set cbr='#2ea043' %}{% set bco='#56d364' %}{% set bbg='#1c2e1c' %}{% set bbr='#2ea043' %}{% set blbl='EXISTE' %}{% set ico='bi-check-circle-fill' %}
       {% elif c.estado == 'DISPONIBLE' %}
-        {% set card_bg = '#1e1a0d' %}{% set card_border = '#9e6a03' %}
-        {% set badge_color = '#e3b341' %}{% set badge_bg = '#2d2416' %}{% set badge_border = '#9e6a03' %}
-        {% set badge_label = 'DISPONIBLE' %}{% set icon = 'bi-plus-circle-fill' %}
+        {% set cbg='#1e1a0d' %}{% set cbr='#9e6a03' %}{% set bco='#e3b341' %}{% set bbg='#2d2416' %}{% set bbr='#9e6a03' %}{% set blbl='DISPONIBLE' %}{% set ico='bi-plus-circle-fill' %}
       {% else %}
-        {% set card_bg = '#0d1117' %}{% set card_border = '#21262d' %}
-        {% set badge_color = '#484f58' %}{% set badge_bg = '#161b22' %}{% set badge_border = '#30363d' %}
-        {% set badge_label = 'SIN ZPLA' %}{% set icon = 'bi-dash-circle' %}
+        {% set cbg='#0d1117' %}{% set cbr='#21262d' %}{% set bco='#484f58' %}{% set bbg='#161b22' %}{% set bbr='#30363d' %}{% set blbl='SIN ZPLA' %}{% set ico='bi-dash-circle' %}
       {% endif %}
-
-      <div style="background:{{ card_bg }}; border:1px solid {{ card_border }}; border-radius:12px;
-                  padding:.85rem .95rem; position:relative; transition:border-color .15s;
+      <div style="background:{{ cbg }}; border:1px solid {{ cbr }}; border-radius:11px;
+                  padding:.75rem .85rem; position:relative; transition:border-color .15s;
                   {% if c.es_base %}outline:2px solid var(--accent2); outline-offset:2px;{% endif %}">
-
         {% if c.es_base %}
-        <div style="position:absolute; top:-9px; left:12px; background:var(--accent2); color:#fff;
-                    font-size:.6rem; font-weight:800; padding:.1rem .5rem; border-radius:20px; letter-spacing:.5px;">
-          BASE
-        </div>
+        <div style="position:absolute; top:-8px; left:10px; background:var(--accent2); color:#fff;
+                    font-size:.58rem; font-weight:800; padding:.08rem .45rem; border-radius:20px;">BASE</div>
         {% endif %}
-
-        <!-- Código + badge estado -->
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.55rem;">
-          <span style="background:{{ badge_bg }}; color:{{ badge_color }}; border:1px solid {{ badge_border }};
-                       padding:.18rem .5rem; border-radius:20px; font-size:.78rem; font-weight:700;">
-            {{ c.color_codigo }}
-          </span>
-          <span style="color:{{ badge_color }}; font-size:.7rem; font-weight:700;
-                       display:flex; align-items:center; gap:.25rem;">
-            <i class="bi {{ icon }}" style="font-size:.82rem;"></i>{{ badge_label }}
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.45rem;">
+          <span style="background:{{ bbg }}; color:{{ bco }}; border:1px solid {{ bbr }};
+                       padding:.15rem .45rem; border-radius:20px; font-size:.75rem; font-weight:700;">{{ c.color_codigo }}</span>
+          <span style="color:{{ bco }}; font-size:.66rem; font-weight:700; display:flex; align-items:center; gap:.2rem;">
+            <i class="bi {{ ico }}" style="font-size:.78rem;"></i>{{ blbl }}
           </span>
         </div>
-
-        <!-- Nombre -->
-        <div style="font-weight:700; font-size:.88rem; color:var(--text);
-                    margin-bottom:.45rem; line-height:1.25;">{{ c.color_nombre }}</div>
-
-        <!-- Detalle según estado -->
+        <div style="font-weight:700; font-size:{% if compact %}.8rem{% else %}.86rem{% endif %}; color:var(--text); margin-bottom:.38rem; line-height:1.2;">{{ c.color_nombre }}</div>
         {% if c.estado == 'EXISTE' %}
-        <div style="font-size:.76rem;">
+        <div style="font-size:.73rem;">
           <a href="/zfer/{{ c.zfer }}" style="color:var(--accent); font-weight:700; text-decoration:none;">
-            <i class="bi bi-box-arrow-up-right me-1" style="font-size:.68rem;"></i>{{ c.zfer }}
+            <i class="bi bi-box-arrow-up-right me-1" style="font-size:.65rem;"></i>{{ c.zfer }}
           </a>
           {% if c.zfer_pn %}
-          <div style="margin-top:.28rem;">
-            <code style="color:#e3b341; font-size:.7rem; background:#1c1a10; padding:.1rem .3rem;
-                         border-radius:4px; border:1px solid #5a3e00;">{{ c.zfer_pn }}</code>
-          </div>
-          {% endif %}
-          {% if c.zfer_texto %}
-          <div style="color:#484f58; font-size:.68rem; margin-top:.18rem;
-                      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.zfer_texto }}</div>
+          <div style="margin-top:.22rem;"><code style="color:#e3b341; font-size:.67rem; background:#1c1a10; padding:.08rem .28rem; border-radius:4px; border:1px solid #5a3e00;">{{ c.zfer_pn }}</code></div>
           {% endif %}
         </div>
         {% elif c.estado == 'DISPONIBLE' %}
-        <div style="font-size:.76rem; color:var(--muted);">
-          <span style="color:#e3b341; font-weight:600;">ZPLA:</span>
-          <span style="font-weight:700; color:#e6edf3; font-size:.8rem; margin-left:.3rem;">{{ c.zpla }}</span>
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div style="font-size:.73rem; color:var(--muted);">
+            <span style="color:#e3b341; font-weight:600;">ZPLA:</span>
+            <span style="font-weight:700; color:#e6edf3; margin-left:.25rem;">{{ c.zpla }}</span>
+          </div>
+          <input type="checkbox" class="col-queue-check"
+                 data-zfer="{{ zfer_id }}"
+                 data-color="{{ c.color_codigo }}"
+                 data-color-nombre="{{ c.color_nombre }}"
+                 data-zpla="{{ c.zpla }}"
+                 style="width:15px; height:15px; accent-color:#e3b341; cursor:pointer; flex-shrink:0;"
+                 onchange="_colaContarSeleccionados()">
         </div>
         {% else %}
-        <div style="font-size:.73rem; color:#484f58;">Sin ZPLA para esta combinación</div>
+        <div style="font-size:.7rem; color:#484f58;">Sin ZPLA</div>
         {% endif %}
-
       </div>
-
     {% endif %}
     {% endfor %}
-
   </div>
 {% endfor %}
+</div>
+{% endmacro %}
+
+<!-- ── Matriz de combinaciones ───────────────────────────────────────────────── -->
+{% if sim %}
+{# ── Modo simetría: dos paneles lado a lado ── #}
+<div id="colores-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin-bottom:1rem; align-items:start;">
+
+  <!-- Panel principal -->
+  <div style="background:#0d1117; border:1px solid #30363d; border-radius:14px; padding:1rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.8rem; padding-bottom:.6rem; border-bottom:1px solid #21262d;">
+      <div>
+        <span style="font-size:1.1rem; font-weight:900; color:var(--accent2);">{{ material }}</span>
+        <span class="tag t-pieza" style="font-size:.7rem; margin-left:.5rem;">{{ piece_type }} — {{ piece_nombre }}</span>
+      </div>
+      <div style="display:flex; gap:.4rem;">
+        <span style="font-size:.7rem; background:#1c2e1c; color:#56d364; border:1px solid #2ea043; border-radius:6px; padding:.15rem .45rem;">{{ n_existe }} exist.</span>
+        <span style="font-size:.7rem; background:#2d2416; color:#e3b341; border:1px solid #9e6a03; border-radius:6px; padding:.15rem .45rem;">{{ n_disponible }} disp.</span>
+      </div>
+    </div>
+    {{ render_panel_colores(matrix, compact=true, zfer_id=material) }}
+  </div>
+
+  <!-- Panel simétrico -->
+  <div id="sim-panel-wrapper" style="background:#0d1117; border:1px solid #2d2150; border-radius:14px; padding:1rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.8rem; padding-bottom:.6rem; border-bottom:1px solid #2d2150;">
+      <div>
+        <span style="font-size:1.1rem; font-weight:900; color:#bc8cff;">{{ sim_material }}</span>
+        <span class="tag t-pieza" style="font-size:.7rem; margin-left:.5rem;">{{ sim.piece_type }} — {{ sim.piece_nombre }}</span>
+        <a href="/combinaciones/{{ sim_material }}" style="font-size:.68rem; color:#8b949e; margin-left:.5rem; text-decoration:none;">
+          <i class="bi bi-box-arrow-up-right"></i> ver solo este
+        </a>
+      </div>
+      <div style="display:flex; gap:.4rem;">
+        <span style="font-size:.7rem; background:#1c2e1c; color:#56d364; border:1px solid #2ea043; border-radius:6px; padding:.15rem .45rem;">{{ sim.n_existe }} exist.</span>
+        <span style="font-size:.7rem; background:#2d2416; color:#e3b341; border:1px solid #9e6a03; border-radius:6px; padding:.15rem .45rem;">{{ sim.n_disponible }} disp.</span>
+      </div>
+    </div>
+    {{ render_panel_colores(sim.matrix, compact=true, zfer_id=sim_material) }}
+  </div>
+
+</div>
+{% else %}
+{# ── Modo normal: 4 columnas ── #}
+<div id="colores-grid" style="margin-bottom:1rem;">
+  {{ render_panel_colores(matrix, compact=false, zfer_id=material) }}
+</div>
+{% endif %}
+
+<!-- ── Barra de acción cola (visible en modo normal y simetría) ───────────── -->
+<!-- ── Barra de acción cola ── sticky para que siempre sea visible ────────── -->
+<div id="cola-sim-bar" style="display:none; position:sticky; top:62px; z-index:50;
+     background:linear-gradient(135deg,#1a102e 0%,#0d1117 100%);
+     border:2px solid #7c3aed; border-radius:14px;
+     padding:.85rem 1.4rem; margin-bottom:1.5rem;
+     align-items:center; gap:1.2rem; flex-wrap:wrap;
+     box-shadow:0 4px 24px rgba(124,58,237,.35);">
+  <div style="display:flex; align-items:center; gap:.6rem; flex:1; min-width:200px;">
+    <i class="bi bi-bag-check-fill" style="color:#bc8cff; font-size:1.3rem;"></i>
+    <div>
+      <div style="font-size:.78rem; color:#8b949e; text-transform:uppercase; letter-spacing:.8px;">Seleccionados para homologar</div>
+      <div style="font-size:1rem; font-weight:900; color:#e6edf3; line-height:1.1;">
+        <span id="cola-sim-count" style="color:#e3b341; font-size:1.3rem;">0</span>
+        <span id="cola-sim-label" style="font-size:.88rem; color:#e6edf3; margin-left:.3rem;">ítem(s)</span>
+      </div>
+    </div>
+  </div>
+  <button onclick="_colaAgregarColores()" id="btn-enviar-cola-main"
+          style="background:linear-gradient(135deg,#7c3aed,#9333ea); color:#fff; border:none;
+                 border-radius:10px; padding:.65rem 1.8rem; font-size:.95rem; font-weight:800;
+                 cursor:pointer; display:flex; align-items:center; gap:.5rem;
+                 box-shadow:0 2px 12px rgba(124,58,237,.5); transition:opacity .15s;"
+          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+    <i class="bi bi-clock-history" style="font-size:1rem;"></i>
+    Enviar a Cola SAP
+  </button>
+  <span id="cola-sim-msg" style="font-size:.8rem; color:#bc8cff; flex:1; min-width:150px;"></span>
 </div>
 
 <!-- ── Tabla detalle ZFERs existentes ─────────────────────────────────────── -->
@@ -665,13 +724,18 @@
         <div style="display:flex; align-items:center; gap:.5rem; font-size:.75rem;">
           <label style="display:flex; align-items:center; gap:.35rem; cursor:pointer; color:#8b949e; user-select:none;">
             <input type="checkbox" id="sim-check" style="accent-color:#bc8cff; cursor:pointer;"
-                   onchange="_simetriaToggle()">
+                   onchange="_simetriaToggle()"
+                   {% if sim_material %}checked{% endif %}>
             <i class="bi bi-symmetry-horizontal" style="color:#bc8cff;"></i>
             <span>Simetría</span>
           </label>
-          <span id="sim-chip" style="display:none; background:#1a102e; border:1px solid #6e40c9;
-                border-radius:6px; padding:.15rem .5rem; color:#bc8cff; font-size:.72rem;
-                align-items:center; gap:.3rem;"></span>
+          {% if sim_material %}
+          <a href="/zfer/{{ sim_material }}" style="font-size:.72rem; background:#1a102e; border:1px solid #6e40c9;
+             border-radius:6px; padding:.15rem .5rem; color:#bc8cff; text-decoration:none;
+             display:inline-flex; align-items:center; gap:.3rem;">
+            <i class="bi bi-symmetry-horizontal"></i>{{ sim_material }}
+          </a>
+          {% endif %}
           <span id="sim-spinner" style="display:none;" class="paso-spinner" style="width:11px;height:11px;border-width:2px;"></span>
         </div>
       </div>
@@ -764,6 +828,13 @@ const PIECE_TYPE   = "{{ piece_type }}";
 const FRANJA_BASE  = "{{ shade_band }}";
 const PN_BASE      = "{{ partnumber }}";
 const NIVEL_BASE   = "{{ nivel }}";
+// Panel simétrico (vacío cuando no hay simetría activa)
+const SIM_MATERIAL   = "{{ sim_material }}";
+const SIM_FORMULA    = "{{ sim.formula_code if sim else '' }}";
+const SIM_PIECE_TYPE = "{{ sim.piece_type   if sim else '' }}";
+const SIM_FRANJA     = "{{ sim.shade_band   if sim else '' }}";
+const SIM_PN_BASE    = "{{ sim.partnumber   if sim else '' }}";
+const SIM_NIVEL      = "{{ sim.nivel        if sim else '' }}";
 
 // ── Nombres amigables de los 5 pasos ─────────────────────────────────────────
 const PASO_NOMBRES = [
@@ -1360,8 +1431,15 @@ function _mostrarReporte(data, batchId) {
 
 // ── Combinaciones por Fórmula ──────────────────────────────────────────────
 
-function _renderFormulaCards(formulas) {
-  const cont = document.getElementById("formulas-resultado");
+// opts = { p:"", zfer, franja, pn_base, nivel, piece_type, containerEl }
+function _renderFormulaCards(formulas, opts = {}) {
+  const p      = opts.p         ?? "";
+  const _ZFER  = opts.zfer      ?? ZFER_BASE;
+  const _FRJ   = opts.franja    ?? FRANJA_BASE;
+  const _PN    = opts.pn_base   ?? PN_BASE;
+  const _NIV   = opts.nivel     ?? NIVEL_BASE;
+  const _PTYPE = opts.piece_type?? PIECE_TYPE;
+  const cont   = opts.containerEl ?? document.getElementById("formulas-resultado");
   if (!cont) return;
 
   if (!formulas.length) {
@@ -1375,22 +1453,24 @@ function _renderFormulaCards(formulas) {
   cont.innerHTML = formulas.map((fa, i) => {
     const idx = i + 1;
     const filas = fa.colores.map(c => `
-      <tr id="fc-row-${idx}-${c.color}"
+      <tr id="${p}fc-row-${idx}-${c.color}"
           style="border-bottom:1px solid #161b22;"
           onmouseover="this.style.background='rgba(188,140,255,.06)'"
           onmouseout="this.style.background=''">
         <td style="padding:.5rem .8rem; text-align:center;">
-          <input type="checkbox" class="chk-fc chk-fc-${idx}"
+          <input type="checkbox" class="${p}chk-fc ${p}chk-fc-${idx}"
                  data-fidx="${idx}" data-formula="${fa.formula}"
                  data-color="${c.color}" data-color-nombre="${c.color_nombre}"
                  data-zpla="${c.zpla}"
+                 data-zfer="${_ZFER}" data-franja="${_FRJ}"
+                 data-pn-base="${_PN}" data-nivel="${_NIV}"
                  style="width:15px; height:15px; accent-color:#bc8cff; cursor:pointer;">
         </td>
         <td style="padding:.5rem .8rem;"><span class="tag t-color">${c.color}</span></td>
         <td style="padding:.5rem .8rem; font-weight:600;">${c.color_nombre}</td>
         <td style="padding:.5rem .8rem; color:var(--muted); font-size:.82rem; font-weight:600;">${c.zpla}</td>
         <td style="padding:.5rem .8rem; color:#484f58; font-size:.78rem;">${c.differentials || '—'}</td>
-        <td id="fc-estado-${idx}-${c.color}" style="padding:.5rem .8rem;">
+        <td id="${p}fc-estado-${idx}-${c.color}" style="padding:.5rem .8rem;">
           <span style="color:#484f58; font-size:.72rem;">
             <i class="bi bi-arrow-repeat paso-spinner"></i>
           </span>
@@ -1400,24 +1480,24 @@ function _renderFormulaCards(formulas) {
     return `
     <div class="card mb-3" style="border-color:#2d2150;">
       <div class="card-header" style="cursor:pointer; user-select:none; display:flex; align-items:center; gap:.7rem;"
-           onclick="_toggleFC(${idx})">
+           onclick="_toggleFC(${idx},'${p}')">
         <i class="bi bi-flask" style="color:#bc8cff;"></i>
         <span style="font-weight:800; font-size:1rem; color:#bc8cff;">${fa.formula}</span>
         <span class="tag" style="background:#1e1030; border:1px solid #6e40c9; color:#bc8cff; font-size:.72rem;">
           ${fa.colores.length} color(es)
         </span>
-        <span id="fc-resumen-${idx}" style="font-size:.72rem; color:#484f58; margin-left:.3rem;"></span>
-        <i class="bi bi-chevron-down ms-auto" id="fc-chv-${idx}" style="color:var(--muted); transition:transform .2s;"></i>
+        <span id="${p}fc-resumen-${idx}" style="font-size:.72rem; color:#484f58; margin-left:.3rem;"></span>
+        <i class="bi bi-chevron-down ms-auto" id="${p}fc-chv-${idx}" style="color:var(--muted); transition:transform .2s;"></i>
       </div>
-      <div id="fc-body-${idx}" style="display:none;">
+      <div id="${p}fc-body-${idx}" style="display:none;">
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse; font-size:.85rem;">
             <thead>
               <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
                 <th style="padding:.5rem .8rem; width:40px;">
-                  <input type="checkbox" id="chk-fc-all-${idx}" title="Seleccionar todos"
+                  <input type="checkbox" id="${p}chk-fc-all-${idx}" title="Seleccionar todos"
                          style="width:15px; height:15px; accent-color:#bc8cff; cursor:pointer;"
-                         onchange="_fcSelAll(${idx}, this.checked)">
+                         onchange="_fcSelAll(${idx}, this.checked, '${p}')">
                 </th>
                 <th style="padding:.5rem .8rem;">Color</th>
                 <th style="padding:.5rem .8rem;">Nombre</th>
@@ -1431,38 +1511,35 @@ function _renderFormulaCards(formulas) {
         </div>
         <div style="padding:.8rem 1rem; border-top:1px solid #21262d; display:flex; align-items:center; gap:.8rem; flex-wrap:wrap;">
           <span style="font-size:.8rem; color:var(--muted);">
-            <span id="cnt-fc-${idx}">0</span> seleccionado(s)
+            <span id="${p}cnt-fc-${idx}">0</span> seleccionado(s)
           </span>
-          <button id="btn-fc-${idx}" data-idx="${idx}" data-formula="${fa.formula}"
-                  onclick="_fcEjecutar(${idx}, '${fa.formula}')"
-                  style="background:#6e40c9; color:#fff; border:none; border-radius:8px;
+          <button id="${p}btn-fc-${idx}"
+                  onclick="_fcEnviarCola(${idx}, '${fa.formula}', '${p}')"
+                  style="background:#7c3aed; color:#fff; border:none; border-radius:8px;
                          padding:.45rem 1.2rem; font-size:.82rem; font-weight:700; cursor:pointer;
                          display:flex; align-items:center; gap:.4rem;" disabled>
-            <i class="bi bi-arrow-left-right"></i>
-            Homologar ${fa.formula}
-            <span id="badge-fc-${idx}" style="background:#bc8cff; color:#1a0050;
+            <i class="bi bi-clock-history"></i>
+            Enviar a Cola — ${fa.formula}
+            <span id="${p}badge-fc-${idx}" style="background:#bc8cff; color:#1a0050;
                   border-radius:20px; padding:.1rem .5rem; font-size:.72rem; font-weight:900; display:none;"></span>
           </button>
-          <span id="status-fc-${idx}" style="font-size:.78rem; color:#bc8cff;"></span>
+          <span id="${p}status-fc-${idx}" style="font-size:.78rem; color:#bc8cff;"></span>
         </div>
       </div>
     </div>`;
   }).join("");
 
-  // Registrar eventos de checkboxes dinámicos
-  document.querySelectorAll(".chk-fc").forEach(chk => {
+  document.querySelectorAll(`.${p}chk-fc`).forEach(chk => {
     chk.addEventListener("change", () => {
-      _fcActualizarCnt(parseInt(chk.dataset.fidx));
+      _fcActualizarCnt(parseInt(chk.dataset.fidx), p);
       _actualizarContadorCola();
     });
   });
 
-  // Verificar duplicados para todas las fórmulas/colores en segundo plano
-  _verificarDuplicadosFormulas(formulas);
+  _verificarDuplicadosFormulas(formulas, p, _ZFER, _PTYPE);
 }
 
-async function _verificarDuplicadosFormulas(formulas) {
-  // Construir lista de todos los items a verificar
+async function _verificarDuplicadosFormulas(formulas, p = "", zfer_base = ZFER_BASE, piece_type_base = PIECE_TYPE) {
   const items = [];
   formulas.forEach((fa, i) => {
     fa.colores.forEach(c => {
@@ -1480,7 +1557,7 @@ async function _verificarDuplicadosFormulas(formulas) {
   try {
     const r = await fetch("/api/sap/verificar_duplicados", {
       method: "POST", headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ zfer_base: ZFER_BASE, items }),
+      body: JSON.stringify({ zfer_base, items }),
     });
     const data = await r.json();
     if (!data.ok) return;
@@ -1491,9 +1568,9 @@ async function _verificarDuplicadosFormulas(formulas) {
     (data.results || []).forEach(res => {
       const fidx  = res._fidx;
       const color = res.color;
-      const el    = document.getElementById(`fc-estado-${fidx}-${color}`);
-      const chk   = document.querySelector(`.chk-fc[data-fidx="${fidx}"][data-color="${color}"]`);
-      const row   = document.getElementById(`fc-row-${fidx}-${color}`);
+      const el    = document.getElementById(`${p}fc-estado-${fidx}-${color}`);
+      const chk   = document.querySelector(`.${p}chk-fc[data-fidx="${fidx}"][data-color="${color}"]`);
+      const row   = document.getElementById(`${p}fc-row-${fidx}-${color}`);
 
       if (!contadores[fidx]) contadores[fidx] = {existe: 0, disponible: 0};
 
@@ -1525,7 +1602,8 @@ async function _verificarDuplicadosFormulas(formulas) {
     });
 
     // Limpiar spinners que quedaron sin respuesta → marcar como Disponible
-    document.querySelectorAll("[id^='fc-estado-']").forEach(el => {
+    const prefix_selector = p ? `[id^='${p}fc-estado-']` : `[id^='fc-estado-']`;
+    document.querySelectorAll(prefix_selector).forEach(el => {
       if (el.querySelector(".paso-spinner")) {
         el.innerHTML = `
           <span style="display:inline-flex; align-items:center; gap:.3rem;
@@ -1533,8 +1611,7 @@ async function _verificarDuplicadosFormulas(formulas) {
                 padding:.15rem .5rem; font-size:.72rem; font-weight:700; color:#56d364; white-space:nowrap;">
             <i class="bi bi-plus-circle"></i>Disponible
           </span>`;
-        // Sumar al contador del fidx correspondiente
-        const parts = el.id.split("-");  // fc-estado-{fidx}-...
+        const parts = el.id.replace(p, "").split("-"); // {p}fc-estado-{fidx}-...
         const fidx = parseInt(parts[2]);
         if (!isNaN(fidx)) {
           if (!contadores[fidx]) contadores[fidx] = {existe: 0, disponible: 0};
@@ -1543,19 +1620,17 @@ async function _verificarDuplicadosFormulas(formulas) {
       }
     });
 
-    // Actualizar resumen en el header de cada tarjeta
     Object.entries(contadores).forEach(([fidx, cnt]) => {
-      const resEl = document.getElementById(`fc-resumen-${fidx}`);
+      const resEl = document.getElementById(`${p}fc-resumen-${fidx}`);
       if (!resEl) return;
       const parts = [];
       if (cnt.disponible > 0) parts.push(`<span style="color:#56d364;">${cnt.disponible} disponible${cnt.disponible!==1?"s":""}</span>`);
       if (cnt.existe    > 0) parts.push(`<span style="color:#e3b341;">${cnt.existe} ya existe${cnt.existe!==1?"n":""}</span>`);
       resEl.innerHTML = parts.join(" · ");
-      _fcActualizarCnt(parseInt(fidx));
+      _fcActualizarCnt(parseInt(fidx), p);
     });
   } catch(e) {
-    // Si falla el fetch, limpiar todos los spinners a Disponible para no bloquear la UI
-    document.querySelectorAll("[id^='fc-estado-']").forEach(el => {
+    document.querySelectorAll(p ? `[id^='${p}fc-estado-']` : `[id^='fc-estado-']`).forEach(el => {
       if (el.querySelector(".paso-spinner"))
         el.innerHTML = `<span style="color:#484f58; font-size:.72rem;">—</span>`;
     });
@@ -1563,73 +1638,126 @@ async function _verificarDuplicadosFormulas(formulas) {
   }
 }
 
-function _toggleFC(idx) {
-  const body = document.getElementById(`fc-body-${idx}`);
-  const chv  = document.getElementById(`fc-chv-${idx}`);
+function _toggleFC(idx, p = "") {
+  const body = document.getElementById(`${p}fc-body-${idx}`);
+  const chv  = document.getElementById(`${p}fc-chv-${idx}`);
   if (!body) return;
   const open = body.style.display === "none" || body.style.display === "";
   body.style.display = open ? "block" : "none";
   if (chv) chv.style.transform = open ? "rotate(180deg)" : "";
 }
 
-function _fcSelAll(idx, checked) {
-  document.querySelectorAll(`.chk-fc-${idx}`).forEach(c => { c.checked = checked; });
-  _fcActualizarCnt(idx);
+function _fcSelAll(idx, checked, p = "") {
+  document.querySelectorAll(`.${p}chk-fc-${idx}`).forEach(c => { c.checked = checked; });
+  _fcActualizarCnt(idx, p);
   _actualizarContadorCola();
 }
 
-function _fcActualizarCnt(idx) {
-  const sel   = document.querySelectorAll(`.chk-fc-${idx}:checked`).length;
-  const cnt   = document.getElementById(`cnt-fc-${idx}`);
-  const btn   = document.getElementById(`btn-fc-${idx}`);
-  const badge = document.getElementById(`badge-fc-${idx}`);
+function _fcActualizarCnt(idx, p = "") {
+  const sel   = document.querySelectorAll(`.${p}chk-fc-${idx}:checked`).length;
+  const cnt   = document.getElementById(`${p}cnt-fc-${idx}`);
+  const btn   = document.getElementById(`${p}btn-fc-${idx}`);
+  const badge = document.getElementById(`${p}badge-fc-${idx}`);
   if (cnt)   cnt.textContent    = sel;
   if (btn)   btn.disabled       = sel === 0;
   if (badge) { badge.textContent = sel; badge.style.display = sel > 0 ? "inline" : "none"; }
 }
 
-async function _fcEjecutar(idx, formula) {
-  const checks = document.querySelectorAll(`.chk-fc-${idx}:checked`);
+async function _fcEnviarCola(idx, formula, p = "") {
+  const checks = document.querySelectorAll(`.${p}chk-fc-${idx}:checked`);
   if (!checks.length) return;
-  const statusEl = document.getElementById(`status-fc-${idx}`);
-  const btn      = document.getElementById(`btn-fc-${idx}`);
-  btn.disabled   = true;
-  if (statusEl) statusEl.textContent = "Preparando…";
+  const statusEl = document.getElementById(`${p}status-fc-${idx}`);
+  const btn      = document.getElementById(`${p}btn-fc-${idx}`);
 
-  const cola = Array.from(checks).map(c => ({
+  const firstChk = checks[0];
+  const _zfer_fc  = firstChk.dataset.zfer   || ZFER_BASE;
+  const _frj_fc   = firstChk.dataset.franja || FRANJA_BASE;
+  const _pn_fc    = firstChk.dataset.pnBase || PN_BASE;
+  const _niv_fc   = firstChk.dataset.nivel  || NIVEL_BASE;
+
+  const items = Array.from(checks).map(c => ({
     tipo:          "formula",
-    zfer:          ZFER_BASE,
+    zfer:          _zfer_fc,
     color:         c.dataset.color,
     color_nombre:  c.dataset.colorNombre,
     zpla:          c.dataset.zpla,
-    franja:        FRANJA_BASE,
-    pn_base:       PN_BASE,
-    nivel:         NIVEL_BASE,
-    tipo_pieza:    PIECE_TYPE,
+    franja:        _frj_fc,
+    pn_base:       _pn_fc,
+    nivel:         _niv_fc,
+    tipo_pieza:    p ? SIM_PIECE_TYPE : PIECE_TYPE,
     formula_nueva: formula,
   }));
 
-  if (statusEl) statusEl.textContent = `Enviando ${cola.length} combinación(es) a SAP…`;
+  if (statusEl) statusEl.textContent = "Consultando cola…";
+  btn.disabled = true;
 
   try {
-    const r = await fetch("/api/sap/ejecutar_cola", {
-      method:  "POST",
-      headers: {"Content-Type": "application/json"},
-      body:    JSON.stringify({ cola }),
-    });
-    const d = await r.json();
-    if (!d.ok) {
-      if (statusEl) statusEl.textContent = `Error: ${d.error}`;
+    const ds = await fetch("/api/cola/estado").then(r => r.json());
+    let textoBloque = ds.bloque_num
+      ? `Bloque ${ds.bloque_num} · ${ds.hora_prog}${ds.pendientes > 0 ? ` · ${ds.pendientes} ya en cola` : ''}${ds.ya_paso ? ' ⚠ hora ya pasó' : ''}`
+      : "Se creará un nuevo bloque (mañana 7am)";
+
+    if (!confirm(`¿Enviar ${items.length} ítem(s) a la Cola SAP?\nFórmula: ${formula}\n${textoBloque}\n\nSe ejecutará en la hora programada del bloque.`)) {
+      if (statusEl) statusEl.textContent = "";
       btn.disabled = false;
       return;
     }
-    if (statusEl) statusEl.textContent = `<i class="bi bi-arrow-repeat paso-spinner me-1"></i>Procesando ${d.total} item(s)…`;
-    _pollBatch(d.batch_id, [], Array.from(checks));
-    btn.disabled = false;
-  } catch (err) {
-    if (statusEl) statusEl.textContent = `Error de red: ${err}`;
-    btn.disabled = false;
+
+    const d = await fetch("/api/cola/agregar", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ items }),
+    }).then(r => r.json());
+
+    if (d.ok) {
+      if (statusEl) statusEl.textContent = `✓ ${items.length} ítem(s) → Bloque ${d.bloque_num} · ${d.hora_prog}`;
+      _colaActualizarBadge();
+      // Desmarcar checkboxes
+      checks.forEach(c => { c.checked = false; });
+      _fcActualizarCnt(idx, p);
+    } else {
+      if (statusEl) statusEl.textContent = `Error: ${d.error}`;
+    }
+  } catch(e) {
+    if (statusEl) statusEl.textContent = `Error de red: ${e.message}`;
   }
+  btn.disabled = false;
+}
+
+// Mini-panel de colores disponibles para enviar a cola (usado en columna simétrica)
+function _renderColoresDisponiblesInline(dCol, zferSim) {
+  if (!dCol || !dCol.ok || !dCol.colores || !dCol.colores.length) return "";
+  const franja    = dCol.franja    || "00";
+  const pn        = dCol.partnumber || "";
+  const nivel     = dCol.nivel     || "";
+  const pieceType = dCol.piece_type || SIM_PIECE_TYPE;
+
+  const chips = dCol.colores.map(c => `
+    <label style="display:inline-flex; align-items:center; gap:.35rem; cursor:pointer;
+                  background:#1e1a0d; border:1px solid #9e6a03; border-radius:8px;
+                  padding:.3rem .65rem; font-size:.78rem; color:#e3b341; margin:.2rem;"
+           title="ZPLA: ${c.zpla}">
+      <input type="checkbox" class="col-queue-check"
+             data-zfer="${zferSim}"
+             data-color="${c.color_codigo}"
+             data-color-nombre="${c.color_nombre}"
+             data-zpla="${c.zpla}"
+             style="accent-color:#e3b341; width:13px; height:13px; cursor:pointer;"
+             onchange="_colaContarSeleccionados()">
+      <span style="background:#2d2416; color:#e3b341; border:1px solid #9e6a03;
+                   border-radius:20px; font-size:.7rem; font-weight:700;
+                   padding:.1rem .4rem;">${c.color_codigo}</span>
+      ${c.color_nombre}
+    </label>`).join("");
+
+  return `
+    <div style="background:#0d1117; border:1px solid #9e6a03; border-radius:10px;
+                padding:.65rem .9rem; margin-bottom:.75rem;">
+      <div style="font-size:.68rem; text-transform:uppercase; letter-spacing:1px;
+                  color:#9e6a03; font-weight:700; margin-bottom:.45rem;">
+        <i class="bi bi-plus-circle-fill me-1"></i>Colores disponibles — Enviar a Cola
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:.1rem;">${chips}</div>
+    </div>`;
 }
 
 // Buscar fórmulas con filtros dinámicos
@@ -1644,23 +1772,166 @@ async function buscarFormulasAlt() {
   cont.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#484f58;">
     <i class="bi bi-arrow-repeat" style="font-size:1.5rem; display:block; margin-bottom:.4rem;"></i>Consultando…</div>`;
 
+  const mkParams = (piece_type, formula_base) => new URLSearchParams({piece_type, formula_base, nivel, subproducto: sub}).toString();
+
   try {
-    const params = new URLSearchParams({
-      piece_type:   PIECE_TYPE,
-      formula_base: FORMULA_CODE,
-      nivel:        nivel,
-      subproducto:  sub,
-    });
-    const r    = await fetch(`/api/formulas_alt?${params}`);
-    const data = await r.json();
-    if (data.error) throw new Error(data.error);
-    _renderFormulaCards(data);
+    if (SIM_MATERIAL) {
+      // ── Modo simetría: tres fetches en paralelo ──────────────────────────
+      const [r1, r2, rCol] = await Promise.all([
+        fetch(`/api/formulas_alt?${mkParams(PIECE_TYPE, FORMULA_CODE)}`),
+        fetch(`/api/formulas_alt?${mkParams(SIM_PIECE_TYPE, SIM_FORMULA)}`),
+        fetch(`/api/colores_disponibles/${SIM_MATERIAL}`),
+      ]);
+      const [d1, d2, dCol] = await Promise.all([r1.json(), r2.json(), rCol.json()]);
+
+      // Render mini-panel de colores disponibles del simétrico
+      const coloresSimHTML = _renderColoresDisponiblesInline(dCol, SIM_MATERIAL);
+
+      cont.innerHTML = `
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; align-items:start;">
+          <div>
+            <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.7rem;
+                        padding:.4rem .7rem; background:#0d1117; border:1px solid #30363d;
+                        border-radius:10px; border-left:3px solid var(--accent2);">
+              <i class="bi bi-arrow-left-right" style="color:var(--accent2);"></i>
+              <span style="font-weight:800; color:var(--accent2); font-size:.85rem;">${ZFER_BASE}</span>
+              <span style="color:var(--muted); font-size:.75rem;">· ${FORMULA_CODE} · Pieza ${PIECE_TYPE}</span>
+            </div>
+            <div id="fc-main-cont"></div>
+          </div>
+          <div>
+            <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.7rem;
+                        padding:.4rem .7rem; background:#0d1117; border:1px solid #2d2150;
+                        border-radius:10px; border-left:3px solid #bc8cff;">
+              <i class="bi bi-symmetry-horizontal" style="color:#bc8cff;"></i>
+              <span style="font-weight:800; color:#bc8cff; font-size:.85rem;">${SIM_MATERIAL}</span>
+              <span style="color:var(--muted); font-size:.75rem;">· ${SIM_FORMULA} · Pieza ${SIM_PIECE_TYPE}</span>
+            </div>
+            ${coloresSimHTML}
+            <div id="fc-sim-cont"></div>
+          </div>
+        </div>`;
+
+      if (d1.error) document.getElementById("fc-main-cont").innerHTML = `<div style="color:#ffa198; padding:1rem;">Error: ${d1.error}</div>`;
+      else _renderFormulaCards(d1, { p: "", containerEl: document.getElementById("fc-main-cont") });
+
+      if (d2.error) document.getElementById("fc-sim-cont").innerHTML = `<div style="color:#ffa198; padding:1rem;">Error: ${d2.error}</div>`;
+      else _renderFormulaCards(d2, { p: "s", zfer: SIM_MATERIAL, franja: SIM_FRANJA, pn_base: SIM_PN_BASE, nivel: SIM_NIVEL, piece_type: SIM_PIECE_TYPE, containerEl: document.getElementById("fc-sim-cont") });
+
+    } else {
+      // ── Modo normal ─────────────────────────────────────────────────────
+      const r    = await fetch(`/api/formulas_alt?${mkParams(PIECE_TYPE, FORMULA_CODE)}`);
+      const data = await r.json();
+      if (data.error) throw new Error(data.error);
+      _renderFormulaCards(data);
+    }
   } catch(e) {
     if (cont) cont.innerHTML = `<div style="color:#ffa198; padding:1rem;">Error: ${e.message}</div>`;
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-search"></i> Buscar fórmulas'; }
   }
 }
+
+// ── Cola desde panel de colores (simetría o normal) ───────────────────────
+function _colaContarSeleccionados() {
+  const n = document.querySelectorAll(".col-queue-check:checked").length;
+  const bar = document.getElementById("cola-sim-bar");
+  const cnt = document.getElementById("cola-sim-count");
+  const lbl = document.getElementById("cola-sim-label");
+  if (bar) { bar.style.display = n > 0 ? "flex" : "none"; }
+  if (cnt) cnt.textContent = n;
+  if (lbl) {
+    const hasSim = !!SIM_MATERIAL;
+    lbl.textContent = hasSim ? " color(es) seleccionados (base + simétrico)" : " color(es) seleccionados";
+  }
+}
+
+function _colaItemsSeleccionados() {
+  return Array.from(document.querySelectorAll(".col-queue-check:checked")).map(cb => ({
+    tipo:         "color",
+    zfer:         cb.dataset.zfer,
+    color:        cb.dataset.color,
+    color_nombre: cb.dataset.colorNombre,
+    zpla:         cb.dataset.zpla,
+    franja:       cb.dataset.zfer === ZFER_BASE ? FRANJA_BASE : SIM_FRANJA,
+    pn_base:      cb.dataset.zfer === ZFER_BASE ? PN_BASE      : SIM_PN_BASE,
+    nivel:        cb.dataset.zfer === ZFER_BASE ? NIVEL_BASE   : SIM_NIVEL,
+    tipo_pieza:   cb.dataset.zfer === ZFER_BASE ? PIECE_TYPE   : SIM_PIECE_TYPE,
+  }));
+}
+
+async function _colaEjecutarDirecto() {
+  const cola = _colaItemsSeleccionados();
+  if (!cola.length) return;
+  const msg = document.getElementById("cola-sim-msg");
+  if (msg) { msg.textContent = `Enviando ${cola.length} ítem(s) a SAP…`; }
+  try {
+    const r = await fetch("/api/sap/ejecutar_cola", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ cola }),
+    });
+    const d = await r.json();
+    if (!d.ok) { if (msg) msg.textContent = `Error: ${d.error}`; return; }
+    if (msg) msg.textContent = `✓ Enviado. Procesando ${d.total} ítem(s)…`;
+    _pollBatch(d.batch_id, [], []);
+    document.querySelectorAll(".col-queue-check:checked").forEach(cb => { cb.checked = false; });
+    _colaContarSeleccionados();
+  } catch(e) {
+    if (msg) msg.textContent = `Error de red: ${e.message}`;
+  }
+}
+
+async function _colaAgregarColores() {
+  const items = _colaItemsSeleccionados();
+  if (!items.length) return;
+  const msg = document.getElementById("cola-sim-msg");
+  if (msg) msg.textContent = "Consultando cola…";
+  try {
+    const ds = await fetch("/api/cola/estado").then(r => r.json());
+    let textoBloque;
+    if (ds.bloque_num) {
+      const pendLabel = ds.pendientes > 0 ? ` · ${ds.pendientes} ítem(s) ya en cola` : '';
+      const yaLabel   = ds.ya_paso ? ' ⚠ hora ya pasó' : '';
+      textoBloque = `Bloque ${ds.bloque_num} · ${ds.hora_prog}${pendLabel}${yaLabel}`;
+    } else {
+      textoBloque = "Se creará un nuevo bloque (mañana 7am)";
+    }
+    if (!confirm(`¿Enviar ${items.length} ítem(s) a la Cola SAP?\n${textoBloque}\n\nSe ejecutará en la hora programada del bloque.`)) {
+      if (msg) msg.textContent = ""; return;
+    }
+    const d = await fetch("/api/cola/agregar", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ items }),
+    }).then(r => r.json());
+    if (d.ok) {
+      if (msg) msg.textContent = `✓ ${items.length} ítem(s) → Bloque ${d.bloque_num} · ${d.hora_prog}`;
+      document.querySelectorAll(".col-queue-check:checked").forEach(cb => { cb.checked = false; });
+      _colaContarSeleccionados();
+      _colaActualizarBadge();
+    } else {
+      if (msg) msg.textContent = `Error: ${d.error}`;
+    }
+  } catch(e) {
+    if (msg) msg.textContent = `Error de red: ${e.message}`;
+  }
+}
+
+// Badge en navbar con total pendiente
+async function _colaActualizarBadge() {
+  try {
+    const r = await fetch("/api/cola/estado");
+    const d = await r.json();
+    let badge = document.getElementById("cola-navbar-badge");
+    if (!badge) return;
+    if (d.total_pendientes > 0) {
+      badge.textContent = d.total_pendientes;
+      badge.style.display = "inline-flex";
+    } else {
+      badge.style.display = "none";
+    }
+  } catch(e) {}
+}
+_colaActualizarBadge();
 
 document.getElementById("btn-buscar-formulas")?.addEventListener("click", buscarFormulasAlt);
 
@@ -1778,29 +2049,64 @@ buscarFormulasAlt();
   };
 
   window._simetriaToggle = async function() {
-    const chk = document.getElementById("sim-check");
+    const chk     = document.getElementById("sim-check");
+    const simPanel = document.getElementById("sim-panel-wrapper");
+    const grid     = document.getElementById("colores-grid");
+
     if (!chk.checked) {
-      _simActual.tiene_simetria = false;
-      _simActual.zfer_simetrico = "";
-      _simActual.pieza_contraria = "";
-      _simetriaRenderizar();
+      // Ocultar panel simétrico sin recargar la página
+      if (simPanel) simPanel.style.display = "none";
+      if (grid)     grid.style.gridTemplateColumns = "1fr";
+      // Desmarcar checkboxes del panel sim para que no queden en la cola
+      document.querySelectorAll(".col-queue-check").forEach(cb => {
+        if (cb.dataset.zfer !== _ZFER) { cb.checked = false; }
+      });
+      _colaContarSeleccionados();
+      // Actualizar URL sin recargar
+      const url = new URL(window.location.href);
+      url.searchParams.delete("simetrico");
+      history.replaceState({}, '', url.toString());
       return;
     }
-    // Marcó: buscar automáticamente
+
+    // Re-activar: si el panel ya existe en el DOM, solo mostrarlo
+    if (simPanel) {
+      simPanel.style.display = "";
+      if (grid) grid.style.gridTemplateColumns = "1fr 1fr";
+      const url = new URL(window.location.href);
+      url.searchParams.set("simetrico", SIM_MATERIAL || _simActual.zfer_simetrico);
+      history.replaceState({}, '', url.toString());
+      return;
+    }
+
+    // Necesita carga completa (primera vez activando simetría)
     const spinner = document.getElementById("sim-spinner");
     if (spinner) spinner.style.display = "inline-block";
-    try {
-      const r = await fetch(`/api/simetria/${_ZFER}`);
-      const d = await r.json();
-      if (d.encontrados && d.encontrados.length > 0) {
-        const z = d.encontrados[0];
-        _simActual = { tiene_simetria: true, zfer_simetrico: z.zfer, pieza_contraria: z.pieza_contraria || "" };
-      } else {
-        _simActual = { tiene_simetria: true, zfer_simetrico: "", pieza_contraria: "" };
-      }
-    } catch(e) { }
-    if (spinner) spinner.style.display = "none";
-    _simetriaRenderizar();
+    chk.disabled = true;
+
+    let zferSim = _simActual.zfer_simetrico;
+    if (!zferSim) {
+      try {
+        const d = await fetch(`/api/simetria/${_ZFER}`).then(r => r.json());
+        if (d.encontrados && d.encontrados.length > 0) {
+          zferSim = d.encontrados[0].zfer;
+          _simActual.zfer_simetrico = zferSim;
+        }
+      } catch(e) {}
+    }
+
+    if (zferSim) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("simetrico", zferSim);
+      window.location.href = url.toString();
+    } else {
+      if (spinner) spinner.style.display = "none";
+      chk.disabled = false;
+      chk.checked  = false;
+      // Mostrar aviso breve
+      const chip = document.getElementById("sim-chip");
+      if (chip) { chip.innerHTML = '<span style="color:#484f58;font-size:.78rem;">Sin simétrico encontrado</span>'; }
+    }
   };
 
   window._rutaEditar = function() {
