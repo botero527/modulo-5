@@ -554,7 +554,7 @@ class AutomatizadorSAP:
                 except Exception:
                     pass
             return "", ""
-
+        
         try:
             n_filas = grid.RowCount
             if not n_filas:
@@ -717,7 +717,7 @@ class AutomatizadorSAP:
                     pass
         except Exception:
             pass
-
+        
         # Fallback GuiTableControl clásico
         if not filas:
             try:

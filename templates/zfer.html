@@ -9,6 +9,12 @@
   <a href="/combinaciones/{{ material }}" style="display:inline-flex; align-items:center; background:var(--accent2); color:#fff; font-weight:700; border-radius:8px; padding:.4rem 1rem; font-size:.85rem; text-decoration:none;">
     <i class="bi bi-diagram-3-fill me-1"></i>Ver Combinaciones
   </a>
+  <span id="simetria-chip" style="display:inline-flex; font-size:.8rem; background:#1a102e;
+        border:1px solid #2d2150; border-radius:8px; padding:.3rem .75rem; color:#8b949e;
+        align-items:center; gap:.4rem;">
+    <span class="paso-spinner" style="width:10px;height:10px;border-width:2px;flex-shrink:0;"></span>
+    Simetría…
+  </span>
   <form method="GET" action="#" onsubmit="window.location='/zfer/'+document.getElementById('qs').value.trim();return false;"
         style="display:flex; max-width:300px;">
     <input id="qs" type="text" class="search-box" style="flex:1; font-size:.9rem; padding:.45rem .85rem; border-radius:8px 0 0 8px;"
@@ -305,4 +311,28 @@ new Chart(document.getElementById('chartMercados'), {
 });
 </script>
 {% endif %}
+
+<script>
+(function() {
+  const _ZFER = "{{ material }}";
+  fetch(`/api/simetria/${_ZFER}`)
+    .then(r => r.json())
+    .then(d => {
+      const chip = document.getElementById("simetria-chip");
+      if (!d.encontrados || d.encontrados.length === 0) {
+        chip.style.display = "none";
+        return;
+      }
+      const z = d.encontrados[0];
+      chip.style.background    = "#1a102e";
+      chip.style.borderColor   = "#6e40c9";
+      chip.style.color         = "#bc8cff";
+      chip.innerHTML =
+        `<i class="bi bi-symmetry-horizontal"></i>` +
+        `Simétrico:&nbsp;<a href="/zfer/${z.zfer}" style="color:#bc8cff; font-weight:700; text-decoration:underline;">${z.zfer}</a>` +
+        (z.desc ? `&nbsp;<span style="color:#484f58; font-size:.72rem;">${z.desc}</span>` : '');
+    })
+    .catch(() => { document.getElementById("simetria-chip").style.display = "none"; });
+})();
+</script>
 {% endblock %}

@@ -115,6 +115,22 @@ PIEZAS = {
     "110": "Techo Solar A — Paquete",     "125": "Techo Solar B — Paquete",
     "187": "Techo Solar C — Paquete",     "190": "Techo Solar Panorámico — Paquete",
 }
+# Pares simétricos izquierda ↔ derecha (solo aplica a piezas con ambos lados)
+_PARES_SIMETRIA = {
+    "001": "002", "002": "001",  # Lateral Delantero
+    "003": "004", "004": "003",  # Lateral Trasero
+    "005": "006", "006": "005",  # Ventilete Trasero
+    "007": "008", "008": "007",  # Cabina Trasera
+    "011": "012", "012": "011",  # Lateral Extendido
+    "013": "014", "014": "013",  # Posterior Izq/Der
+    "015": "016", "016": "015",  # Claraboya
+    "019": "020", "020": "019",  # Ventilete Delantero
+    "021": "022", "022": "021",  # Cabina Delantera
+    "023": "024", "024": "023",  # Cabina Superior
+    "026": "027", "027": "026",  # Parabrisas Der/Izq
+    "028": "029", "029": "028",  # Lateral Secundario
+}
+
 for _i in range(1, 20):
     PIEZAS[f"{40+_i:03d}"] = f"Pieza Especial {_i}"
 for _i in range(1, 11):
@@ -141,6 +157,9 @@ COLORES = {
     "22": "G2 Gray Medium Automotive",
     "23": "G2 Gray Dark Automotive",
 }
+
+# Únicos colores habilitados para combinaciones (los demás no se muestran ni procesan)
+_COLORES_ACTIVOS = {"00","01","05","06","10","13","18","19","20","21","22","23"}
 
 FRANJAS = {
     "00": "Sin Franja", "01": "Franja Azul",
@@ -1128,7 +1147,7 @@ def combinaciones(material: str):
     # Matriz completa: un item por color del catálogo (excepto NA)
     matrix = []
     for cod, nombre in COLORES.items():
-        if cod == "NA":
+        if cod not in _COLORES_ACTIVOS:
             continue
         zfer_v    = colores_con_zfer.get(cod)
         zpla_list = colores_con_zpla.get(cod, [])  
@@ -2003,26 +2022,30 @@ def _get_conn_local():
 @app.route("/api/ruta/<zfer>", methods=["GET"])
 @login_required
 def api_ruta_get(zfer: str):
-    """Devuelve la ruta de carpeta guardada para un ZFER."""
+    """Devuelve la URL y datos de simetría guardados para un ZFER."""
     zfer = zfer.strip()
     try:
         cn  = _get_conn_local()
         cur = cn.cursor()
         cur.execute(
-            "SELECT ruta, descripcion, modificado_el "
+            "SELECT ruta, descripcion, modificado_el, tiene_simetria, zfer_simetrico, pieza_contraria "
             "FROM dbo.M5_RutasZFER WHERE zfer = ?", zfer
         )
         row = cur.fetchone()
         cn.close()
         if row:
             return jsonify({
-                "ok": True,
-                "zfer": zfer,
-                "ruta": str(row[0] or ""),
-                "descripcion": str(row[1] or ""),
-                "modificado_el": str(row[2])[:19] if row[2] else "",
+                "ok": True, "zfer": zfer,
+                "ruta":           str(row[0] or ""),
+                "descripcion":    str(row[1] or ""),
+                "modificado_el":  str(row[2])[:19] if row[2] else "",
+                "tiene_simetria": bool(row[3]),
+                "zfer_simetrico": str(row[4] or ""),
+                "pieza_contraria":str(row[5] or ""),
             })
-        return jsonify({"ok": True, "zfer": zfer, "ruta": "", "descripcion": "", "modificado_el": ""})
+        return jsonify({"ok": True, "zfer": zfer, "ruta": "", "descripcion": "",
+                        "modificado_el": "", "tiene_simetria": False,
+                        "zfer_simetrico": "", "pieza_contraria": ""})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 200
 
@@ -2030,29 +2053,100 @@ def api_ruta_get(zfer: str):
 @app.route("/api/ruta/<zfer>", methods=["POST"])
 @login_required
 def api_ruta_set(zfer: str):
-    """Guarda (upsert) la ruta de carpeta para un ZFER."""
+    """Guarda (upsert) la URL y simetría para un ZFER."""
     zfer = zfer.strip()
     body = request.get_json(force=True) or {}
-    ruta = str(body.get("ruta", "")).strip()[:500]
-    desc = str(body.get("descripcion", "")).strip()[:200]
-    if not ruta:
-        return jsonify({"ok": False, "error": "ruta vacía"}), 400
+    ruta          = str(body.get("ruta", "")).strip()[:500]
+    desc          = str(body.get("descripcion", "")).strip()[:200]
+    tiene_sim     = 1 if body.get("tiene_simetria") else 0
+    zfer_sim      = str(body.get("zfer_simetrico", "")).strip()[:20]
+    pieza_contra  = str(body.get("pieza_contraria", "")).strip()[:10]
     try:
         cn  = _get_conn_local()
         cur = cn.cursor()
         cur.execute("""
             MERGE dbo.M5_RutasZFER AS t
-            USING (SELECT ? AS zfer, ? AS ruta, ? AS descripcion) AS s
+            USING (SELECT ? AS zfer, ? AS ruta, ? AS descripcion,
+                          ? AS tiene_simetria, ? AS zfer_simetrico, ? AS pieza_contraria) AS s
               ON t.zfer = s.zfer
             WHEN MATCHED THEN
-                UPDATE SET ruta = s.ruta, descripcion = s.descripcion,
-                           modificado_el = GETDATE()
+                UPDATE SET ruta=s.ruta, descripcion=s.descripcion,
+                           tiene_simetria=s.tiene_simetria, zfer_simetrico=s.zfer_simetrico,
+                           pieza_contraria=s.pieza_contraria, modificado_el=GETDATE()
             WHEN NOT MATCHED THEN
-                INSERT (zfer, ruta, descripcion)
-                VALUES (s.zfer, s.ruta, s.descripcion);
-        """, zfer, ruta, desc)
+                INSERT (zfer, ruta, descripcion, tiene_simetria, zfer_simetrico, pieza_contraria)
+                VALUES (s.zfer, s.ruta, s.descripcion, s.tiene_simetria, s.zfer_simetrico, s.pieza_contraria);
+        """, zfer, ruta, desc, tiene_sim, zfer_sim, pieza_contra)
         cn.close()
-        return jsonify({"ok": True, "zfer": zfer, "ruta": ruta})
+        return jsonify({"ok": True, "zfer": zfer})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/simetria/<zfer>")
+@login_required
+def api_simetria_buscar(zfer: str):
+    zfer = zfer.strip()
+    _ATNAMES = ('Z_VEHICLE_CODE','Z_AGP_VERSION','Z_FORMULA_CODE','Z_COLOR',
+                'Z_SHADE_BAND','Z_BEHAVIOR_DIFFERENTIALS','Z_AGP_LEVEL',
+                'Z_SUBPRODUCT','Z_COMMERCIAL_THICKNESS','Z_PIECE_TYPE')
+    try:
+        with get_conn() as cn:
+            cur = cn.cursor()
+
+            # 1. Leer atributos del ZFER actual
+            cur.execute(f"""
+                SELECT ATNAM, ATWRT FROM dbo.ODATA_ZFER_CLASS_001
+                WHERE MATERIAL=? AND CENTRO='CO01'
+                  AND ATNAM IN ({','.join('?' for _ in _ATNAMES)})
+            """, zfer, *_ATNAMES)
+            attrs = {r[0]: str(r[1] or "").strip() for r in cur.fetchall()}
+
+            piece_code      = attrs.get("Z_PIECE_TYPE","").split(",")[0].strip().zfill(3)
+            pieza_contraria = _PARES_SIMETRIA.get(piece_code)
+            if not pieza_contraria:
+                return jsonify({"ok": True, "aplica": False,
+                                "motivo": f"Pieza '{piece_code}' no tiene simétrico definido"})
+
+            # 2. INTERSECT: cada atributo filtra por índice — sin GROUP BY ni pivot
+            #    El resultado ya es solo los MATERIAL que cumplen TODO
+            intersects = []
+            params_i   = []
+            for atnam, val in attrs.items():
+                if atnam == "Z_PIECE_TYPE" or not val:
+                    continue
+                intersects.append(
+                    "SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
+                    f"WHERE CENTRO='CO01' AND ATNAM='{atnam}' AND ATWRT=?"
+                )
+                params_i.append(val)
+
+            # Último INTERSECT: pieza contraria (puede ser "001,002" → usamos LIKE)
+            intersects.append(
+                "SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
+                "WHERE CENTRO='CO01' AND ATNAM='Z_PIECE_TYPE' AND ATWRT LIKE ?"
+            )
+            params_i.append(f"%{pieza_contraria}%")
+
+            intersect_sql = "\nINTERSECT\n".join(intersects)
+
+            cur.execute(f"""
+                SELECT TOP 3 m.MATERIAL, h.TEXTO_BREVE_MATERIAL
+                FROM ({intersect_sql}) m
+                JOIN dbo.ODATA_ZFER_HEAD h ON h.MATERIAL = m.MATERIAL AND h.CENTRO = 'CO01'
+                WHERE m.MATERIAL <> ?
+                  AND UPPER(ISNULL(h.STATUS,'')) != 'ZZ'
+                ORDER BY TRY_CAST(m.MATERIAL AS BIGINT) DESC
+            """, *params_i, zfer)
+            filas = cur.fetchall()
+
+        resultados = [
+            {"zfer": str(r[0]), "desc": str(r[1] or ""), "pieza_contraria": pieza_contraria}
+            for r in filas
+        ]
+        return jsonify({"ok": True, "aplica": True,
+                        "pieza_contraria": pieza_contraria,
+                        "encontrados": resultados})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 200
 

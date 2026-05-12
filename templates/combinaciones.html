@@ -122,93 +122,108 @@
   </span>
 </div>
 
-<!-- ── Matriz de combinaciones ─────────────────────────────────────────────── -->
-<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:.75rem; margin-bottom:2rem;">
-  {% for c in matrix %}
+<!-- ── Matriz de combinaciones — 4 columnas temáticas ───────────────────────── -->
+{% set _GRUPOS = [
+  {'titulo': 'Incoloro',  'icono': 'bi-circle',              'color_titulo': '#8b949e', 'codigos': ['00','01']},
+  {'titulo': 'Claros',    'icono': 'bi-sun',                 'color_titulo': '#e3b341', 'codigos': ['05','06','19']},
+  {'titulo': 'Medio',     'icono': 'bi-circle-half',         'color_titulo': '#58a6ff', 'codigos': ['10','18','20','22']},
+  {'titulo': 'Dark',      'icono': 'bi-moon-stars-fill',     'color_titulo': '#bc8cff', 'codigos': ['13','21','23']},
+] %}
+{% set _matrix_map = {} %}
+{% for c in matrix %}{% if _matrix_map.update({c.color_codigo: c}) %}{% endif %}{% endfor %}
 
-  {% if c.estado == 'EXISTE' %}
-    {% set card_bg = '#0d2318' %}
-    {% set card_border = '#2ea043' %}
-    {% set badge_color = '#56d364' %}
-    {% set badge_bg = '#1c2e1c' %}
-    {% set badge_border = '#2ea043' %}
-    {% set badge_label = 'EXISTE' %}
-    {% set icon = 'bi-check-circle-fill' %}
-  {% elif c.estado == 'DISPONIBLE' %}
-    {% set card_bg = '#1e1a0d' %}
-    {% set card_border = '#9e6a03' %}
-    {% set badge_color = '#e3b341' %}
-    {% set badge_bg = '#2d2416' %}
-    {% set badge_border = '#9e6a03' %}
-    {% set badge_label = 'DISPONIBLE' %}
-    {% set icon = 'bi-plus-circle-fill' %}
-  {% else %}
-    {% set card_bg = '#0d1117' %}
-    {% set card_border = '#21262d' %}
-    {% set badge_color = '#484f58' %}
-    {% set badge_bg = '#161b22' %}
-    {% set badge_border = '#30363d' %}
-    {% set badge_label = 'SIN ZPLA' %}
-    {% set icon = 'bi-dash-circle' %}
-  {% endif %}
+<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:2rem; align-items:start;">
+{% for grp in _GRUPOS %}
+  <div style="display:flex; flex-direction:column; gap:.6rem;">
 
-  <div style="background:{{ card_bg }}; border:1px solid {{ card_border }}; border-radius:12px; padding:.9rem 1rem;
-              {% if c.es_base %}outline:2px solid var(--accent2); outline-offset:2px;{% endif %}
-              position:relative; transition:border-color .15s;">
-
-    {% if c.es_base %}
-    <div style="position:absolute; top:-9px; left:12px; background:var(--accent2); color:#fff;
-                font-size:.62rem; font-weight:800; padding:.1rem .5rem; border-radius:20px; letter-spacing:.5px;">
-      BASE
-    </div>
-    {% endif %}
-
-    <!-- Color code y badge -->
-    <div class="d-flex align-items-center justify-content-between mb-2">
-      <span style="background:{{ badge_bg }}; color:{{ badge_color }}; border:1px solid {{ badge_border }};
-                   padding:.2rem .55rem; border-radius:20px; font-size:.8rem; font-weight:700;">
-        {{ c.color_codigo }}
-      </span>
-      <span style="color:{{ badge_color }}; font-size:.72rem; font-weight:700; display:flex; align-items:center; gap:.3rem;">
-        <i class="bi {{ icon }}" style="font-size:.85rem;"></i>{{ badge_label }}
-      </span>
+    <!-- Encabezado de grupo -->
+    <div style="display:flex; align-items:center; gap:.45rem; padding:.35rem .6rem;
+                background:#0d1117; border:1px solid #21262d; border-radius:10px;
+                border-bottom:2px solid {{ grp.color_titulo }};">
+      <i class="bi {{ grp.icono }}" style="color:{{ grp.color_titulo }}; font-size:.9rem;"></i>
+      <span style="font-size:.78rem; font-weight:800; text-transform:uppercase; letter-spacing:1px;
+                   color:{{ grp.color_titulo }};">{{ grp.titulo }}</span>
     </div>
 
-    <!-- Nombre del color -->
-    <div style="font-weight:700; font-size:.92rem; color:var(--text); margin-bottom:.5rem; line-height:1.2;">
-      {{ c.color_nombre }}
-    </div>
+    <!-- Cards del grupo -->
+    {% for cod in grp.codigos %}
+    {% set c = _matrix_map.get(cod) %}
+    {% if c %}
 
-    <!-- Info según estado -->
-    {% if c.estado == 'EXISTE' %}
-    <div style="font-size:.78rem;">
-      <a href="/zfer/{{ c.zfer }}" style="color:var(--accent); font-weight:700; text-decoration:none; font-size:.82rem;">
-        <i class="bi bi-box-arrow-up-right me-1" style="font-size:.7rem;"></i>{{ c.zfer }}
-      </a>
-      {% if c.zfer_pn %}
-      <div style="margin-top:.3rem;">
-        <code style="color:#e3b341; font-size:.72rem; background:#1c1a10; padding:.1rem .35rem; border-radius:4px; border:1px solid #5a3e00;">{{ c.zfer_pn }}</code>
-      </div>
+      {% if c.estado == 'EXISTE' %}
+        {% set card_bg = '#0d2318' %}{% set card_border = '#2ea043' %}
+        {% set badge_color = '#56d364' %}{% set badge_bg = '#1c2e1c' %}{% set badge_border = '#2ea043' %}
+        {% set badge_label = 'EXISTE' %}{% set icon = 'bi-check-circle-fill' %}
+      {% elif c.estado == 'DISPONIBLE' %}
+        {% set card_bg = '#1e1a0d' %}{% set card_border = '#9e6a03' %}
+        {% set badge_color = '#e3b341' %}{% set badge_bg = '#2d2416' %}{% set badge_border = '#9e6a03' %}
+        {% set badge_label = 'DISPONIBLE' %}{% set icon = 'bi-plus-circle-fill' %}
+      {% else %}
+        {% set card_bg = '#0d1117' %}{% set card_border = '#21262d' %}
+        {% set badge_color = '#484f58' %}{% set badge_bg = '#161b22' %}{% set badge_border = '#30363d' %}
+        {% set badge_label = 'SIN ZPLA' %}{% set icon = 'bi-dash-circle' %}
       {% endif %}
-      {% if c.zfer_texto %}
-      <div style="color:#484f58; font-size:.7rem; margin-top:.2rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-        {{ c.zfer_texto }}
+
+      <div style="background:{{ card_bg }}; border:1px solid {{ card_border }}; border-radius:12px;
+                  padding:.85rem .95rem; position:relative; transition:border-color .15s;
+                  {% if c.es_base %}outline:2px solid var(--accent2); outline-offset:2px;{% endif %}">
+
+        {% if c.es_base %}
+        <div style="position:absolute; top:-9px; left:12px; background:var(--accent2); color:#fff;
+                    font-size:.6rem; font-weight:800; padding:.1rem .5rem; border-radius:20px; letter-spacing:.5px;">
+          BASE
+        </div>
+        {% endif %}
+
+        <!-- Código + badge estado -->
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.55rem;">
+          <span style="background:{{ badge_bg }}; color:{{ badge_color }}; border:1px solid {{ badge_border }};
+                       padding:.18rem .5rem; border-radius:20px; font-size:.78rem; font-weight:700;">
+            {{ c.color_codigo }}
+          </span>
+          <span style="color:{{ badge_color }}; font-size:.7rem; font-weight:700;
+                       display:flex; align-items:center; gap:.25rem;">
+            <i class="bi {{ icon }}" style="font-size:.82rem;"></i>{{ badge_label }}
+          </span>
+        </div>
+
+        <!-- Nombre -->
+        <div style="font-weight:700; font-size:.88rem; color:var(--text);
+                    margin-bottom:.45rem; line-height:1.25;">{{ c.color_nombre }}</div>
+
+        <!-- Detalle según estado -->
+        {% if c.estado == 'EXISTE' %}
+        <div style="font-size:.76rem;">
+          <a href="/zfer/{{ c.zfer }}" style="color:var(--accent); font-weight:700; text-decoration:none;">
+            <i class="bi bi-box-arrow-up-right me-1" style="font-size:.68rem;"></i>{{ c.zfer }}
+          </a>
+          {% if c.zfer_pn %}
+          <div style="margin-top:.28rem;">
+            <code style="color:#e3b341; font-size:.7rem; background:#1c1a10; padding:.1rem .3rem;
+                         border-radius:4px; border:1px solid #5a3e00;">{{ c.zfer_pn }}</code>
+          </div>
+          {% endif %}
+          {% if c.zfer_texto %}
+          <div style="color:#484f58; font-size:.68rem; margin-top:.18rem;
+                      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.zfer_texto }}</div>
+          {% endif %}
+        </div>
+        {% elif c.estado == 'DISPONIBLE' %}
+        <div style="font-size:.76rem; color:var(--muted);">
+          <span style="color:#e3b341; font-weight:600;">ZPLA:</span>
+          <span style="font-weight:700; color:#e6edf3; font-size:.8rem; margin-left:.3rem;">{{ c.zpla }}</span>
+        </div>
+        {% else %}
+        <div style="font-size:.73rem; color:#484f58;">Sin ZPLA para esta combinación</div>
+        {% endif %}
+
       </div>
-      {% endif %}
-    </div>
 
-    {% elif c.estado == 'DISPONIBLE' %}
-    <div style="font-size:.78rem; color:var(--muted);">
-      <span style="color:#e3b341; font-weight:600;">ZPLA:</span>
-      <span style="font-weight:700; color:#e6edf3; font-size:.82rem; margin-left:.3rem;">{{ c.zpla }}</span>
-    </div>
-
-    {% else %}
-    <div style="font-size:.75rem; color:#484f58;">Sin ZPLA para esta combinación</div>
     {% endif %}
+    {% endfor %}
 
   </div>
-  {% endfor %}
+{% endfor %}
 </div>
 
 <!-- ── Tabla detalle ZFERs existentes ─────────────────────────────────────── -->
@@ -623,26 +638,42 @@
         </span>
       </div>
 
-      <!-- ── Ruta de carpeta por fórmula ─────────────────────────────── -->
-      <div style="display:flex; align-items:center; gap:.4rem; min-width:0;">
-        <div style="display:flex; align-items:center; gap:.35rem; min-width:0;
-                    background:#0d1117; border:1px solid #2d2150; border-radius:8px;
-                    padding:.25rem .5rem .25rem .7rem; font-size:.75rem; color:#8b949e; max-width:340px;">
-          <i class="bi bi-folder2" style="color:#e3b341; flex-shrink:0; font-size:.8rem;"></i>
-          <span id="ruta-texto" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-                flex:1; min-width:0;" title="">Cargando…</span>
-          <button onclick="_rutaEditar()" title="Editar ruta de carpeta"
-                  style="background:none; border:none; color:#58a6ff; cursor:pointer;
-                         padding:0 .15rem; font-size:.8rem; flex-shrink:0; line-height:1;">
-            <i class="bi bi-pencil-square"></i>
+      <!-- ── URL + Simetría ────────────────────────────────────────────── -->
+      <div style="display:flex; flex-direction:column; gap:.3rem; min-width:0; align-items:flex-end;">
+        <!-- URL row -->
+        <div style="display:flex; align-items:center; gap:.4rem; min-width:0;">
+          <div style="display:flex; align-items:center; gap:.35rem; min-width:0;
+                      background:#0d1117; border:1px solid #2d2150; border-radius:8px;
+                      padding:.25rem .5rem .25rem .7rem; font-size:.75rem; color:#8b949e; max-width:340px;">
+            <i class="bi bi-link-45deg" style="color:#e3b341; flex-shrink:0; font-size:.85rem;"></i>
+            <span id="ruta-texto" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+                  flex:1; min-width:0;" title="">Cargando…</span>
+            <button onclick="_rutaEditar()" title="Editar URL"
+                    style="background:none; border:none; color:#58a6ff; cursor:pointer;
+                           padding:0 .15rem; font-size:.8rem; flex-shrink:0; line-height:1;">
+              <i class="bi bi-pencil-square"></i>
+            </button>
+          </div>
+          <button id="ruta-btn-abrir" onclick="_rutaAbrir()" title="Abrir URL"
+                  style="display:none; background:#0d1117; border:1px solid #2d2150; border-radius:8px;
+                         color:#56d364; padding:.25rem .55rem; font-size:.75rem; cursor:pointer;
+                         white-space:nowrap; flex-shrink:0;">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Abrir
           </button>
         </div>
-        <button id="ruta-btn-abrir" onclick="_rutaAbrir()" title="Abrir carpeta"
-                style="display:none; background:#0d1117; border:1px solid #2d2150; border-radius:8px;
-                       color:#56d364; padding:.25rem .55rem; font-size:.75rem; cursor:pointer;
-                       white-space:nowrap; flex-shrink:0;">
-          <i class="bi bi-folder-symlink me-1"></i>Abrir
-        </button>
+        <!-- Simetría row -->
+        <div style="display:flex; align-items:center; gap:.5rem; font-size:.75rem;">
+          <label style="display:flex; align-items:center; gap:.35rem; cursor:pointer; color:#8b949e; user-select:none;">
+            <input type="checkbox" id="sim-check" style="accent-color:#bc8cff; cursor:pointer;"
+                   onchange="_simetriaToggle()">
+            <i class="bi bi-symmetry-horizontal" style="color:#bc8cff;"></i>
+            <span>Simetría</span>
+          </label>
+          <span id="sim-chip" style="display:none; background:#1a102e; border:1px solid #6e40c9;
+                border-radius:6px; padding:.15rem .5rem; color:#bc8cff; font-size:.72rem;
+                align-items:center; gap:.3rem;"></span>
+          <span id="sim-spinner" style="display:none;" class="paso-spinner" style="width:11px;height:11px;border-width:2px;"></span>
+        </div>
       </div>
     </div>
     <div class="card-body" style="padding:.9rem 1.2rem;">
@@ -1644,34 +1675,49 @@ document.getElementById("btn-buscar-formulas")?.addEventListener("click", buscar
 buscarFormulasAlt();
 </script>
 
-<!-- ── Modal editar ruta de carpeta ─────────────────────────────────────── -->
+<!-- ── Modal editar URL + Simetría ──────────────────────────────────────── -->
 <div id="modal-ruta" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.65);
      z-index:9000; align-items:center; justify-content:center;">
   <div style="background:#161b22; border:1px solid #30363d; border-radius:14px;
-              padding:1.5rem 1.8rem; max-width:540px; width:90%; box-shadow:0 8px 40px rgba(0,0,0,.6);">
+              padding:1.5rem 1.8rem; max-width:560px; width:90%; box-shadow:0 8px 40px rgba(0,0,0,.6);">
     <div style="font-size:1rem; font-weight:800; color:#e6edf3; margin-bottom:.8rem;">
-      <i class="bi bi-folder-plus me-2" style="color:#e3b341;"></i>Ruta de carpeta — {{ material }}
+      <i class="bi bi-link-45deg me-2" style="color:#e3b341;"></i>URL y Simetría — {{ material }}
     </div>
-    <div style="font-size:.76rem; color:#8b949e; margin-bottom:.6rem;">
-      Pega la ruta completa (red o local). El botón Explorar ayuda a confirmar el nombre de la carpeta:
-    </div>
+
+    <!-- URL -->
+    <div style="font-size:.73rem; color:#8b949e; margin-bottom:.35rem; text-transform:uppercase;
+                letter-spacing:.6px;">URL</div>
     <div style="display:flex; gap:.4rem; margin-bottom:.6rem;">
-      <input id="ruta-input" type="text" placeholder="\\servidor\carpeta\proyecto  ó  C:\ruta\local"
+      <input id="ruta-input" type="text" placeholder="https://… ó \\servidor\carpeta"
              style="flex:1; background:#0d1117; border:1px solid #30363d; border-radius:8px;
                     color:#e6edf3; padding:.5rem .8rem; font-size:.8rem; font-family:monospace;">
-      <label title="Seleccionar carpeta"
-             style="background:#21262d; border:1px solid #30363d; border-radius:8px;
-                    color:#e3b341; padding:.5rem .75rem; cursor:pointer; font-size:.82rem;
-                    display:flex; align-items:center; gap:.3rem; white-space:nowrap; flex-shrink:0;">
-        <i class="bi bi-folder2-open"></i>Explorar
-        <input type="file" id="ruta-explorer" webkitdirectory style="display:none;"
-               onchange="_rutaDesdeExplorer(this)">
-      </label>
     </div>
     <input id="ruta-desc-input" type="text" placeholder="Descripción opcional (ej: Planos técnicos AUDI Q4)"
            style="width:100%; background:#0d1117; border:1px solid #30363d; border-radius:8px;
-                  color:#e6edf3; padding:.45rem .8rem; font-size:.76rem; margin-bottom:.9rem;
+                  color:#e6edf3; padding:.45rem .8rem; font-size:.76rem; margin-bottom:1rem;
                   box-sizing:border-box;">
+
+    <!-- Simetría -->
+    <div style="background:#0d1117; border:1px solid #2d2150; border-radius:8px;
+                padding:.75rem 1rem; margin-bottom:.9rem;">
+      <div style="font-size:.73rem; color:#8b949e; text-transform:uppercase;
+                  letter-spacing:.6px; margin-bottom:.5rem;">
+        <i class="bi bi-symmetry-horizontal me-1" style="color:#bc8cff;"></i>Simetría
+      </div>
+      <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.82rem; color:#e6edf3;">
+        <input type="checkbox" id="sim-modal-check" style="accent-color:#bc8cff; width:14px; height:14px;">
+        Esta pieza tiene simetría (par izquierdo/derecho)
+      </label>
+      <div id="sim-modal-encontrado" style="display:none; margin-top:.6rem; font-size:.78rem;
+           color:#bc8cff; background:#1a102e; border-radius:6px; padding:.4rem .7rem;"></div>
+      <button id="sim-modal-buscar" onclick="_simModalBuscar()"
+              style="margin-top:.5rem; background:#2d2150; color:#bc8cff; border:1px solid #6e40c9;
+                     border-radius:7px; padding:.3rem .75rem; font-size:.75rem; cursor:pointer;
+                     display:flex; align-items:center; gap:.35rem;">
+        <i class="bi bi-search"></i>Buscar pieza simétrica
+      </button>
+    </div>
+
     <div style="display:flex; gap:.6rem; justify-content:flex-end;">
       <button onclick="document.getElementById('modal-ruta').style.display='none'"
               style="background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:8px;
@@ -1689,15 +1735,21 @@ buscarFormulasAlt();
 (function() {
   const _ZFER = "{{ material }}";
   let _rutaActual = "";
+  let _simActual = { tiene_simetria: false, zfer_simetrico: "", pieza_contraria: "" };
 
-  // Cargar ruta al abrir la página
+  // Cargar ruta + simetría al abrir la página
   fetch(`/api/ruta/${_ZFER}`)
     .then(r => r.json())
-    .then(d => { _rutaActual = d.ruta || ""; _rutaRenderizar(d); })
-    .catch(() => { const el = document.getElementById("ruta-texto"); if(el) el.textContent = "Sin ruta"; });
+    .then(d => {
+      _rutaActual = d.ruta || "";
+      _simActual  = { tiene_simetria: !!d.tiene_simetria, zfer_simetrico: d.zfer_simetrico || "", pieza_contraria: d.pieza_contraria || "" };
+      _rutaRenderizar(d);
+      _simetriaRenderizar();
+    })
+    .catch(() => { const el = document.getElementById("ruta-texto"); if(el) el.textContent = "Sin URL"; });
 
   window._rutaRenderizar = function(d) {
-    const texto   = document.getElementById("ruta-texto");
+    const texto    = document.getElementById("ruta-texto");
     const btnAbrir = document.getElementById("ruta-btn-abrir");
     if (!texto) return;
     if (d.ruta) {
@@ -1706,30 +1758,100 @@ buscarFormulasAlt();
       texto.style.color = "#e6edf3";
       if (btnAbrir) btnAbrir.style.display = "flex";
     } else {
-      texto.textContent = "Sin ruta — clic en ✏";
+      texto.textContent = "Sin URL — clic en ✏";
       texto.style.color = "#484f58";
       if (btnAbrir) btnAbrir.style.display = "none";
     }
+  };
+
+  window._simetriaRenderizar = function() {
+    const chk  = document.getElementById("sim-check");
+    const chip = document.getElementById("sim-chip");
+    if (!chk) return;
+    chk.checked = _simActual.tiene_simetria;
+    if (_simActual.tiene_simetria && _simActual.zfer_simetrico) {
+      chip.innerHTML = `<i class="bi bi-symmetry-horizontal"></i>&nbsp;<a href="/zfer/${_simActual.zfer_simetrico}" style="color:#bc8cff; font-weight:700;">${_simActual.zfer_simetrico}</a>`;
+      chip.style.display = "inline-flex";
+    } else {
+      chip.style.display = "none";
+    }
+  };
+
+  window._simetriaToggle = async function() {
+    const chk = document.getElementById("sim-check");
+    if (!chk.checked) {
+      _simActual.tiene_simetria = false;
+      _simActual.zfer_simetrico = "";
+      _simActual.pieza_contraria = "";
+      _simetriaRenderizar();
+      return;
+    }
+    // Marcó: buscar automáticamente
+    const spinner = document.getElementById("sim-spinner");
+    if (spinner) spinner.style.display = "inline-block";
+    try {
+      const r = await fetch(`/api/simetria/${_ZFER}`);
+      const d = await r.json();
+      if (d.encontrados && d.encontrados.length > 0) {
+        const z = d.encontrados[0];
+        _simActual = { tiene_simetria: true, zfer_simetrico: z.zfer, pieza_contraria: z.pieza_contraria || "" };
+      } else {
+        _simActual = { tiene_simetria: true, zfer_simetrico: "", pieza_contraria: "" };
+      }
+    } catch(e) { }
+    if (spinner) spinner.style.display = "none";
+    _simetriaRenderizar();
   };
 
   window._rutaEditar = function() {
     document.getElementById("ruta-input").value = _rutaActual;
     document.getElementById("ruta-desc-input").value = "";
     document.getElementById("ruta-modal-msg").textContent = "";
+    // Populate simetría in modal
+    const mc = document.getElementById("sim-modal-check");
+    if (mc) mc.checked = _simActual.tiene_simetria;
+    const me = document.getElementById("sim-modal-encontrado");
+    if (me && _simActual.zfer_simetrico) {
+      me.innerHTML = `Pieza simétrica: <strong>${_simActual.zfer_simetrico}</strong>`;
+      me.style.display = "block";
+    } else if (me) { me.style.display = "none"; }
     document.getElementById("modal-ruta").style.display = "flex";
     document.getElementById("ruta-input").focus();
   };
 
-  window._rutaDesdeExplorer = function(input) {
-    if (input.files && input.files.length > 0) {
-      const partes = input.files[0].webkitRelativePath.split("/");
-      document.getElementById("ruta-input").value = partes[0];
+  window._simModalBuscar = async function() {
+    const btn = document.getElementById("sim-modal-buscar");
+    const me  = document.getElementById("sim-modal-encontrado");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="paso-spinner" style="width:10px;height:10px;border-width:2px;"></span> Buscando…';
+    try {
+      const r = await fetch(`/api/simetria/${_ZFER}`);
+      const d = await r.json();
+      if (d.encontrados && d.encontrados.length > 0) {
+        const z = d.encontrados[0];
+        me.innerHTML = `Pieza simétrica encontrada: <strong style="color:#bc8cff;">${z.zfer}</strong> — ${z.desc || ''}`;
+        me.style.display = "block";
+        document.getElementById("sim-modal-check").checked = true;
+        // Store temporarily
+        btn._found = { zfer: z.zfer, pieza_contraria: z.pieza_contraria || "" };
+      } else {
+        me.innerHTML = "No se encontró pieza simétrica en la base de datos.";
+        me.style.color = "#8b949e";
+        me.style.display = "block";
+        btn._found = null;
+      }
+    } catch(e) {
+      me.innerHTML = "Error al buscar."; me.style.display = "block";
     }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-search"></i> Buscar pieza simétrica';
   };
 
   window._rutaAbrir = function() {
     if (_rutaActual) {
-      window.open("file:///" + _rutaActual.replace(/\\/g, "/"), "_blank");
+      const url = _rutaActual.startsWith("http") ? _rutaActual
+                  : "file:///" + _rutaActual.replace(/\\/g, "/");
+      window.open(url, "_blank");
     }
   };
 
@@ -1737,18 +1859,28 @@ buscarFormulasAlt();
     const ruta = document.getElementById("ruta-input").value.trim();
     const desc = document.getElementById("ruta-desc-input").value.trim();
     const msg  = document.getElementById("ruta-modal-msg");
-    if (!ruta) { msg.style.color="#ffa198"; msg.textContent="La ruta no puede estar vacía."; return; }
+    if (!ruta) { msg.style.color="#ffa198"; msg.textContent="La URL no puede estar vacía."; return; }
     msg.style.color="#8b949e"; msg.textContent="Guardando…";
+
+    const mc = document.getElementById("sim-modal-check");
+    const tiene_simetria = mc ? mc.checked : _simActual.tiene_simetria;
+    const buscarBtn = document.getElementById("sim-modal-buscar");
+    const found = buscarBtn && buscarBtn._found;
+    const zfer_simetrico  = found ? found.zfer : _simActual.zfer_simetrico;
+    const pieza_contraria = found ? found.pieza_contraria : _simActual.pieza_contraria;
+
     try {
       const r = await fetch(`/api/ruta/${_ZFER}`, {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ ruta, descripcion: desc }),
+        body: JSON.stringify({ ruta, descripcion: desc, tiene_simetria, zfer_simetrico, pieza_contraria }),
       });
       const d = await r.json();
       if (d.ok) {
         _rutaActual = ruta;
+        _simActual  = { tiene_simetria, zfer_simetrico, pieza_contraria };
         _rutaRenderizar({ ruta, descripcion: desc });
-        msg.style.color="#56d364"; msg.textContent="✓ Guardada";
+        _simetriaRenderizar();
+        msg.style.color="#56d364"; msg.textContent="✓ Guardado";
         setTimeout(() => document.getElementById("modal-ruta").style.display="none", 800);
       } else {
         msg.style.color="#ffa198"; msg.textContent = d.error || "Error al guardar";
