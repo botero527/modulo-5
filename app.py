@@ -2349,26 +2349,48 @@ def _cola_ejecutar_bloque(bloque_id: int):
         try:
             sap = importlib.import_module("sap_auto")
             # Usar funciones libres del módulo (no instancia — ver sap_auto.py)
-            _proc_color   = getattr(sap, "procesar_combinacion",               None)
-            _proc_formula = getattr(sap, "procesar_combinacion_formula_sin_acero", None)
-            if not _proc_color or not _proc_formula:
-                # Intentar con instancia si existen
-                cls = getattr(sap, "AutomatizadorSAP", None) or getattr(sap, "AutoSAP", None)
-                if cls:
-                    bot = cls()
-                    _proc_color   = getattr(bot, "procesar_combinacion",               None) or getattr(bot, "procesar", None)
-                    _proc_formula = getattr(bot, "procesar_combinacion_formula_sin_acero", None) or getattr(bot, "procesar_formula_sin_acero", None)
+            _proc_color         = getattr(sap, "procesar_combinacion",                      None)
+            _proc_formula_sin   = getattr(sap, "procesar_combinacion_formula_sin_acero",    None)
+            _proc_formula_con   = getattr(sap, "procesar_combinacion_formula_con_acero",    None)
+
+            def _tiene_diferencial_06(zfer: str) -> bool:
+                """Consulta BD SAP: retorna True si el ZFER tiene '06' en Z_BEHAVIOR_DIFFERENTIALS."""
+                try:
+                    with get_conn() as cn:
+                        cur = cn.cursor()
+                        cur.execute("""
+                            SELECT TOP 1 ATWRT FROM dbo.ODATA_ZFER_CLASS_001
+                            WHERE MATNR = ? AND ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS' AND ATWRT = '06'
+                        """, zfer)
+                        return cur.fetchone() is not None
+                except Exception as e:
+                    print(f"[COLA] _tiene_diferencial_06({zfer}): {e}")
+                    return False  # ante duda, no asumir con acero
 
             for item in cola:
                 # ── Cada item tiene su propio try/except — un error nunca detiene los demás ──
                 try:
-                    if item["tipo"].lower() == "formula" and _proc_formula:
-                        res = _proc_formula(
-                            item["zfer"], item.get("formula_nueva",""),
-                            item["color"], item.get("color_nombre",""),
-                            item.get("franja","00"), item.get("pn_base",""),
-                            item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza","")
-                        )
+                    tipo = item["tipo"].upper()
+                    if tipo == "FORMULA":
+                        # Auto-detectar dirección según diferencial 06 del ZFER base
+                        tiene_06 = _tiene_diferencial_06(item["zfer"])
+                        print(f"[COLA] {item['zfer']} diferencial 06: {tiene_06} → {'con→sin' if tiene_06 else 'sin→con'}")
+                        if tiene_06 and _proc_formula_sin:
+                            res = _proc_formula_sin(
+                                item["zfer"], item.get("formula_nueva",""),
+                                item["color"], item.get("color_nombre",""),
+                                item.get("franja","00"), item.get("pn_base",""),
+                                item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza","")
+                            )
+                        elif not tiene_06 and _proc_formula_con:
+                            res = _proc_formula_con(
+                                item["zfer"], item.get("formula_nueva",""),
+                                item["color"], item.get("color_nombre",""),
+                                item.get("franja","00"), item.get("pn_base",""),
+                                item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza","")
+                            )
+                        else:
+                            raise RuntimeError("No se encontró función de procesamiento de fórmula en sap_auto")
                     elif _proc_color:
                         res = _proc_color(
                             item["zfer"], item["color"], item.get("color_nombre",""),

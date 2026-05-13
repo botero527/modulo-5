@@ -1748,6 +1748,266 @@ class AutomatizadorSAP:
             _warn(str(e))
             return False
 
+    # ── ZPPR0008 — Validar posición acero por ZPLA (sesión auxiliar) ─────────
+
+    def zppr0008_validar_posicion_acero_zpla(self, zpla: str) -> dict:
+        """
+        Abre sesión auxiliar, entra a ZPPR0008 modo ZPLA (radRB_2),
+        filtra por ZPLA+CO01, busca posición 0106 ó 0116.
+        Retorna {"ok": True/False, "pos": "0106"|"0116"|"", "error": ""}
+        Si ok=False con pos="" → el ZPLA NO tiene acero → abortar flujo con acero.
+        """
+        print(f"    ZPPR0008 (aux): validando posición acero para ZPLA={zpla}")
+        self.session.createSession()
+        self._esperar(T_LENTO)
+
+        idx_nueva = self.conn_sap.Children.Count - 1
+        ses = self.conn_sap.Children(idx_nueva)
+        ses.findById("wnd[0]").maximize()
+
+        try:
+            ses.findById(self._ID_TCODE_BOX).text = "ZPPR0008"
+            ses.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+
+            # Modo "por material" con radio radRB_2 + campo ctxtS_MATNR2-LOW = ZPLA
+            ses.findById("wnd[0]/usr/radRB_2").setFocus()
+            ses.findById("wnd[0]/usr/radRB_2").select()
+            self._esperar(T_RAPIDO)
+            ses.findById("wnd[0]/usr/ctxtS_MATNR2-LOW").text = zpla
+            ses.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").text = "CO01"
+            ses.findById(self._ID_BTN_EXEC).press()
+            self._esperar(T_LENTO)
+
+            # Buscar grid
+            grid = None
+            for _gid in ("wnd[0]/usr/cntlGRID1/shellcont/shell",
+                         "wnd[0]/usr/cntlGRID/shellcont/shell",
+                         "wnd[0]/usr/cntlALV/shellcont/shell"):
+                try:
+                    grid = ses.findById(_gid)
+                    break
+                except Exception:
+                    pass
+
+            if grid is None:
+                return {"ok": False, "pos": "",
+                        "error": f"ZPPR0008 (aux): grid no encontrado para ZPLA={zpla}"}
+
+            n = grid.RowCount
+            print(f"    ZPPR0008 (aux): {n} filas para ZPLA={zpla}")
+            for i in range(n):
+                for col in ("POSNR", "POSN", "POS", "COMPONENT", "MATNR"):
+                    try:
+                        v = str(grid.GetCellValue(i, col) or "").strip().lstrip("0") or "0"
+                        if v in ("106", "116"):
+                            pos_found = "0" + v
+                            print(f"    ZPPR0008 (aux): posición acero encontrada = {pos_found}")
+                            return {"ok": True, "pos": pos_found, "error": ""}
+                        break
+                    except Exception:
+                        pass
+            return {"ok": False, "pos": "",
+                    "error": f"ZPLA {zpla} no tiene posición 0106 ni 0116 — no aplica flujo con acero"}
+
+        except Exception as e:
+            return {"ok": False, "pos": "", "error": f"ZPPR0008 (aux) error: {e}"}
+        finally:
+            try:
+                ses.findById("wnd[0]").close()
+            except Exception:
+                pass
+
+    # ── MM02 — Activar diferencial 06 (inverso de desactivar) ────────────────
+
+    def mm02_activar_diferencial_06(self, zfer: str):
+        """
+        Igual que mm02_desactivar_diferencial_06 pero marca selected=True (activa "06").
+        IDs idénticos confirmados por VBS.
+        """
+        print(f"    MM02 diferencial: activando 06 en {zfer}")
+        self._cerrar_dialogs_abiertos()
+        self.session.findById(self._ID_TCODE_BOX).text = "/NMM02"
+        self.session.findById("wnd[0]").sendVKey(0)
+        self._esperar(T_MEDIO)
+        self.session.findById(self._ID_MM02_MATNR).text = zfer
+        self.session.findById("wnd[0]").sendVKey(0)
+        self._esperar(T_MEDIO)
+        for _ in range(3):
+            try:
+                self.session.findById(self._ID_MM02_TAB03)
+                break
+            except Exception:
+                pass
+            if not self._primera_opcion_si_popup():
+                self.session.findById("wnd[0]").sendVKey(0)
+                self._esperar(T_MEDIO)
+        self.session.findById(self._ID_MM02_TAB03).select()
+        self._esperar(T_RAPIDO)
+        self._primera_opcion_si_popup()
+        self.session.findById(self._ID_MM02_TAB4).select()
+        self._esperar(T_RAPIDO)
+
+        tbl = self._ID_MM02_TBL_PIEZA
+        self.session.findById(tbl).verticalScrollbar.position = 6
+        self._esperar(T_RAPIDO)
+
+        campo_name = tbl + "/ctxtRCTMS-MNAME[0,7]"
+        self.session.findById(campo_name).setFocus()
+        self.session.findById(campo_name).caretPosition = 16
+        self.session.findById("wnd[0]").sendVKey(2)
+        self._esperar(T_MEDIO)
+
+        try:
+            chk = "wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]"
+            self.session.findById(chk).selected = True   # ← activa en vez de desactivar
+            self.session.findById(chk).setFocus()
+            self.session.findById("wnd[1]").sendVKey(2)
+            self._esperar(T_RAPIDO)
+        except Exception as e:
+            print(f"    [WARN] Activar diferencial popup check: {e}")
+
+        try:
+            self.session.findById("wnd[1]").close()
+        except Exception:
+            try:
+                self.session.findById("wnd[1]").sendVKey(12)
+            except Exception:
+                pass
+        self._esperar(T_RAPIDO)
+
+        try:
+            self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
+            self._esperar(T_MEDIO)
+            self._primera_opcion_si_popup()
+        except Exception as e:
+            print(f"    [WARN] Activar diferencial guardar: {e}")
+        try:
+            self.session.findById("wnd[0]/tbar[0]/btn[3]").press()
+            self._esperar(T_RAPIDO)
+            self._primera_opcion_si_popup()
+        except Exception:
+            pass
+
+    # ── MM02 — Cambio de plano CON SP (flujo sin acero → con acero) ──────────
+
+    def _buscar_plano_con_sp(self, doknr_actual: str) -> tuple:
+        """
+        Dado el DOKNR leído de MM02, busca en ODATA_ZFER_RUTAS_JPG el plano
+        más reciente QUE SÍ tenga SP, ordenado por ULTIMA_MOD DESC.
+        Returns: (plano_nuevo: str | None, mensaje: str)
+        """
+        # Quitar sufijo SP si ya lo tiene, para obtener la base
+        base = re.sub(r'(\s+[A-Z]+)?\s+SP\s*$', '', doknr_actual, flags=re.IGNORECASE).strip()
+        if not base:
+            return None, f"DOKNR '{doknr_actual}' no tiene base reconocible"
+
+        try:
+            cn  = pyodbc.connect(_DB_SAP_STR, autocommit=True)
+            cur = cn.cursor()
+            cur.execute(
+                "SELECT TOP 1 DOCUMENTO "
+                "FROM dbo.ODATA_ZFER_RUTAS_JPG "
+                "WHERE DOCUMENTO LIKE ? "
+                "  AND DOCUMENTO LIKE '% SP' "
+                "ORDER BY ULTIMA_MOD DESC",
+                f"%{base}%"
+            )
+            row = cur.fetchone()
+            cn.close()
+        except Exception as e:
+            return None, f"Error BD al buscar plano con SP: {e}"
+
+        if not row:
+            return None, (
+                f"⚠ PLANO CON SP NO ENCONTRADO — No se encontró versión con SP "
+                f"para '{base}' en ODATA_ZFER_RUTAS_JPG."
+            )
+
+        doc_elegido = str(row[0] or "").strip()
+        if not doc_elegido:
+            return None, "⚠ PLANO CON SP NO ENCONTRADO — DOCUMENTO vacío en BD."
+        return doc_elegido, f"Plano con SP: DOKNR ← '{doc_elegido}'"
+
+    def mm02_cambiar_plano_con_sp(self, zfer: str, res: "ResultadoItem" = None) -> bool:
+        """
+        Igual que mm02_cambiar_plano pero busca el plano MÁS RECIENTE CON SP.
+        Para flujo sin acero → con acero.
+        """
+        def _warn(msg):
+            print(f"    [WARN] mm02_cambiar_plano_con_sp: {msg}")
+            if res:
+                res._log(f"  [PLANO-SP] ADVERTENCIA: {msg}")
+
+        print(f"    MM02 plano (con SP): procesando {zfer}")
+        try:
+            _subZU04 = ("wnd[0]/usr/tabsTABSPR1/tabpZU04"
+                        "/ssubTABFRA1:SAPLMGMM:2110"
+                        "/subSUB2:SAPLMGD1:3400"
+                        "/subDOCU:SAPLCV140:0204")
+            _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
+
+            self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById(self._ID_MM02_MATNR).text = zfer
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+
+            self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
+            self._esperar(T_MEDIO)
+            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
+            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
+            self._esperar(T_RAPIDO)
+
+            try:
+                doknr_actual = self.session.findById(_grid_docu).getCellValue(0, "DOKNR")
+                print(f"    MM02 plano (con SP): DOKNR actual='{doknr_actual}'")
+            except Exception as e:
+                _warn(f"No pudo leer DOKNR: {e}")
+                return False
+
+            if not doknr_actual or not str(doknr_actual).strip():
+                _warn("DOKNR vacío en MM02, omitiendo cambio de plano")
+                return False
+
+            nuevo_plano, msg_bd = self._buscar_plano_con_sp(str(doknr_actual).strip())
+            print(f"    MM02 plano (con SP) BD: {msg_bd}")
+            if res:
+                res._log(f"  [PLANO-SP] {msg_bd}")
+
+            if not nuevo_plano:
+                return False
+
+            if nuevo_plano == str(doknr_actual).strip():
+                print(f"    MM02 plano (con SP): sin cambio necesario ('{nuevo_plano}')")
+                if res:
+                    res._log(f"  [PLANO-SP] Sin cambio necesario ('{nuevo_plano}')")
+                return True
+
+            self.session.findById(_grid_docu).modifyCell(0, "DOKNR", nuevo_plano)
+            self.session.findById(_grid_docu).currentCellColumn = "DOKNR"
+            self.session.findById(_grid_docu).pressEnter()
+            self._esperar(T_MEDIO)
+            try:
+                self.session.findById("wnd[1]/usr/btnBUTTON_1").press()
+                self._esperar(T_RAPIDO)
+            except Exception:
+                pass
+            self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
+            self._esperar(T_LENTO)
+            print(f"    MM02 plano (con SP) guardado: {zfer} → '{nuevo_plano}'")
+            if res:
+                res._log(f"  [PLANO-SP] Guardado: '{doknr_actual}' → '{nuevo_plano}'")
+            return True
+        except Exception as e:
+            _warn(str(e))
+            return False
+
     # ── CEWB — Eliminar posición acero ───────────────────────────────────────
 
     def cewb_eliminar_posicion_acero(self, material: str, pos_acero: str):
@@ -2183,6 +2443,185 @@ class AutomatizadorSAP:
         self._log_bd(res)
         return res
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # FLUJO: sin acero → con acero
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def procesar_formula_con_acero(
+            self, zfer_base: str, formula_nueva: str,
+            color_codigo: str, color_nombre: str,
+            franja: str = "00", pn_base: str = "", zpla: str = "",
+            nivel: str = "", tipo_pieza: str = "",
+            step_callback=None) -> ResultadoItem:
+        """
+        Flujo completo: cambio de fórmula sin acero → con acero.
+        Pasos:
+          0 — Validar versión en ZPPP0042
+          1 — ZMME0001 Cambio de Fórmula (igual que sin_acero)
+          2 — Validar posición acero en ZPPR0008 con el ZPLA sugerido (sesión aux)
+          3 — ZPPR0020 esperar fases
+          4 — ZMME0001 BOM (igual que sin_acero)
+          5 — MM02: PN + activar diferencial 06 + plano CON SP
+          6 — CEWB agregar posición acero (PENDIENTE — se implementará después)
+        """
+        res = ResultadoItem(
+            batch_id     = str(uuid.uuid4())[:8],
+            zfer_base    = zfer_base,
+            color_codigo = color_codigo,
+            formula      = str(formula_nueva or ""),
+            tipo_pieza   = str(tipo_pieza or ""),
+            estado       = "EN_PROCESO",
+            fecha_inicio = datetime.datetime.now(),
+        )
+
+        def _cb(paso_num: int, desc: str):
+            res._log(f"PASO {paso_num}/6: {desc}")
+            if step_callback:
+                try:
+                    step_callback(paso_num, desc)
+                except Exception:
+                    pass
+
+        try:
+            res._log(f"=== Inicio fórmula con acero: {zfer_base} → fórmula {formula_nueva} color {color_codigo} ===")
+            res._log(f"  Franja={franja}  PN_base={pn_base}  ZPLA={zpla}")
+
+            p_color = color_codigo.strip()
+            p_franj = franja or "00"
+            zplas_validos = [z.strip() for z in str(zpla).split(",") if z.strip()]
+
+            # PASO 0 — Validar versión en ZPPP0042 (sin validar pos acero)
+            _cb(0, f"Validando ZFER base en SAP (ZPPP0042) — {zfer_base}")
+            val = self.zppp0042_validar(zfer_base)
+            if not val["ok"]:
+                raise RuntimeError(f"ZPPP0042: {val['error']}")
+            res._log(f"  VERID={val['verid']} — OK")
+
+            # Caso BE
+            forzar_be    = False
+            nivel_norm   = str(nivel or "").strip().lstrip("0") or "0"
+            tipopza_norm = str(tipo_pieza or "").strip().lstrip("0") or "0"
+            if nivel_norm in ("2", "3") and tipopza_norm in ("9", "90"):
+                try:
+                    clases_zfer = self._leer_clases_zpla_sap(zfer_base)
+                    clase_0100  = clases_zfer.get("0100", clases_zfer.get("100", ""))
+                    if clase_0100.upper().endswith("800") or clase_0100.upper().endswith("800_"):
+                        forzar_be = True
+                        res._log("  Caso BE activo")
+                except Exception as e:
+                    res._log(f"  [WARN] BE check: {e}")
+
+            # PASO 1 — ZMME0001 Cambio de Fórmula
+            _cb(1, f"Homologando cambio de fórmula en SAP (ZMME0001) — {formula_nueva}")
+            zfer_nuevo, zfor_nuevo, zpla_usado = self.zmme0001_ejecutar_formula(
+                zfer_base, p_color, p_franj, formula_nueva, zplas_validos, forzar_be=forzar_be
+            )
+            res.zfer_nuevo = zfer_nuevo
+            res.zfor_nuevo = zfor_nuevo
+            res.zpla       = zpla_usado
+
+            # PASO 2 — Validar posición acero en ZPPR0008 con el ZPLA sugerido
+            _cb(2, f"Validando posición acero en ZPPR0008 (ZPLA={zpla_usado})")
+            if not zpla_usado:
+                raise RuntimeError("No se obtuvo ZPLA desde ZMME0001 — no se puede validar acero en ZPPR0008")
+            val_acero = self.zppr0008_validar_posicion_acero_zpla(zpla_usado)
+            if not val_acero["ok"]:
+                raise RuntimeError(val_acero["error"])
+            pos_acero = val_acero["pos"]
+            res._log(f"  Posición acero confirmada en ZPLA: {pos_acero}")
+
+            # PASO 3 — ZPPR0020
+            _cb(3, f"Esperando aprobación del proceso SAP (ZPPR0020) — {zfer_nuevo}")
+            fase_res = self.zppr0020_esperar_fases(zfer_nuevo)
+            if not fase_res["ok"]:
+                raise RuntimeError(f"ZPPR0020 falló — {fase_res['fase_error']}: {fase_res['detalle']}")
+            if not zpla_usado and fase_res.get("zpla"):
+                zpla_usado = fase_res["zpla"]
+                res.zpla   = zpla_usado
+            res._log(f"  ZPPR0020 OK | ZPLA={zpla_usado}")
+
+            # PASO 4 — ZMME0001 BOM (igual que sin_acero)
+            _cb(4, "Comparando y copiando estructura de materiales (BOM)")
+            try:
+                self.session.findById(self._ID_RAD_HOMOLOG).setFocus()
+                self.session.findById(self._ID_RAD_HOMOLOG).select()
+                self._esperar(T_RAPIDO)
+                self.session.findById(self._ID_CTX_CENTER).text = "CO01"
+                self.session.findById(self._ID_RAD_FORMULA).setFocus()
+                self.session.findById(self._ID_RAD_FORMULA).select()
+                self._esperar(T_RAPIDO)
+                self.session.findById(self._ID_CTX_P_COLOR).text = p_color
+                self.session.findById(self._ID_CTX_P_FRANJ).text = p_franj
+                self.session.findById(self._ID_TXT_FORMU).text   = formula_nueva
+                zpla_actual = ""
+                try:
+                    zpla_actual = self.session.findById(self._ID_CTX_P_ZPLA).text.strip()
+                except Exception:
+                    pass
+                if not zpla_actual and zpla_usado:
+                    self.session.findById(self._ID_CTX_P_ZPLA).text = f" {zpla_usado}"
+            except Exception as e_p4:
+                print(f"     [WARN] Re-establecer campos paso 4: {e_p4}")
+
+            self.session.findById(self._ID_MATER_LOW).text = zfer_nuevo
+            self.session.findById(self._ID_MATER_LOW).caretPosition = len(zfer_nuevo)
+            self._esperar(T_RAPIDO)
+
+            clases = {}
+            if zpla_usado:
+                clases = self._leer_clases_zpla_sap(zpla_usado)
+                res._log(f"  Clases leídas desde SAP: {clases}")
+            else:
+                res._log("  [WARN] Sin ZPLA para leer clases")
+
+            posiciones = self.bom_con_retry(zpla_usado, clases)
+            res.posiciones_bom = posiciones
+            res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
+
+            # PASO 5 — MM02: PN + activar diferencial 06 + plano CON SP
+            _cb(5, f"Actualizando MM02 (PN, diferencial 06, plano SP) — {zfer_nuevo}")
+            nuevo_pn = self._construir_nuevo_pn_formula(pn_base, formula_nueva, p_color)
+            res._log(f"  Nuevo PN={nuevo_pn}")
+
+            for mat in ([zfer_nuevo] + ([zfor_nuevo] if zfor_nuevo else [])):
+                # 5a — PARTNUMBER
+                if nuevo_pn and nuevo_pn != pn_base:
+                    self.mm02_actualizar_partnumber(mat, nuevo_pn)
+                # 5b — Activar diferencial 06 (lo marca, no desmarca)
+                self.mm02_activar_diferencial_06(mat)
+
+            # 5c — Plano con SP: solo para ZFER nuevo
+            self.mm02_cambiar_plano_con_sp(zfer_nuevo, res)
+
+            # PASO 6 — CEWB: agregar posición acero (PENDIENTE de implementar)
+            res._log(f"  CEWB agregar pos {pos_acero}: PENDIENTE de implementar")
+
+            # Volver a pantalla inicial
+            try:
+                for _btn in ("wnd[1]/tbar[0]/btn[0]", "wnd[1]/usr/btnSPOP-OPTION1"):
+                    try:
+                        self.session.findById(_btn).press()
+                        self._esperar(T_RAPIDO)
+                    except Exception:
+                        pass
+                self._navegar("ZMME0001")
+                self._esperar(T_MEDIO)
+            except Exception as e:
+                print(f"    [WARN] Navegación final: {e}")
+
+            res.estado    = "OK"
+            res.fecha_fin = datetime.datetime.now()
+            res._log(f"=== COMPLETADO OK ({res.duracion_seg}s) ===")
+
+        except Exception as e:
+            res.estado    = "ERROR"
+            res.error     = str(e)
+            res.fecha_fin = datetime.datetime.now()
+            res._log(f"=== ERROR: {e} ===")
+
+        self._log_bd(res)
+        return res
+
 
 # ── Función de entrada (usada desde app.py vía threading) ────────────────────
 
@@ -2202,6 +2641,29 @@ def procesar_combinacion(zfer_base: str, color_codigo: str, color_nombre: str,
     return auto.procesar(zfer_base, color_codigo, color_nombre, franja, pn_base, zpla,
                          nivel=nivel, tipo_pieza=tipo_pieza,
                          step_callback=step_callback)
+
+
+def procesar_combinacion_formula_con_acero(
+        zfer_base: str, formula_nueva: str,
+        color_codigo: str, color_nombre: str,
+        franja: str = "00", pn_base: str = "", zpla: str = "",
+        nivel: str = "", tipo_pieza: str = "",
+        step_callback=None) -> "ResultadoItem":
+    """Entrada pública para flujo sin acero → con acero."""
+    auto = AutomatizadorSAP()
+    if not auto.conectar():
+        r = ResultadoItem(
+            batch_id=str(uuid.uuid4())[:8], zfer_base=zfer_base,
+            color_codigo=color_codigo, estado="ERROR",
+            error="SAP GUI no disponible.",
+            fecha_inicio=datetime.datetime.now(), fecha_fin=datetime.datetime.now(),
+        )
+        return r
+    return auto.procesar_formula_con_acero(
+        zfer_base, formula_nueva, color_codigo, color_nombre,
+        franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
+        step_callback=step_callback,
+    )
 
 
 def procesar_combinacion_formula_sin_acero(

@@ -828,6 +828,8 @@ const SIM_PIECE_TYPE = "{{ sim.piece_type   if sim else '' }}";
 const SIM_FRANJA     = "{{ sim.shade_band   if sim else '' }}";
 const SIM_PN_BASE    = "{{ sim.partnumber   if sim else '' }}";
 const SIM_NIVEL      = "{{ sim.nivel        if sim else '' }}";
+const DIFFERENTIALS      = "{{ differentials }}";      // diferencial ZFER base
+const SIM_DIFFERENTIALS  = "{{ sim.differentials if sim else '' }}";  // diferencial panel simétrico
 
 // ── Nombres amigables de los 5 pasos ─────────────────────────────────────────
 const PASO_NOMBRES = [
@@ -1420,8 +1422,20 @@ function _renderFormulaCards(formulas, opts = {}) {
     return;
   }
 
+  // Determinar dirección del cambio de fórmula según diferencial base del panel
+  const _diffBase = (p === "s" ? SIM_DIFFERENTIALS : DIFFERENTIALS) || "";
+  const _tieneAcero = _diffBase.split(/[,\s]+/).map(v=>v.trim()).includes("06");
+
   cont.innerHTML = formulas.map((fa, i) => {
     const idx = i + 1;
+    // Badge dirección: si el ZFER base tiene 06 → cambia a SIN acero; si no → cambia a CON acero
+    const _dirBadge = _tieneAcero
+      ? `<span style="background:#1c2e1c;border:1px solid #2ea043;color:#56d364;border-radius:20px;font-size:.68rem;font-weight:700;padding:.1rem .5rem;white-space:nowrap;">
+           <i class="bi bi-arrow-right me-1"></i>Sin acero
+         </span>`
+      : `<span style="background:#1e1030;border:1px solid #8957e5;color:#d2a8ff;border-radius:20px;font-size:.68rem;font-weight:700;padding:.1rem .5rem;white-space:nowrap;">
+           <i class="bi bi-arrow-right me-1"></i>Con acero
+         </span>`;
     const filas = fa.colores.map(c => `
       <tr id="${p}fc-row-${idx}-${c.color}"
           style="border-bottom:1px solid #161b22;"
@@ -1456,6 +1470,7 @@ function _renderFormulaCards(formulas, opts = {}) {
         <span class="tag" style="background:#1e1030; border:1px solid #6e40c9; color:#bc8cff; font-size:.72rem;">
           ${fa.colores.length} color(es)
         </span>
+        ${_dirBadge}
         <span id="${p}fc-resumen-${idx}" style="font-size:.72rem; color:#484f58; margin-left:.3rem;"></span>
         <i class="bi bi-chevron-down ms-auto" id="${p}fc-chv-${idx}" style="color:var(--muted); transition:transform .2s;"></i>
       </div>
