@@ -255,34 +255,25 @@
 </div>
 {% endif %}
 
-<!-- ── Barra de acción cola (visible en modo normal y simetría) ───────────── -->
-<!-- ── Barra de acción cola ── sticky para que siempre sea visible ────────── -->
-<div id="cola-sim-bar" style="display:none; position:sticky; top:62px; z-index:50;
-     background:linear-gradient(135deg,#1a102e 0%,#0d1117 100%);
-     border:2px solid #7c3aed; border-radius:14px;
-     padding:.85rem 1.4rem; margin-bottom:1.5rem;
-     align-items:center; gap:1.2rem; flex-wrap:wrap;
-     box-shadow:0 4px 24px rgba(124,58,237,.35);">
-  <div style="display:flex; align-items:center; gap:.6rem; flex:1; min-width:200px;">
-    <i class="bi bi-bag-check-fill" style="color:#bc8cff; font-size:1.3rem;"></i>
-    <div>
-      <div style="font-size:.78rem; color:#8b949e; text-transform:uppercase; letter-spacing:.8px;">Seleccionados para homologar</div>
-      <div style="font-size:1rem; font-weight:900; color:#e6edf3; line-height:1.1;">
-        <span id="cola-sim-count" style="color:#e3b341; font-size:1.3rem;">0</span>
-        <span id="cola-sim-label" style="font-size:.88rem; color:#e6edf3; margin-left:.3rem;">ítem(s)</span>
-      </div>
-    </div>
-  </div>
-  <button onclick="_colaAgregarColores()" id="btn-enviar-cola-main"
+<!-- ── Barra flotante de cola (abajo, discreta, aparece cuando hay seleccionados) ── -->
+<div id="cola-sim-bar" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+     z-index:999; background:rgba(26,16,46,.97); border:1px solid #7c3aed; border-radius:40px;
+     padding:.55rem .55rem .55rem 1.2rem; align-items:center; gap:.8rem;
+     box-shadow:0 4px 24px rgba(124,58,237,.5); backdrop-filter:blur(8px);">
+  <span style="font-size:.85rem; color:#e6edf3; white-space:nowrap;">
+    <i class="bi bi-bag-check-fill me-1" style="color:#bc8cff;"></i>
+    <span id="cola-sim-count" style="color:#e3b341; font-weight:800;">0</span>
+    <span id="cola-sim-label" style="color:#8b949e;"> ítem(s) seleccionado(s)</span>
+  </span>
+  <button onclick="_enviarTodoACola()" id="btn-enviar-cola-main"
           style="background:linear-gradient(135deg,#7c3aed,#9333ea); color:#fff; border:none;
-                 border-radius:10px; padding:.65rem 1.8rem; font-size:.95rem; font-weight:800;
-                 cursor:pointer; display:flex; align-items:center; gap:.5rem;
-                 box-shadow:0 2px 12px rgba(124,58,237,.5); transition:opacity .15s;"
-          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-    <i class="bi bi-clock-history" style="font-size:1rem;"></i>
-    Enviar a Cola SAP
+                 border-radius:30px; padding:.45rem 1.3rem; font-size:.88rem; font-weight:800;
+                 cursor:pointer; display:flex; align-items:center; gap:.4rem;
+                 transition:opacity .15s; white-space:nowrap;"
+          onmouseover="this.style.opacity='.82'" onmouseout="this.style.opacity='1'">
+    <i class="bi bi-clock-history"></i>Enviar a Cola SAP
   </button>
-  <span id="cola-sim-msg" style="font-size:.8rem; color:#bc8cff; flex:1; min-width:150px;"></span>
+  <span id="cola-sim-msg" style="display:none;"></span>
 </div>
 
 <!-- ── Tabla detalle ZFERs existentes ─────────────────────────────────────── -->
@@ -516,12 +507,14 @@
         <i class="bi bi-check-all me-1"></i>Seleccionar todo
       </button>
       <button id="btn-ejecutar-sap"
-              style="background:var(--accent); color:#000; font-weight:700; border:none; border-radius:8px; padding:.45rem 1.2rem; font-size:.88rem; cursor:pointer; transition:.15s; display:flex; align-items:center; gap:.4rem;"
-              onmouseover="this.style.background='#00a8d8'" onmouseout="this.style.background='var(--accent)'">
-        <i class="bi bi-play-circle-fill"></i>
-        <span>Ejecutar Cola SAP</span>
-        <span id="badge-cola-total" style="display:none; background:rgba(0,0,0,.3); border-radius:20px;
-              padding:.05rem .45rem; font-size:.75rem; font-weight:900;"></span>
+              style="background:linear-gradient(135deg,#7c3aed,#9333ea); color:#fff; font-weight:800; border:none;
+                     border-radius:10px; padding:.55rem 1.6rem; font-size:.92rem; cursor:pointer; transition:.15s;
+                     display:flex; align-items:center; gap:.5rem; box-shadow:0 2px 14px rgba(124,58,237,.45);"
+              onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        <i class="bi bi-clock-history" style="font-size:1rem;"></i>
+        <span>Enviar a Cola SAP</span>
+        <span id="badge-cola-total" style="display:none; background:rgba(255,255,255,.25); border-radius:20px;
+              padding:.05rem .5rem; font-size:.75rem; font-weight:900;"></span>
       </button>
       <span id="sap-status-global" style="font-size:.82rem; color:var(--muted);"></span>
     </div>
@@ -986,150 +979,127 @@ if (btnSelAll) {
   });
 }
 
-// ── Contador de cola (actualiza badge del botón) ──────────────────────────────
+// ── Contador unificado (colores tabla + fórmulas + colores simétrico disponibles) ──
 function _actualizarContadorCola() {
-  const nColor   = document.querySelectorAll(".sap-check:checked").length;
-  const nFormula = document.querySelectorAll(".chk-fc:checked").length;
-  const total    = nColor + nFormula;
-  const badge    = document.getElementById("badge-cola-total");
-  if (badge) {
-    badge.textContent = total;
-    badge.style.display = total > 0 ? "inline" : "none";
-  }
-  return { nColor, nFormula, total };
+  const n1    = document.querySelectorAll(".sap-check:checked").length;
+  const n2    = document.querySelectorAll(".chk-fc:checked, .schk-fc:checked").length;
+  const n3    = document.querySelectorAll(".col-queue-check:checked").length;
+  const total = n1 + n2 + n3;
+  const badge = document.getElementById("badge-cola-total");
+  if (badge) { badge.textContent = total; badge.style.display = total > 0 ? "inline" : "none"; }
+  // Sincronizar sticky bar
+  const bar = document.getElementById("cola-sim-bar");
+  const cnt = document.getElementById("cola-sim-count");
+  if (bar) bar.style.display = total > 0 ? "flex" : "none";
+  if (cnt) cnt.textContent = total;
+  return { total };
 }
 
 // Observar cambios en checkboxes de color
 document.querySelectorAll(".sap-check").forEach(cb =>
   cb.addEventListener("change", _actualizarContadorCola));
 
-// ── Ejecutar Cola SAP (mixto: color + fórmula) ────────────────────────────────
+// ── Recolectar TODOS los items seleccionados (colores + fórmulas + simétrico) ──
+function _recolectarTodoSeleccionado() {
+  const cola = [];
+  // 1. Colores de la tabla principal
+  document.querySelectorAll(".sap-check:checked").forEach(cb => {
+    const row = cb.closest("tr");
+    cola.push({
+      tipo: "color", zfer: ZFER_BASE, color: cb.value,
+      color_nombre: row ? row.dataset.colorNombre : "",
+      zpla:     row ? (row.dataset.zplas || row.dataset.zpla) : "",
+      franja:   FRANJA_BASE, pn_base: PN_BASE, nivel: NIVEL_BASE, tipo_pieza: PIECE_TYPE,
+    });
+  });
+  // 2. Fórmulas de los cards (panel base + simétrico) — .chk-fc (base) y .schk-fc (sim)
+  document.querySelectorAll(".chk-fc:checked, .schk-fc:checked").forEach(chk => {
+    const isSim = chk.classList.contains("schk-fc");
+    cola.push({
+      tipo: "formula",
+      zfer:          isSim ? SIM_MATERIAL  : ZFER_BASE,
+      color:         chk.dataset.color,
+      color_nombre:  chk.dataset.colorNombre,
+      zpla:          chk.dataset.zpla,
+      franja:        isSim ? SIM_FRANJA    : FRANJA_BASE,
+      pn_base:       isSim ? SIM_PN_BASE   : PN_BASE,
+      nivel:         isSim ? SIM_NIVEL     : NIVEL_BASE,
+      tipo_pieza:    isSim ? SIM_PIECE_TYPE: PIECE_TYPE,
+      formula_nueva: chk.dataset.formula,
+    });
+  });
+  // 3. Colores disponibles del simétrico (.col-queue-check)
+  document.querySelectorAll(".col-queue-check:checked").forEach(cb => {
+    cola.push({
+      tipo: "color", zfer: cb.dataset.zfer,
+      color:        cb.dataset.color,
+      color_nombre: cb.dataset.colorNombre,
+      zpla:         cb.dataset.zpla,
+      franja:   cb.dataset.zfer === ZFER_BASE ? FRANJA_BASE : SIM_FRANJA,
+      pn_base:  cb.dataset.zfer === ZFER_BASE ? PN_BASE     : SIM_PN_BASE,
+      nivel:    cb.dataset.zfer === ZFER_BASE ? NIVEL_BASE  : SIM_NIVEL,
+      tipo_pieza: cb.dataset.zfer === ZFER_BASE ? PIECE_TYPE : SIM_PIECE_TYPE,
+    });
+  });
+  return cola;
+}
+
+// ── Enviar todo a la Cola SAP programada ─────────────────────────────────────
 const btnEjec   = document.getElementById("btn-ejecutar-sap");
 const statusGlb = document.getElementById("sap-status-global");
 
-if (btnEjec) {
-  btnEjec.addEventListener("click", async () => {
-    const coloresCheck  = [...document.querySelectorAll(".sap-check:checked")];
-    const formulaChecks = [...document.querySelectorAll(".chk-fc:checked")];
+async function _enviarTodoACola() {
+  const cola = _recolectarTodoSeleccionado();
+  if (!cola.length) {
+    if (statusGlb) statusGlb.textContent = "Selecciona al menos un color o fórmula.";
+    return;
+  }
+  if (btnEjec) btnEjec.disabled = true;
+  if (statusGlb) statusGlb.textContent = "Consultando cola…";
 
-    if (coloresCheck.length === 0 && formulaChecks.length === 0) {
-      statusGlb.textContent = "Selecciona al menos un color o fórmula."; return;
+  try {
+    const ds = await fetch("/api/cola/estado").then(r => r.json());
+    const nC = cola.filter(c => c.tipo === "color").length;
+    const nF = cola.filter(c => c.tipo === "formula").length;
+    let partes = [];
+    if (nC) partes.push(`${nC} color${nC !== 1 ? "es" : ""}`);
+    if (nF) partes.push(`${nF} fórmula${nF !== 1 ? "s" : ""}`);
+    const textoBloque = ds.bloque_num
+      ? `Bloque ${ds.bloque_num} · ${ds.hora_prog}${ds.pendientes > 0 ? ` · ${ds.pendientes} ya en cola` : ""}${ds.ya_paso ? " ⚠ hora ya pasó" : ""}`
+      : "Se creará un nuevo bloque (mañana 7am)";
+
+    if (!confirm(`¿Enviar ${partes.join(" + ")} a la Cola SAP?\n${textoBloque}\n\nSe ejecutará a la hora programada del bloque.`)) {
+      if (statusGlb) statusGlb.textContent = "";
+      if (btnEjec) btnEjec.disabled = false;
+      return;
     }
-    btnEjec.disabled = true;
 
-    // Construir cola unificada
-    const cola = [];
+    const d = await fetch("/api/cola/agregar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: cola }),
+    }).then(r => r.json());
 
-    coloresCheck.forEach(cb => {
-      const row = cb.closest("tr");
-      cola.push({
-        tipo:         "color",
-        zfer:         ZFER_BASE,
-        color:        cb.value,
-        color_nombre: row.dataset.colorNombre,
-        zpla:         row.dataset.zplas || row.dataset.zpla,
-        franja:       FRANJA_BASE,
-        pn_base:      PN_BASE,
-        nivel:        NIVEL_BASE,
-        tipo_pieza:   PIECE_TYPE,
-      });
-    });
-
-    formulaChecks.forEach(chk => {
-      cola.push({
-        tipo:          "formula",
-        zfer:          ZFER_BASE,
-        color:         chk.dataset.color,
-        color_nombre:  chk.dataset.colorNombre,
-        zpla:          chk.dataset.zpla,
-        franja:        FRANJA_BASE,
-        pn_base:       PN_BASE,
-        nivel:         NIVEL_BASE,
-        tipo_pieza:    PIECE_TYPE,
-        formula_nueva: chk.dataset.formula,
-      });
-    });
-
-    // Feedback visual inicial
-    coloresCheck.forEach((cb, i) => {
-      const td = document.querySelector(`.td-sap-${cb.value}`);
-      if (td) td.innerHTML = i === 0 && formulaChecks.length === 0
-        ? _renderStepper(1, "Iniciando proceso…")
-        : _renderEnCola();
-    });
-    formulaChecks.forEach((chk, i) => {
-      const statusEl = document.getElementById(`status-fc-${chk.dataset.fidx}`);
-      if (statusEl) statusEl.textContent = coloresCheck.length === 0 && i === 0
-        ? "⏳ Iniciando…" : "🕐 En cola…";
-    });
-
-    const nC = coloresCheck.length, nF = formulaChecks.length;
-    statusGlb.innerHTML = `<i class="bi bi-arrow-repeat paso-spinner me-1"></i>
-      Verificando duplicados…`;
-
-    try {
-      // ── Paso 1: verificar duplicados ────────────────────────────────────
-      const vResp = await fetch("/api/sap/verificar_duplicados", {
-        method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-          zfer_base: ZFER_BASE,
-          items: cola.map(c => ({ tipo: c.tipo, color: c.color,
-                                  color_nombre: c.color_nombre,
-                                  formula_nueva: c.formula_nueva || "" }))
-        }),
-      });
-      const vData = await vResp.json();
-
-      const duplicados = (vData.results || []).filter(r => r.ya_existe);
-
-      if (duplicados.length > 0) {
-        // Mostrar aviso y dejar al usuario decidir
-        const continuar = await _mostrarAviso_duplicados(duplicados, cola.length);
-        if (continuar === "cancelar") {
-          statusGlb.textContent = "Cancelado.";
-          btnEjec.disabled = false;
-          return;
-        }
-        if (continuar === "solo_nuevos") {
-          // Filtrar la cola para quitar los duplicados
-          const dupKeys = new Set(duplicados.map(d =>
-            d.tipo === "formula" ? `formula:${d.formula_nueva}:${d.color}` : `color:${d.color}`
-          ));
-          cola.splice(0, cola.length, ...cola.filter(c => {
-            const k = c.tipo === "formula" ? `formula:${c.formula_nueva}:${c.color}` : `color:${c.color}`;
-            return !dupKeys.has(k);
-          }));
-          if (cola.length === 0) {
-            statusGlb.textContent = "Todos los items ya existen en SAP. Nada que procesar.";
-            btnEjec.disabled = false;
-            return;
-          }
-        }
-        // si continuar === "todos" → sigue con la cola completa
-      }
-
-      // ── Paso 2: ejecutar cola ────────────────────────────────────────────
-      const nCf = cola.filter(c=>c.tipo==="color").length;
-      const nFf = cola.filter(c=>c.tipo==="formula").length;
-      statusGlb.innerHTML = `<i class="bi bi-arrow-repeat paso-spinner me-1"></i>
-        Cola: ${nCf} color${nCf!==1?"es":""} + ${nFf} fórmula${nFf!==1?"s":""}…`;
-
-      const resp = await fetch("/api/sap/ejecutar_cola", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ cola }),
-      });
-      const data = await resp.json();
-      if (!data.ok) {
-        statusGlb.textContent = `Error al iniciar: ${data.error}`;
-        btnEjec.disabled = false; return;
-      }
-      _pollBatch(data.batch_id, coloresCheck, formulaChecks);
-    } catch (e) {
-      statusGlb.textContent = `Error de red: ${e.message}`;
-      btnEjec.disabled = false;
+    if (d.ok) {
+      if (statusGlb) statusGlb.innerHTML =
+        `<span style="color:#56d364; font-weight:700;">
+          <i class="bi bi-check-circle-fill me-1"></i>${cola.length} ítem(s) → Bloque ${d.bloque_num} · ${d.hora_prog}
+        </span>`;
+      // Desmarcar todos
+      document.querySelectorAll(".sap-check:checked,.chk-fc:checked,.col-queue-check:checked")
+        .forEach(c => { c.checked = false; });
+      _actualizarContadorCola();
+      _colaActualizarBadge();
+    } else {
+      if (statusGlb) statusGlb.textContent = `Error: ${d.error}`;
     }
-  });
+  } catch(e) {
+    if (statusGlb) statusGlb.textContent = `Error de red: ${e.message}`;
+  }
+  if (btnEjec) btnEjec.disabled = false;
 }
+
+if (btnEjec) btnEjec.addEventListener("click", _enviarTodoACola);
+
 
 // ── Modal aviso duplicados ────────────────────────────────────────────────────
 function _mostrarAviso_duplicados(duplicados, totalCola) {
@@ -1509,20 +1479,10 @@ function _renderFormulaCards(formulas, opts = {}) {
             <tbody>${filas}</tbody>
           </table>
         </div>
-        <div style="padding:.8rem 1rem; border-top:1px solid #21262d; display:flex; align-items:center; gap:.8rem; flex-wrap:wrap;">
+        <div style="padding:.6rem 1rem; border-top:1px solid #21262d; display:flex; align-items:center; gap:.8rem; flex-wrap:wrap;">
           <span style="font-size:.8rem; color:var(--muted);">
-            <span id="${p}cnt-fc-${idx}">0</span> seleccionado(s)
+            <span id="${p}cnt-fc-${idx}">0</span> seleccionado(s) — usa el botón <b style="color:#bc8cff;">Enviar a Cola SAP</b> arriba para enviar
           </span>
-          <button id="${p}btn-fc-${idx}"
-                  onclick="_fcEnviarCola(${idx}, '${fa.formula}', '${p}')"
-                  style="background:#7c3aed; color:#fff; border:none; border-radius:8px;
-                         padding:.45rem 1.2rem; font-size:.82rem; font-weight:700; cursor:pointer;
-                         display:flex; align-items:center; gap:.4rem;" disabled>
-            <i class="bi bi-clock-history"></i>
-            Enviar a Cola — ${fa.formula}
-            <span id="${p}badge-fc-${idx}" style="background:#bc8cff; color:#1a0050;
-                  border-radius:20px; padding:.1rem .5rem; font-size:.72rem; font-weight:900; display:none;"></span>
-          </button>
           <span id="${p}status-fc-${idx}" style="font-size:.78rem; color:#bc8cff;"></span>
         </div>
       </div>
@@ -1834,11 +1794,10 @@ async function buscarFormulasAlt() {
 
 // ── Cola desde panel de colores (simetría o normal) ───────────────────────
 function _colaContarSeleccionados() {
-  const n = document.querySelectorAll(".col-queue-check:checked").length;
-  const bar = document.getElementById("cola-sim-bar");
+  _actualizarContadorCola();  // unifica todo en un solo contador
+  const n = document.querySelectorAll(".col-queue-check:checked,.sap-check:checked,.chk-fc:checked").length;
   const cnt = document.getElementById("cola-sim-count");
   const lbl = document.getElementById("cola-sim-label");
-  if (bar) { bar.style.display = n > 0 ? "flex" : "none"; }
   if (cnt) cnt.textContent = n;
   if (lbl) {
     const hasSim = !!SIM_MATERIAL;

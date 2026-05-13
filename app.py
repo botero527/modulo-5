@@ -2297,27 +2297,25 @@ def _cola_proximo_bloque() -> dict | None:
 
 
 def _cola_archivar_y_limpiar(bloque_id: int):
-    """Al completar un bloque: mueve los items ejecutados de M5_Cola → M5_LogEjecuciones y los elimina."""
+    """Al completar un bloque: mueve ejecutados → M5_LogEjecuciones, limpia M5_Cola. Deja el bloque COMPLETADO visible."""
     try:
         with _get_conn_local() as cn:
             cur = cn.cursor()
-            # Copiar todo lo ejecutado (OK o ERROR) al log permanente
             cur.execute("""
                 INSERT INTO dbo.M5_LogEjecuciones
                     (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
                      formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg, ejecutado_el)
-                SELECT
-                    bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                    formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg,
-                    ISNULL(ejecutado_el, GETDATE())
+                SELECT bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
+                       formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg,
+                       ISNULL(ejecutado_el, GETDATE())
                 FROM dbo.M5_Cola
                 WHERE bloque_id = ? AND estado IN ('OK','ERROR')
             """, bloque_id)
             archivados = cur.rowcount
-            # Eliminar de la cola temporal
-            cur.execute("DELETE FROM dbo.M5_Cola WHERE bloque_id=? AND estado IN ('OK','ERROR')",
-                        bloque_id)
-            print(f"[COLA] bloque {bloque_id}: {archivados} items archivados → M5_LogEjecuciones")
+            # Limpiar cola temporal (todos los items del bloque)
+            cur.execute("DELETE FROM dbo.M5_Cola WHERE bloque_id=?", bloque_id)
+            # NO borrar el bloque — queda COMPLETADO para que el usuario vea el reporte
+            print(f"[COLA] bloque {bloque_id}: {archivados} archivados → M5_LogEjecuciones, bloque queda COMPLETADO")
     except Exception as e:
         print(f"[COLA] error archivando bloque {bloque_id}: {e}")
 
@@ -2362,18 +2360,20 @@ def _cola_ejecutar_bloque(bloque_id: int):
                     _proc_formula = getattr(bot, "procesar_combinacion_formula_sin_acero", None) or getattr(bot, "procesar_formula_sin_acero", None)
 
             for item in cola:
+                # ── Cada item tiene su propio try/except — un error nunca detiene los demás ──
                 try:
                     if item["tipo"].lower() == "formula" and _proc_formula:
                         res = _proc_formula(
-                            item["zfer"], item["color"], item.get("formula_nueva",""),
-                            item.get("zpla",""), item.get("franja","00"),
-                            item.get("pn_base",""), item.get("nivel",""), item.get("tipo_pieza","")
+                            item["zfer"], item.get("formula_nueva",""),
+                            item["color"], item.get("color_nombre",""),
+                            item.get("franja","00"), item.get("pn_base",""),
+                            item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza","")
                         )
                     elif _proc_color:
                         res = _proc_color(
-                            item["zfer"], item["color"], item.get("zpla",""),
+                            item["zfer"], item["color"], item.get("color_nombre",""),
                             item.get("franja","00"), item.get("pn_base",""),
-                            item.get("nivel",""), item.get("tipo_pieza","")
+                            item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza","")
                         )
                     else:
                         raise RuntimeError("No se encontró función de procesamiento en sap_auto")
@@ -2381,26 +2381,35 @@ def _cola_ejecutar_bloque(bloque_id: int):
                     zfer_nuevo  = getattr(res, "zfer_nuevo", "") or ""
                     error_msg   = getattr(res, "error",     "") or ""
                 except Exception as ex:
-                    estado_item, zfer_nuevo, error_msg = "ERROR", "", str(ex)
+                    estado_item, zfer_nuevo, error_msg = "ERROR", "", str(ex)[:500]
+                    print(f"[COLA] item {item['_cola_id']} error: {ex}")
 
-                with _get_conn_local() as cn:
-                    cn.cursor().execute("""
-                        UPDATE dbo.M5_Cola
-                        SET estado=?, ejecutado_el=GETDATE(), zfer_nuevo=?, error_msg=?
-                        WHERE id=?
-                    """, estado_item, zfer_nuevo or None, error_msg[:500] or None, item["_cola_id"])
+                # Guardar resultado — también en try para no cortar el loop si falla la BD
+                try:
+                    with _get_conn_local() as cn:
+                        cn.cursor().execute("""
+                            UPDATE dbo.M5_Cola
+                            SET estado=?, ejecutado_el=GETDATE(), zfer_nuevo=?, error_msg=?
+                            WHERE id=?
+                        """, estado_item, zfer_nuevo or None, error_msg or None, item["_cola_id"])
+                except Exception as db_ex:
+                    print(f"[COLA] error guardando item {item['_cola_id']}: {db_ex}")
 
                 if estado_item == "OK": ok_n += 1
                 else:                  err_n += 1
 
         except Exception as sap_ex:
-            err_n = len(cola)
-            with _get_conn_local() as cn:
-                cn.cursor().execute("""
-                    UPDATE dbo.M5_Cola SET estado='ERROR', error_msg=?
-                    WHERE bloque_id=? AND estado='PENDIENTE'
-                """, str(sap_ex)[:500], bloque_id)
-            print(f"[COLA] error SAP en bloque {bloque_id}: {sap_ex}")
+            # Solo llega aquí si falló la carga del módulo sap_auto en sí
+            print(f"[COLA] error cargando sap_auto en bloque {bloque_id}: {sap_ex}")
+            try:
+                with _get_conn_local() as cn:
+                    cn.cursor().execute("""
+                        UPDATE dbo.M5_Cola SET estado='ERROR', error_msg=?
+                        WHERE bloque_id=? AND estado='PENDIENTE'
+                    """, str(sap_ex)[:500], bloque_id)
+                err_n = len(cola)
+            except Exception:
+                pass
 
         with _get_conn_local() as cn:
             cur2 = cn.cursor()
@@ -2428,19 +2437,52 @@ def _cola_ejecutar_bloque(bloque_id: int):
         print(f"[COLA] error ejecutando bloque {bloque_id}: {e}")
 
 
+def _cola_limpiar_al_inicio():
+    """Al arrancar: borra COMPLETADOS vacíos y resetea EJECUTANDO a PENDIENTE (por reinicios inesperados)."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            # Borrar bloques COMPLETADOS con más de 7 días (historial en LogEjecuciones ya los tiene)
+            cur.execute("""
+                DELETE FROM dbo.M5_Bloques
+                WHERE estado = 'COMPLETADO'
+                  AND ejecutado_el < DATEADD(day, -7, GETDATE())
+            """)
+            if cur.rowcount:
+                print(f"[COLA] limpieza: {cur.rowcount} bloques completados viejos eliminados")
+            # Resetear bloques EJECUTANDO a PENDIENTE (quedaron pegados por crash/restart)
+            cur.execute("SELECT id FROM dbo.M5_Bloques WHERE estado='EJECUTANDO'")
+            bloques_pegados = [r[0] for r in cur.fetchall()]
+            if bloques_pegados:
+                cur.execute("UPDATE dbo.M5_Bloques SET estado='PENDIENTE' WHERE estado='EJECUTANDO'")
+                ph = ",".join("?" * len(bloques_pegados))
+                # Resetear TODOS los items (PENDIENTE y ERROR) de esos bloques
+                cur.execute(f"""
+                    UPDATE dbo.M5_Cola
+                    SET estado='PENDIENTE', error_msg=NULL, ejecutado_el=NULL
+                    WHERE bloque_id IN ({ph})
+                      AND estado IN ('PENDIENTE','ERROR')
+                """, *bloques_pegados)
+                print(f"[COLA] reset: {len(bloques_pegados)} bloque(s) pegados reseteados a PENDIENTE")
+    except Exception as e:
+        print(f"[COLA] error limpieza inicial: {e}")
+
+
 def _cola_scheduler():
     """Hilo de fondo: cada 60s revisa bloques vencidos."""
+    _cola_limpiar_al_inicio()  # limpiar residuos y resetear pegados al arrancar
     while True:
         _time.sleep(60)
         try:
             with _get_conn_local() as cn:
                 cur = cn.cursor()
+                # Comparar con hora local Python para evitar desfase UTC vs local de GETDATE()
                 cur.execute("""
-                    SELECT id FROM dbo.M5_Bloques
-                    WHERE estado='PENDIENTE' AND timer_activo=1
-                      AND hora_prog <= GETDATE()
+                    SELECT id, hora_prog FROM dbo.M5_Bloques
+                    WHERE estado='PENDIENTE' AND timer_activo=1 AND hora_prog IS NOT NULL
                 """)
-                vencidos = [r[0] for r in cur.fetchall()]
+                ahora = _dt.now()
+                vencidos = [r[0] for r in cur.fetchall() if r[1] <= ahora]
             for bid in vencidos:
                 threading.Thread(target=_cola_ejecutar_bloque, args=(bid,), daemon=True).start()
         except Exception as e:
@@ -2668,6 +2710,41 @@ def api_cola_cambiar_hora(bloque_id: int):
         return jsonify({"ok": False, "error": str(e)})
 
 
+@app.route("/api/cola/bloque/<int:bloque_id>/reset", methods=["POST"])
+@login_required
+def api_cola_reset_bloque(bloque_id: int):
+    """Resetea un bloque EJECUTANDO a PENDIENTE (para bloques pegados por error/crash)."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("UPDATE dbo.M5_Bloques SET estado='PENDIENTE' WHERE id=? AND estado='EJECUTANDO'",
+                        bloque_id)
+            if cur.rowcount == 0:
+                return jsonify({"ok": False, "error": "El bloque no está en estado EJECUTANDO"})
+            # Resetear items PENDIENTE y ERROR a PENDIENTE para reintento
+            cur.execute("""
+                UPDATE dbo.M5_Cola SET estado='PENDIENTE', error_msg=NULL, ejecutado_el=NULL
+                WHERE bloque_id=? AND estado IN ('PENDIENTE','ERROR')
+            """, bloque_id)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/cola/bloque/<int:bloque_id>/borrar", methods=["POST"])
+@login_required
+def api_cola_borrar_bloque(bloque_id: int):
+    """Borra un bloque y todos sus ítems permanentemente."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("DELETE FROM dbo.M5_Cola WHERE bloque_id=?", bloque_id)
+            cur.execute("DELETE FROM dbo.M5_Bloques WHERE id=?", bloque_id)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @app.route("/api/cola/bloque/<int:bloque_id>/vaciar", methods=["POST"])
 @login_required
 def api_cola_vaciar_bloque(bloque_id: int):
@@ -2712,6 +2789,168 @@ def api_cola_historial():
         return jsonify({"ok": True, "log": log})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "log": []})
+
+
+@app.route("/api/cola/bloque/<int:bloque_id>/reporte")
+@login_required
+def api_cola_bloque_reporte(bloque_id: int):
+    """Items ejecutados de un bloque (desde M5_LogEjecuciones)."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            # Info del bloque
+            cur.execute("""
+                SELECT bloque_num, hora_prog, ejecutado_el, ok_count, error_count
+                FROM dbo.M5_Bloques WHERE id=?
+            """, bloque_id)
+            br = cur.fetchone()
+            cur.execute("""
+                SELECT zfer_base, tipo, color, color_nombre, zpla, franja,
+                       formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg, ejecutado_el
+                FROM dbo.M5_LogEjecuciones WHERE bloque_id=?
+                ORDER BY ejecutado_el
+            """, bloque_id)
+            rows = cur.fetchall()
+        items = [{"zfer_base": r[0], "tipo": r[1], "color": r[2], "color_nombre": r[3],
+                  "zpla": r[4], "franja": r[5] or "00", "formula_nueva": r[6], "tipo_pieza": r[7],
+                  "zfer_nuevo": r[8], "estado": r[9], "error_msg": r[10],
+                  "ejecutado_el": r[11].strftime("%d/%m/%Y %H:%M:%S") if r[11] else ""}
+                 for r in rows]
+        ok_n  = sum(1 for i in items if i["estado"] == "OK")
+        err_n = sum(1 for i in items if i["estado"] == "ERROR")
+        bloque_info = {
+            "num": br[0] if br else bloque_id,
+            "hora_prog": br[1].strftime("%d/%m/%Y %H:%M") if br and br[1] else "",
+            "ejecutado_el": br[2].strftime("%d/%m/%Y %H:%M") if br and br[2] else "",
+        } if br else {}
+        return jsonify({"ok": True, "bloque_id": bloque_id, "bloque": bloque_info,
+                        "items": items, "ok_count": ok_n, "error_count": err_n})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "items": []})
+
+
+@app.route("/api/cola/bloque/<int:bloque_id>/reporte/excel")
+@login_required
+def api_cola_bloque_excel(bloque_id: int):
+    """Descarga Excel del reporte de un bloque ejecutado — 4 hojas."""
+    import io
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("SELECT bloque_num, hora_prog, ejecutado_el, ok_count, error_count FROM dbo.M5_Bloques WHERE id=?", bloque_id)
+            br = cur.fetchone()
+            cur.execute("""
+                SELECT zfer_base, tipo, color, color_nombre, zpla, franja,
+                       formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg, ejecutado_el
+                FROM dbo.M5_LogEjecuciones WHERE bloque_id=?
+                ORDER BY tipo, ejecutado_el
+            """, bloque_id)
+            rows = cur.fetchall()
+
+        # Paleta de colores
+        HDR_FILL  = PatternFill("solid", fgColor="1C1A2E")
+        OK_FILL   = PatternFill("solid", fgColor="0D2818")
+        ERR_FILL  = PatternFill("solid", fgColor="2D0E0E")
+        COL_FILL  = PatternFill("solid", fgColor="0D1E2E")
+        FOR_FILL  = PatternFill("solid", fgColor="1A0E2D")
+        HDR_FONT  = Font(bold=True, color="FFFFFF", size=10)
+        thin      = Side(style="thin", color="303030")
+        brd       = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        def _autofit(ws):
+            for col in ws.columns:
+                w = max((len(str(c.value or "")) for c in col), default=8)
+                ws.column_dimensions[get_column_letter(col[0].column)].width = min(w + 3, 50)
+
+        def _header_row(ws, cols):
+            ws.append(cols)
+            for cell in ws[1]:
+                cell.fill = HDR_FILL; cell.font = HDR_FONT
+                cell.alignment = Alignment(horizontal="center"); cell.border = brd
+            ws.row_dimensions[1].height = 20
+
+        def _write_items(ws, subset):
+            for r in subset:
+                ts = r[11].strftime("%d/%m/%Y %H:%M:%S") if r[11] else ""
+                ws.append([r[0], r[1], r[2] or "", r[3] or "", r[4] or "", r[5] or "00",
+                           r[6] or "", r[7] or "", r[8] or "", r[9], r[10] or "", ts])
+                fill = OK_FILL if r[9] == "OK" else (ERR_FILL if r[9] == "ERROR" else PatternFill())
+                for cell in ws[ws.max_row]:
+                    cell.fill = fill; cell.border = brd
+                    cell.alignment = Alignment(vertical="center")
+
+        COLS = ["ZFER Base","Tipo","Color (código)","Color Nombre","ZPLA","Franja",
+                "Fórmula Nueva","Tipo Pieza","ZFER Nuevo","Estado","Error","Ejecutado el"]
+
+        wb = Workbook()
+
+        # ── Hoja 1: RESUMEN ──────────────────────────────────────────────────
+        ws_r = wb.active; ws_r.title = "RESUMEN"
+        ok_n  = sum(1 for r in rows if r[9] == "OK")
+        err_n = sum(1 for r in rows if r[9] == "ERROR")
+        col_n = sum(1 for r in rows if r[1] == "COLOR")
+        for_n = sum(1 for r in rows if r[1] == "FORMULA")
+        hora_prog_str = br[1].strftime("%d/%m/%Y %H:%M") if br and br[1] else ""
+        ejecutado_str = br[2].strftime("%d/%m/%Y %H:%M") if br and br[2] else ""
+        resumen = [
+            ("Bloque #", br[0] if br else bloque_id),
+            ("Hora programada", hora_prog_str),
+            ("Ejecutado el", ejecutado_str),
+            ("", ""),
+            ("Total ítems", len(rows)),
+            ("Exitosos (OK)", ok_n),
+            ("Con error (ERROR)", err_n),
+            ("Tasa de éxito", f"{round(ok_n/len(rows)*100,1)}%" if rows else "—"),
+            ("", ""),
+            ("Cambios de Color", col_n),
+            ("Cambios de Fórmula", for_n),
+        ]
+        for lbl, val in resumen:
+            ws_r.append([lbl, val])
+            if lbl:
+                ws_r.cell(ws_r.max_row, 1).font = Font(bold=True, color="8B949E", size=10)
+                ws_r.cell(ws_r.max_row, 2).font = Font(color="E6EDF3", size=11)
+        ws_r.column_dimensions["A"].width = 22
+        ws_r.column_dimensions["B"].width = 22
+
+        # ── Hoja 2: TODOS ────────────────────────────────────────────────────
+        ws_t = wb.create_sheet("Todos")
+        _header_row(ws_t, COLS)
+        _write_items(ws_t, rows)
+        _autofit(ws_t)
+
+        # ── Hoja 3: COLORES ──────────────────────────────────────────────────
+        ws_c = wb.create_sheet("Cambio de Color")
+        _header_row(ws_c, COLS)
+        _write_items(ws_c, [r for r in rows if r[1] == "COLOR"])
+        _autofit(ws_c)
+
+        # ── Hoja 4: FÓRMULAS ─────────────────────────────────────────────────
+        ws_f = wb.create_sheet("Cambio de Fórmula")
+        _header_row(ws_f, COLS)
+        _write_items(ws_f, [r for r in rows if r[1] == "FORMULA"])
+        _autofit(ws_f)
+
+        # ── Hoja 5: ERRORES ───────────────────────────────────────────────────
+        err_rows = [r for r in rows if r[9] == "ERROR"]
+        if err_rows:
+            ws_e = wb.create_sheet("Errores")
+            _header_row(ws_e, COLS)
+            _write_items(ws_e, err_rows)
+            _autofit(ws_e)
+
+        buf = io.BytesIO()
+        wb.save(buf); buf.seek(0)
+        bloque_num = br[0] if br else bloque_id
+        return send_file(buf, as_attachment=True,
+                         download_name=f"reporte_bloque_{bloque_num}.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/cola")

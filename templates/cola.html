@@ -8,37 +8,54 @@
   .bloque-badge-pend { background:#1c2340; color:#79c0ff; border:1px solid #1f6feb; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
   .bloque-badge-ok   { background:#1c2e1c; color:#56d364; border:1px solid #2ea043; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
   .bloque-badge-err  { background:#2d1f1f; color:#ffa198; border:1px solid #f85149; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
-  .bloque-badge-eje  { background:#2d1f1f; color:#e3b341; border:1px solid #9e6a03; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
+  .bloque-badge-eje  { background:#2d2416; color:#e3b341; border:1px solid #9e6a03; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
 
-  .item-row { display:flex; align-items:center; gap:.7rem; padding:.55rem 1.4rem; border-bottom:1px solid #1c2128; font-size:.85rem; }
+  .item-row { display:flex; align-items:center; gap:.7rem; padding:.55rem 1.4rem; border-bottom:1px solid #1c2128; font-size:.85rem; flex-wrap:wrap; }
   .item-row:last-child { border-bottom:none; }
-  .item-zfer { font-weight:700; color:var(--accent); min-width:100px; font-size:.82rem; }
-  .item-tipo { background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:20px; font-size:.7rem; font-weight:600; padding:.1rem .5rem; }
-  .item-color { background:#1c2340; color:#79c0ff; border:1px solid #1f6feb; border-radius:20px; font-size:.7rem; font-weight:600; padding:.1rem .5rem; }
+  .item-zfer  { font-weight:700; color:var(--accent); min-width:100px; font-size:.82rem; }
+  .item-tipo  { background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:20px; font-size:.7rem; font-weight:600; padding:.1rem .5rem; white-space:nowrap; }
+  .item-color { background:#1c2340; color:#79c0ff; border:1px solid #1f6feb; border-radius:20px; font-size:.7rem; font-weight:600; padding:.1rem .5rem; white-space:nowrap; }
   .item-estado-pend { color:#8b949e; font-size:.72rem; }
   .item-estado-ok   { color:#56d364; font-size:.72rem; }
   .item-estado-err  { color:#ffa198; font-size:.72rem; }
 
-  .hora-input { background:#21262d; border:1px solid #30363d; color:var(--text); border-radius:7px; padding:.25rem .6rem; font-size:.82rem; width:130px; outline:none; }
+  .hora-input { background:#21262d; border:1px solid #30363d; color:var(--text); border-radius:7px; padding:.25rem .6rem; font-size:.82rem; width:145px; outline:none; }
   .hora-input:focus { border-color:var(--accent); }
 
   .btn-sm-purple { background:#2d1f3d; border:1px solid #8957e5; color:#d2a8ff; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; transition:background .15s; white-space:nowrap; }
   .btn-sm-purple:hover { background:#3d2557; }
-  .btn-sm-go { background:#1c2e1c; border:1px solid #2ea043; color:#56d364; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; transition:background .15s; white-space:nowrap; }
+  .btn-sm-go  { background:#1c2e1c; border:1px solid #2ea043; color:#56d364; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; white-space:nowrap; }
   .btn-sm-go:hover { background:#243624; }
-  .btn-sm-red { background:#2d1f1f; border:1px solid #f85149; color:#ffa198; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; transition:background .15s; }
+  .btn-sm-red { background:#2d1f1f; border:1px solid #f85149; color:#ffa198; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; white-space:nowrap; }
   .btn-sm-red:hover { background:#3d2626; }
+  .btn-sm-gray { background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; white-space:nowrap; }
+  .btn-sm-gray:hover { background:#2d333b; }
 
   .timer-toggle { display:inline-flex; align-items:center; gap:.4rem; cursor:pointer; font-size:.78rem; }
-  .timer-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
-  .timer-on  { background:#56d364; box-shadow:0 0 6px #56d364; }
-  .timer-off { background:#484f58; }
+  .timer-dot  { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .timer-on   { background:#56d364; box-shadow:0 0 6px #56d364; }
+  .timer-off  { background:#484f58; }
 
-  .paso-spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(0,194,255,.25); border-top-color:var(--accent); border-radius:50%; animation:_spin .75s linear infinite; }
+  .paso-spinner { display:inline-block; border:2px solid rgba(0,194,255,.25); border-top-color:var(--accent); border-radius:50%; animation:_spin .75s linear infinite; }
   @keyframes _spin { to { transform:rotate(360deg); } }
 
   .empty-state { text-align:center; padding:4rem 2rem; color:#484f58; }
   .empty-state i { font-size:3rem; display:block; margin-bottom:.75rem; }
+
+  /* Modal reporte */
+  .rep-kpi { background:#161b22; border:1px solid #21262d; border-radius:12px; padding:.9rem 1.1rem; text-align:center; }
+  .rep-kpi-num { font-size:1.9rem; font-weight:900; line-height:1.1; }
+  .rep-kpi-lbl { font-size:.72rem; color:#8b949e; text-transform:uppercase; letter-spacing:.6px; margin-top:.2rem; }
+  .rep-tab-btn { background:transparent; border:1px solid #30363d; color:#8b949e; border-radius:8px; padding:.3rem .9rem; font-size:.8rem; font-weight:600; cursor:pointer; transition:.12s; }
+  .rep-tab-btn.active { background:#21262d; color:#e6edf3; border-color:#8957e5; font-weight:800; }
+  .rep-row { display:grid; grid-template-columns:28px 90px 140px 1fr 80px 70px 90px 110px 1fr; gap:.5rem; align-items:center; padding:.6rem .9rem; border-bottom:1px solid #1c2128; font-size:.82rem; }
+  .rep-row:last-child { border-bottom:none; }
+  .rep-thead { background:#161b22; border-radius:10px 10px 0 0; }
+  .rep-thead .rep-row { color:#8b949e; font-size:.7rem; text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+  .tipo-color { background:#0d1e2e; color:#79c0ff; border:1px solid #1f6feb; border-radius:20px; font-size:.68rem; font-weight:700; padding:.1rem .5rem; white-space:nowrap; }
+  .tipo-formula { background:#1e1030; color:#d2a8ff; border:1px solid #8957e5; border-radius:20px; font-size:.68rem; font-weight:700; padding:.1rem .5rem; white-space:nowrap; }
+  .rep-tag-ok  { background:#0d2818; color:#56d364; border:1px solid #2ea043; border-radius:20px; font-size:.72rem; font-weight:700; padding:.1rem .5rem; }
+  .rep-tag-err { background:#2d0e0e; color:#ffa198; border:1px solid #f85149; border-radius:20px; font-size:.72rem; font-weight:700; padding:.1rem .5rem; }
 </style>
 
 <!-- ── Header ──────────────────────────────────────────────────────────── -->
@@ -49,18 +66,19 @@
       <i class="bi bi-clock-history me-2" style="color:#7c3aed;"></i>Cola de Homologaciones SAP
     </h4>
     <div style="font-size:.8rem; color:var(--muted); margin-top:.15rem;">
-      Homologaciones programadas · se ejecutan automáticamente en la hora del bloque
+      Homologaciones programadas · se ejecutan automáticamente a la hora del bloque
     </div>
   </div>
-  <div id="prox-bloque-chip" style="background:#1a102e; border:1px solid #2d2150; border-radius:10px; padding:.45rem 1rem; font-size:.82rem; color:#8b949e; display:flex; align-items:center; gap:.5rem;">
+  <div id="prox-bloque-chip" style="background:#1a102e; border:1px solid #2d2150; border-radius:10px;
+       padding:.45rem 1rem; font-size:.82rem; color:#8b949e; display:flex; align-items:center; gap:.5rem;">
     <span class="paso-spinner" style="width:10px;height:10px;border-width:2px;"></span> Cargando…
   </div>
-  <button onclick="_colaRefrescar()" style="background:#21262d; border:1px solid #30363d; color:var(--muted); border-radius:8px; padding:.4rem .85rem; font-size:.82rem; cursor:pointer;">
+  <button onclick="_colaRefrescar()" style="background:#21262d; border:1px solid #30363d; color:var(--muted); border-radius:8px; padding:.4rem .85rem; font-size:.82rem; cursor:pointer;" title="Refrescar">
     <i class="bi bi-arrow-clockwise"></i>
   </button>
 </div>
 
-<!-- ── Tabs: Cola pendiente / Historial ───────────────────────────────── -->
+<!-- ── Tabs ──────────────────────────────────────────────────────────────── -->
 <div style="display:flex; gap:.4rem; margin-bottom:1.2rem; border-bottom:1px solid #21262d; padding-bottom:.6rem;">
   <button id="tab-cola" onclick="_tabSwitch('cola')"
           style="background:#1c2340; color:#79c0ff; border:1px solid #1f6feb; border-radius:8px;
@@ -74,7 +92,7 @@
   </button>
 </div>
 
-<!-- ── Bloques pendientes ─────────────────────────────────────────────── -->
+<!-- ── Cola pendiente ─────────────────────────────────────────────────── -->
 <div id="tab-pane-cola">
   <div id="bloques-container">
     <div class="empty-state">
@@ -84,7 +102,7 @@
   </div>
 </div>
 
-<!-- ── Historial de ejecuciones ───────────────────────────────────────── -->
+<!-- ── Historial ──────────────────────────────────────────────────────── -->
 <div id="tab-pane-hist" style="display:none;">
   <div id="historial-container">
     <div class="empty-state">
@@ -93,7 +111,6 @@
     </div>
   </div>
 </div>
-
 {% endblock %}
 
 {% block scripts %}
@@ -109,17 +126,16 @@ async function _cargarProxBloque() {
     const d = await fetch(`${_COLA_URL}/estado`).then(r => r.json());
     const chip = document.getElementById('prox-bloque-chip');
     if (d.bloque_num) {
-      const hora = d.hora_prog || '—';
       const timer = d.timer_activo
         ? `<span class="timer-dot timer-on" title="Timer activo"></span>`
         : `<span class="timer-dot timer-off" title="Timer apagado"></span>`;
-      const yaPasoLabel = d.ya_paso ? `<span style="color:#e3b341;font-size:.72rem;"> (hora pasada)</span>` : '';
-      chip.innerHTML = `${timer} <b style="color:#bc8cff;">Bloque ${d.bloque_num}</b>&nbsp;·&nbsp;${hora}${yaPasoLabel}&nbsp;·&nbsp;<span style="color:#79c0ff;">${d.total_pendientes || 0} pendientes</span>`;
+      const yaPaso = d.ya_paso ? `<span style="color:#e3b341;font-size:.72rem;"> (hora pasada)</span>` : '';
+      chip.innerHTML = `${timer} <b style="color:#bc8cff;">Bloque ${d.bloque_num}</b>&nbsp;·&nbsp;${d.hora_prog}${yaPaso}&nbsp;·&nbsp;<span style="color:#79c0ff;">${d.total_pendientes||0} pendientes</span>`;
     } else {
       chip.innerHTML = `<i class="bi bi-inbox" style="color:#484f58;"></i> <span style="color:#484f58;">Sin bloques pendientes</span>`;
     }
   } catch(e) {
-    document.getElementById('prox-bloque-chip').innerHTML = '<span style="color:#f85149;">Error cargando estado</span>';
+    document.getElementById('prox-bloque-chip').innerHTML = '<span style="color:#f85149;">Error</span>';
   }
 }
 
@@ -130,33 +146,56 @@ async function _cargarBloques() {
     if (!data.bloques || data.bloques.length === 0) {
       cont.innerHTML = `<div class="empty-state">
         <i class="bi bi-inbox"></i>
-        <div style="font-size:1rem; color:#484f58;">No hay bloques en cola</div>
-        <div style="font-size:.82rem; margin-top:.4rem;">Agrega colores o fórmulas desde la página de Combinaciones</div>
+        <div style="font-size:1rem;">No hay bloques en cola</div>
+        <div style="font-size:.82rem; margin-top:.4rem; color:#484f58;">Agrega colores o fórmulas desde Combinaciones</div>
       </div>`;
       return;
     }
-
     let html = '';
     for (const b of data.bloques) {
       const hora = new Date(b.hora_prog).toLocaleString('es-CO', {dateStyle:'medium', timeStyle:'short'});
       const estadoBadge = _estadoBadge(b.estado);
-      const timerLabel = b.timer_activo
-        ? `<span class="timer-toggle" onclick="_toggleTimer(${b.id}, this)"><span class="timer-dot timer-on"></span>Timer activo</span>`
-        : `<span class="timer-toggle" onclick="_toggleTimer(${b.id}, this)"><span class="timer-dot timer-off"></span>Timer apagado</span>`;
+      const timerLabel = b.estado === 'PENDIENTE'
+        ? (b.timer_activo
+            ? `<span class="timer-toggle" onclick="_toggleTimer(${b.id},this)"><span class="timer-dot timer-on"></span>Timer activo</span>`
+            : `<span class="timer-toggle" onclick="_toggleTimer(${b.id},this)"><span class="timer-dot timer-off"></span>Timer apagado</span>`)
+        : '';
 
-      const itemsHtml = (b.items || []).map(it => _itemRow(it)).join('');
-      const itemsEmpty = !b.items || b.items.length === 0
+      const itemsHtml  = (b.items||[]).map(it => _itemRow(it)).join('');
+      const itemsEmpty = (!b.items || b.items.length === 0)
         ? `<div style="padding:1rem 1.4rem; color:#484f58; font-size:.85rem;">Sin ítems en este bloque</div>` : '';
 
-      const accionesHtml = b.estado === 'PENDIENTE' ? `
-        <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">
-          <input type="datetime-local" class="hora-input" id="hora-inp-${b.id}"
-                 value="${_toDatetimeLocal(b.hora_prog)}"
-                 onchange="_cambiarHora(${b.id}, this.value)">
-          <span style="font-size:.72rem; color:#484f58;">hora prog.</span>
-          <button class="btn-sm-go" onclick="_ejecutarBloque(${b.id})"><i class="bi bi-play-fill me-1"></i>Ejecutar ahora</button>
-          <button class="btn-sm-red" onclick="_eliminarBloque(${b.id})"><i class="bi bi-trash me-1"></i>Vaciar</button>
-        </div>` : `<div style="font-size:.78rem; color:#484f58;">${b.ejecutado_el ? 'Ejecutado: ' + new Date(b.ejecutado_el).toLocaleString('es-CO') : ''} ${b.ok_count != null ? '· OK: '+b.ok_count : ''} ${b.error_count ? '· Errores: '+b.error_count : ''}</div>`;
+      let accionesHtml = '';
+      if (b.estado === 'PENDIENTE') {
+        accionesHtml = `
+          <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">
+            <input type="datetime-local" class="hora-input" id="hora-inp-${b.id}"
+                   value="${_toDatetimeLocal(b.hora_prog)}"
+                   onchange="_cambiarHora(${b.id}, this.value)">
+            <span style="font-size:.72rem; color:#484f58;">hora prog.</span>
+            <button class="btn-sm-go"  onclick="_ejecutarBloque(${b.id})"><i class="bi bi-play-fill me-1"></i>Ejecutar ahora</button>
+            <button class="btn-sm-red" onclick="_borrarBloque(${b.id})"><i class="bi bi-trash3 me-1"></i>Borrar</button>
+          </div>`;
+      } else if (b.estado === 'COMPLETADO') {
+        const okBadge  = b.ok_count    ? `<span class="bloque-badge-ok" style="font-size:.72rem;">✓ ${b.ok_count} OK</span>` : '';
+        const errBadge = b.error_count ? `<span class="bloque-badge-err" style="font-size:.72rem;">✗ ${b.error_count} errores</span>` : '';
+        const ejTime   = b.ejecutado_el ? `<span style="font-size:.76rem;color:#484f58;">Ejecutado: ${new Date(b.ejecutado_el).toLocaleString('es-CO')}</span>` : '';
+        accionesHtml = `
+          <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">
+            ${ejTime} ${okBadge} ${errBadge}
+            <button class="btn-sm-purple" onclick="_verReporteBloque(${b.id})"><i class="bi bi-file-earmark-bar-graph me-1"></i>Ver reporte</button>
+            <a href="${_COLA_URL}/bloque/${b.id}/reporte/excel" class="btn-sm-go" style="text-decoration:none;display:inline-flex;align-items:center;gap:.3rem;"><i class="bi bi-file-earmark-excel"></i>Excel</a>
+            <button class="btn-sm-red" onclick="_borrarBloque(${b.id})"><i class="bi bi-trash3 me-1"></i>Borrar</button>
+          </div>`;
+      } else { /* EJECUTANDO */
+        accionesHtml = `
+          <div style="display:flex; align-items:center; gap:.6rem;">
+            <span style="font-size:.78rem; color:#e3b341; display:flex; align-items:center; gap:.4rem;">
+              <span class="paso-spinner" style="width:12px;height:12px;border-width:2px;"></span> Ejecutando…
+            </span>
+            <button class="btn-sm-red" onclick="_resetearBloque(${b.id})"><i class="bi bi-arrow-counterclockwise me-1"></i>Resetear</button>
+          </div>`;
+      }
 
       html += `
       <div class="bloque-card" id="bloque-card-${b.id}">
@@ -165,96 +204,74 @@ async function _cargarBloques() {
             <span style="font-size:1rem; font-weight:800; color:#bc8cff;">
               <i class="bi bi-layers-fill me-1"></i>Bloque ${b.bloque_num}
             </span>
-            ${estadoBadge}
-            ${timerLabel}
-            <span style="font-size:.8rem; color:var(--muted);">
-              <i class="bi bi-clock me-1"></i>${hora}
-            </span>
-            <span style="font-size:.78rem; color:#79c0ff; background:#1c2340; border:1px solid #1f6feb; border-radius:20px; padding:.1rem .55rem;">
-              ${b.total_items || 0} ítems
-            </span>
+            ${estadoBadge} ${timerLabel}
+            <span style="font-size:.8rem; color:var(--muted);"><i class="bi bi-clock me-1"></i>${hora}</span>
+            <span style="font-size:.78rem; color:#79c0ff; background:#1c2340; border:1px solid #1f6feb; border-radius:20px; padding:.1rem .55rem;">${b.total_items||0} ítems</span>
           </div>
           <div>${accionesHtml}</div>
         </div>
-        <div id="items-bloque-${b.id}">
-          ${itemsHtml}${itemsEmpty}
-        </div>
+        <div id="items-bloque-${b.id}">${itemsHtml}${itemsEmpty}</div>
       </div>`;
     }
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div class="alert-err"><i class="bi bi-exclamation-triangle me-2"></i>Error cargando bloques: ${e.message}</div>`;
+    cont.innerHTML = `<div style="color:#ffa198; padding:1rem;">Error cargando bloques: ${e.message}</div>`;
   }
 }
 
 function _itemRow(it) {
   const tipoLabel = it.tipo === 'color' ? 'Color' : 'Fórmula';
   const detalle = it.tipo === 'color'
-    ? `<span class="item-color">${it.color_nombre || it.color || '—'}</span>`
-    : `<span class="item-tipo" style="background:#1c2e1c;color:#56d364;border-color:#2ea043;">${it.formula_nueva || '—'}</span>`;
+    ? `<span class="item-color">${it.color_nombre||it.color||'—'}</span>`
+    : `<span class="item-tipo" style="background:#1c2e1c;color:#56d364;border-color:#2ea043;">${it.formula_nueva||'—'}</span>`;
   const estadoHtml = it.estado === 'OK'
     ? `<span class="item-estado-ok"><i class="bi bi-check-circle-fill me-1"></i>OK ${it.zfer_nuevo ? '→ '+it.zfer_nuevo : ''}</span>`
     : it.estado === 'ERROR'
-    ? `<span class="item-estado-err"><i class="bi bi-x-circle-fill me-1"></i>${it.error_msg || 'Error'}</span>`
+    ? `<span class="item-estado-err" title="${it.error_msg||''}"><i class="bi bi-x-circle-fill me-1"></i>${(it.error_msg||'Error').substring(0,60)}${(it.error_msg||'').length>60?'…':''}</span>`
     : `<span class="item-estado-pend"><i class="bi bi-hourglass me-1"></i>Pendiente</span>`;
-
   return `<div class="item-row">
     <span class="item-zfer">${it.zfer_base}</span>
     <span class="item-tipo">${tipoLabel}</span>
     ${detalle}
-    ${it.zpla ? `<span style="font-size:.72rem; color:#484f58;">ZPLA: ${it.zpla}</span>` : ''}
+    ${it.zpla ? `<span style="font-size:.72rem;color:#484f58;">ZPLA: ${it.zpla}</span>` : ''}
     <span style="flex:1;"></span>
     ${estadoHtml}
   </div>`;
 }
 
-function _estadoBadge(estado) {
-  const m = {
-    'PENDIENTE': ['bloque-badge-pend', 'Pendiente'],
-    'EJECUTANDO': ['bloque-badge-eje', 'Ejecutando…'],
-    'COMPLETADO': ['bloque-badge-ok', 'Completado'],
-    'ERROR': ['bloque-badge-err', 'Error'],
-  };
-  const [cls, lbl] = m[estado] || ['bloque-badge-pend', estado];
-  return `<span class="${cls}">${lbl}</span>`;
+function _estadoBadge(e) {
+  const m = { PENDIENTE:['bloque-badge-pend','Pendiente'], EJECUTANDO:['bloque-badge-eje','Ejecutando…'], COMPLETADO:['bloque-badge-ok','Completado'], ERROR:['bloque-badge-err','Error'] };
+  const [c,l] = m[e]||['bloque-badge-pend',e];
+  return `<span class="${c}">${l}</span>`;
 }
 
 function _toDatetimeLocal(isoStr) {
   if (!isoStr) return '';
-  // strip seconds/ms and convert to local ISO format for datetime-local input
   const d = new Date(isoStr);
-  const pad = n => String(n).padStart(2,'0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 async function _toggleTimer(bloqueId, el) {
   try {
-    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/timer`, {method:'POST'}).then(r => r.json());
+    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/timer`, {method:'POST'}).then(r=>r.json());
     if (d.ok) {
       const dot = el.querySelector('.timer-dot');
-      if (d.timer_activo) {
-        dot.className = 'timer-dot timer-on'; el.childNodes[1].textContent = 'Timer activo';
-      } else {
-        dot.className = 'timer-dot timer-off'; el.childNodes[1].textContent = 'Timer apagado';
-      }
+      if (d.timer_activo) { dot.className='timer-dot timer-on'; el.childNodes[1].textContent='Timer activo'; }
+      else                { dot.className='timer-dot timer-off'; el.childNodes[1].textContent='Timer apagado'; }
     }
-  } catch(e) { alert('Error al cambiar timer'); }
+  } catch(e) {}
 }
 
 async function _cambiarHora(bloqueId, val) {
   if (!val) return;
-  // convert datetime-local value to ISO
-  const iso = new Date(val).toISOString();
   try {
     const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/hora`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({hora: iso})
+      body: JSON.stringify({hora: val})   // hora local directa, sin convertir a UTC
     }).then(r => r.json());
-    if (d.ok) {
-      _colaRefrescar();
-    } else {
-      alert(d.error || 'Error al cambiar hora');
-    }
+    if (d.ok) { _cargarProxBloque(); }
+    else { alert(d.error||'Error al cambiar hora'); _colaRefrescar(); }
   } catch(e) { alert('Error'); }
 }
 
@@ -263,111 +280,309 @@ async function _ejecutarBloque(bloqueId) {
   const card = document.getElementById(`bloque-card-${bloqueId}`);
   if (card) card.style.opacity = '.6';
   try {
-    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/ejecutar`, {method:'POST'}).then(r => r.json());
-    if (d.ok) {
-      // Bloque pasó a EJECUTANDO, refrescar en 2s para mostrar estado
-      setTimeout(_colaRefrescar, 2000);
-    } else {
-      alert(d.error || 'No se puede ejecutar');
-      if (card) card.style.opacity = '1';
-    }
-  } catch(e) { alert('Error de red'); if (card) card.style.opacity = '1'; }
+    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/ejecutar`, {method:'POST'}).then(r=>r.json());
+    if (d.ok) { setTimeout(_colaRefrescar, 2000); }
+    else { alert(d.error||'No se puede ejecutar'); if(card) card.style.opacity='1'; }
+  } catch(e) { alert('Error de red'); if(card) card.style.opacity='1'; }
 }
 
-async function _eliminarBloque(bloqueId) {
-  if (!confirm('¿Vaciar todos los ítems pendientes de este bloque? No se puede deshacer.')) return;
+async function _resetearBloque(bloqueId) {
+  if (!confirm('¿Resetear este bloque a PENDIENTE?\nLos ítems con error se resetean para reintento.')) return;
   try {
-    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/vaciar`, {method:'POST'}).then(r => r.json());
+    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/reset`, {method:'POST'}).then(r=>r.json());
     if (d.ok) _colaRefrescar();
-    else alert(d.error || 'Error');
-  } catch(e) { alert('Error'); }
+    else alert(d.error||'No se pudo resetear');
+  } catch(e) { alert('Error de red'); }
 }
 
-// Update navbar badge on all pages
-async function _colaActualizarBadge() {
+async function _borrarBloque(bloqueId) {
+  if (!confirm('¿Borrar este bloque y todos sus ítems permanentemente?\nEsta acción no se puede deshacer.')) return;
   try {
-    const d = await fetch(`${_COLA_URL}/estado`).then(r => r.json());
-    const b = document.getElementById('cola-navbar-badge');
-    if (!b) return;
-    if (d.total_pendientes > 0) {
-      b.textContent = d.total_pendientes;
-      b.style.display = 'inline-block';
-    } else {
-      b.style.display = 'none';
-    }
-  } catch(e) {}
+    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/borrar`, {method:'POST'}).then(r=>r.json());
+    if (d.ok) _colaRefrescar();
+    else alert(d.error||'Error al borrar');
+  } catch(e) { alert('Error de red'); }
 }
 
-// ── Tabs ──────────────────────────────────────────────────────────────────
+// ── Tabs ─────────────────────────────────────────────────────────────────────
 let _tabActual = 'cola';
 function _tabSwitch(tab) {
   _tabActual = tab;
   const isCola = tab === 'cola';
   document.getElementById('tab-pane-cola').style.display = isCola ? '' : 'none';
   document.getElementById('tab-pane-hist').style.display = isCola ? 'none' : '';
-  const btnCola = document.getElementById('tab-cola');
-  const btnHist = document.getElementById('tab-hist');
+  const bC = document.getElementById('tab-cola'), bH = document.getElementById('tab-hist');
   if (isCola) {
-    btnCola.style.background = '#1c2340'; btnCola.style.color = '#79c0ff'; btnCola.style.borderColor = '#1f6feb';
-    btnHist.style.background = '#21262d'; btnHist.style.color = '#8b949e'; btnHist.style.borderColor = '#30363d';
+    bC.style.cssText += ';background:#1c2340;color:#79c0ff;border-color:#1f6feb;';
+    bH.style.cssText += ';background:#21262d;color:#8b949e;border-color:#30363d;';
   } else {
-    btnHist.style.background = '#1c2e1c'; btnHist.style.color = '#56d364'; btnHist.style.borderColor = '#2ea043';
-    btnCola.style.background = '#21262d'; btnCola.style.color = '#8b949e'; btnCola.style.borderColor = '#30363d';
+    bH.style.cssText += ';background:#1c2e1c;color:#56d364;border-color:#2ea043;';
+    bC.style.cssText += ';background:#21262d;color:#8b949e;border-color:#30363d;';
     _cargarHistorial();
   }
 }
 
-// ── Historial ─────────────────────────────────────────────────────────────
+// ── Historial ─────────────────────────────────────────────────────────────────
 async function _cargarHistorial() {
   const cont = document.getElementById('historial-container');
-  cont.innerHTML = `<div class="empty-state"><span class="paso-spinner" style="width:24px;height:24px;border-width:3px;"></span><div style="margin-top:.8rem;">Cargando historial…</div></div>`;
+  cont.innerHTML = `<div class="empty-state"><span class="paso-spinner" style="width:24px;height:24px;border-width:3px;"></span><div style="margin-top:.8rem;">Cargando…</div></div>`;
   try {
-    const d = await fetch(`${_COLA_URL}/historial?limit=200`).then(r => r.json());
-    if (!d.ok || !d.log.length) {
+    const d = await fetch(`${_COLA_URL}/historial?limit=200`).then(r=>r.json());
+    if (!d.ok||!d.log.length) {
       cont.innerHTML = `<div class="empty-state"><i class="bi bi-journal-x"></i><div>Sin ejecuciones registradas aún</div></div>`;
       return;
     }
-    const rows = d.log.map(r => {
-      const esBadge = r.estado === 'OK'
-        ? `<span class="bloque-badge-ok">OK</span>`
-        : `<span class="bloque-badge-err">ERROR</span>`;
-      const detalle = r.tipo === 'COLOR'
-        ? `<span class="item-color">${r.color_nombre || r.color || '—'}</span>`
-        : `<span class="item-tipo" style="background:#1c2e1c;color:#56d364;border-color:#2ea043;">${r.formula_nueva || '—'}</span>`;
-      const zferNuevo = r.zfer_nuevo ? `<span style="color:var(--accent);font-size:.72rem;">→ ${r.zfer_nuevo}</span>` : '';
-      const errMsg = r.error_msg ? `<span style="color:#ffa198;font-size:.7rem;" title="${r.error_msg}"><i class="bi bi-exclamation-circle me-1"></i>${r.error_msg.substring(0,60)}${r.error_msg.length>60?'…':''}</span>` : '';
-      return `<div class="item-row">
-        <span class="item-zfer">${r.zfer_base}</span>
-        <span class="item-tipo">${r.tipo}</span>
-        ${detalle}
-        ${zferNuevo}
-        <span style="flex:1;"></span>
-        ${esBadge}
-        ${errMsg}
-        <span style="color:#484f58;font-size:.7rem;">${r.ejecutado_el}</span>
+    // Agrupar por bloque_id
+    const bloques = {};
+    d.log.forEach(r => {
+      if (!bloques[r.bloque_id]) bloques[r.bloque_id] = [];
+      bloques[r.bloque_id].push(r);
+    });
+    let html = '';
+    for (const [bid, items] of Object.entries(bloques).reverse()) {
+      const okN  = items.filter(i=>i.estado==='OK').length;
+      const errN = items.filter(i=>i.estado==='ERROR').length;
+      const fecha = items[0].ejecutado_el||'—';
+      const rows = items.map(r => {
+        const badge = r.estado==='OK'
+          ? `<span class="bloque-badge-ok" style="font-size:.7rem;">OK</span>`
+          : `<span class="bloque-badge-err" style="font-size:.7rem;">ERROR</span>`;
+        const det = r.tipo==='COLOR'
+          ? `<span class="item-color">${r.color_nombre||r.color||'—'}</span>`
+          : `<span class="item-tipo" style="background:#1c2e1c;color:#56d364;border-color:#2ea043;">${r.formula_nueva||'—'}</span>`;
+        return `<div class="item-row">
+          <span class="item-zfer">${r.zfer_base}</span>
+          <span class="item-tipo">${r.tipo}</span>
+          ${det}
+          ${r.zfer_nuevo?`<span style="color:var(--accent);font-size:.72rem;font-weight:700;">→ ${r.zfer_nuevo}</span>`:''}
+          <span style="flex:1;"></span>
+          ${badge}
+          ${r.error_msg?`<span style="color:#ffa198;font-size:.7rem;" title="${r.error_msg}">${r.error_msg.substring(0,50)}…</span>`:''}
+          <span style="color:#484f58;font-size:.7rem;">${r.ejecutado_el}</span>
+        </div>`;
+      }).join('');
+      html += `<div class="bloque-card" style="margin-bottom:1rem;">
+        <div class="bloque-header">
+          <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">
+            <span style="font-weight:800;color:#bc8cff;"><i class="bi bi-layers-fill me-1"></i>Bloque #${bid}</span>
+            ${okN?`<span class="bloque-badge-ok" style="font-size:.72rem;">✓ ${okN} OK</span>`:''}
+            ${errN?`<span class="bloque-badge-err" style="font-size:.72rem;">✗ ${errN} errores</span>`:''}
+            <span style="font-size:.75rem;color:#484f58;">${fecha}</span>
+          </div>
+          <a href="${_COLA_URL}/bloque/${bid}/reporte/excel" class="btn-sm-go" style="text-decoration:none;display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;">
+            <i class="bi bi-file-earmark-excel"></i>Excel
+          </a>
+        </div>
+        <div>${rows}</div>
       </div>`;
-    }).join('');
-
-    const okN  = d.log.filter(r => r.estado === 'OK').length;
-    const errN = d.log.filter(r => r.estado === 'ERROR').length;
+    }
+    const totalOk  = d.log.filter(r=>r.estado==='OK').length;
+    const totalErr = d.log.filter(r=>r.estado==='ERROR').length;
     cont.innerHTML = `
-      <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem; flex-wrap:wrap;">
-        <span class="bloque-badge-ok" style="font-size:.82rem; padding:.3rem .8rem;">✓ ${okN} exitosas</span>
-        ${errN ? `<span class="bloque-badge-err" style="font-size:.82rem; padding:.3rem .8rem;">✗ ${errN} con error</span>` : ''}
-        <span style="color:#484f58; font-size:.78rem;">Últimas ${d.log.length} ejecuciones</span>
+      <div style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:1.2rem;">
+        <span class="bloque-badge-ok" style="font-size:.82rem;padding:.3rem .85rem;">✓ ${totalOk} exitosas</span>
+        ${totalErr?`<span class="bloque-badge-err" style="font-size:.82rem;padding:.3rem .85rem;">✗ ${totalErr} con error</span>`:''}
+        <span style="color:#484f58;font-size:.78rem;">Últimas ${d.log.length} ejecuciones · ${Object.keys(bloques).length} bloques</span>
       </div>
-      <div class="bloque-card" style="overflow:hidden;">${rows}</div>`;
+      ${html}`;
   } catch(e) {
-    cont.innerHTML = `<div class="alert-err">Error cargando historial: ${e.message}</div>`;
+    cont.innerHTML = `<div style="color:#ffa198;padding:1rem;">Error: ${e.message}</div>`;
   }
 }
 
-// Auto-refresh every 30s while on this page (solo la tab activa)
+// ── Reporte visual completo por bloque ────────────────────────────────────────
+async function _verReporteBloque(bloqueId) {
+  const modal  = document.getElementById('modal-rep');
+  const cuerpo = document.getElementById('rep-cuerpo');
+  const titulo = document.getElementById('rep-titulo');
+  const excelBtn = document.getElementById('rep-excel-btn');
+  modal.style.display = 'flex';
+  cuerpo.innerHTML = `<div style="text-align:center;padding:3rem;color:#484f58;">
+    <span class="paso-spinner" style="width:28px;height:28px;border-width:3px;display:inline-block;"></span>
+    <div style="margin-top:.9rem;">Cargando reporte…</div></div>`;
+
+  try {
+    const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/reporte`).then(r=>r.json());
+    if (!d.ok) { cuerpo.innerHTML=`<div style="color:#ffa198;padding:1.5rem;">Error: ${d.error}</div>`; return; }
+
+    const items   = d.items||[];
+    const okN     = d.ok_count||0, errN = d.error_count||0, total = items.length;
+    const colores  = items.filter(i=>i.tipo==='COLOR');
+    const formulas = items.filter(i=>i.tipo==='FORMULA');
+    const errItems = items.filter(i=>i.estado==='ERROR');
+    const tasa     = total ? Math.round(okN/total*100) : 0;
+    const bloque   = d.bloque||{};
+
+    titulo.innerHTML = `<i class="bi bi-file-earmark-bar-graph me-2" style="color:#7c3aed;"></i>
+      Reporte · Bloque ${bloque.num||bloqueId}`;
+    excelBtn.href = `${_COLA_URL}/bloque/${bloqueId}/reporte/excel`;
+
+    // ── renderTabla ──────────────────────────────────────────────────────────
+    const renderTabla = (lista) => {
+      if (!lista.length) return `<div style="padding:2rem;text-align:center;color:#484f58;">Sin ítems en esta categoría</div>`;
+      return lista.map((it,i) => {
+        const bg = it.estado==='OK' ? 'rgba(56,211,100,.05)' : it.estado==='ERROR' ? 'rgba(248,81,73,.06)' : '';
+        const tipoBadge = it.tipo==='COLOR'
+          ? `<span class="tipo-color"><i class="bi bi-palette me-1"></i>Color</span>`
+          : `<span class="tipo-formula"><i class="bi bi-flask me-1"></i>Fórmula</span>`;
+        const detalle = it.tipo==='COLOR'
+          ? `<div style="font-size:.78rem;color:#79c0ff;">${it.color_nombre||it.color||'—'}</div>
+             <div style="font-size:.68rem;color:#484f58;">Franja: ${it.franja||'00'}</div>`
+          : `<div style="font-size:.78rem;color:#d2a8ff;">${it.formula_nueva||'—'}</div>
+             <div style="font-size:.68rem;color:#484f58;">${it.color_nombre||it.color||''}</div>`;
+        const estadoBadge = it.estado==='OK'
+          ? `<span class="rep-tag-ok"><i class="bi bi-check-circle-fill me-1"></i>OK</span>`
+          : it.estado==='ERROR'
+          ? `<span class="rep-tag-err"><i class="bi bi-x-circle-fill me-1"></i>ERROR</span>`
+          : `<span style="color:#8b949e;font-size:.72rem;">—</span>`;
+        const errShort = it.error_msg ? (it.error_msg.length>60 ? it.error_msg.substring(0,60)+'…' : it.error_msg) : '—';
+        return `<div class="rep-row" style="background:${bg};">
+          <span style="color:#484f58;font-size:.7rem;">${i+1}</span>
+          <span style="font-weight:700;color:#58a6ff;font-size:.8rem;">${it.zfer_base}</span>
+          <div>${detalle}</div>
+          <div>
+            <div style="font-size:.78rem;color:#e6edf3;">${it.tipo_pieza||'—'}</div>
+            <div style="font-size:.68rem;color:#484f58;">ZPLA: ${it.zpla||'—'}</div>
+          </div>
+          ${tipoBadge}
+          <span style="font-size:.7rem;color:#484f58;">${it.ejecutado_el||'—'}</span>
+          ${estadoBadge}
+          <span style="font-weight:700;color:#58a6ff;font-size:.82rem;">${it.zfer_nuevo||'—'}</span>
+          <span style="font-size:.7rem;color:#ffa198;word-break:break-word;" title="${(it.error_msg||'').replace(/"/g,"'")}">${errShort}</span>
+        </div>`;
+      }).join('');
+    };
+
+    // ── Render en cuerpo ─────────────────────────────────────────────────────
+    cuerpo.innerHTML = `
+      <!-- Meta bloque -->
+      <div style="display:flex;gap:1.2rem;flex-wrap:wrap;margin-bottom:1.2rem;font-size:.78rem;color:#8b949e;">
+        ${bloque.hora_prog ? `<span><i class="bi bi-clock me-1"></i>Programado: <b style="color:#e6edf3;">${bloque.hora_prog}</b></span>` : ''}
+        ${bloque.ejecutado_el ? `<span><i class="bi bi-check2-circle me-1"></i>Ejecutado: <b style="color:#e6edf3;">${bloque.ejecutado_el}</b></span>` : ''}
+        <span><i class="bi bi-bar-chart me-1"></i>Tasa de éxito: <b style="color:${tasa===100?'#56d364':tasa>50?'#e3b341':'#ffa198'};">${tasa}%</b></span>
+      </div>
+
+      <!-- KPIs -->
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.7rem;margin-bottom:1.4rem;">
+        <div class="rep-kpi"><div class="rep-kpi-num" style="color:#e6edf3;">${total}</div><div class="rep-kpi-lbl">Total</div></div>
+        <div class="rep-kpi"><div class="rep-kpi-num" style="color:#56d364;">${okN}</div><div class="rep-kpi-lbl">Exitosos</div></div>
+        <div class="rep-kpi"><div class="rep-kpi-num" style="color:#ffa198;">${errN}</div><div class="rep-kpi-lbl">Errores</div></div>
+        <div class="rep-kpi"><div class="rep-kpi-num" style="color:#79c0ff;">${colores.length}</div><div class="rep-kpi-lbl">Colores</div></div>
+        <div class="rep-kpi"><div class="rep-kpi-num" style="color:#d2a8ff;">${formulas.length}</div><div class="rep-kpi-lbl">Fórmulas</div></div>
+      </div>
+
+      <!-- Tabs -->
+      <div style="display:flex;gap:.4rem;margin-bottom:.8rem;flex-wrap:wrap;" id="rep-tabs-${bloqueId}">
+        <button class="rep-tab-btn active" data-tab="todos"   onclick="_repTab_${bloqueId}('todos')">
+          <i class="bi bi-list-ul me-1"></i>Todos <span style="background:#21262d;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;">${total}</span>
+        </button>
+        <button class="rep-tab-btn" data-tab="color" onclick="_repTab_${bloqueId}('color')">
+          <i class="bi bi-palette me-1"></i>Color <span style="background:#0d1e2e;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;color:#79c0ff;">${colores.length}</span>
+        </button>
+        <button class="rep-tab-btn" data-tab="formula" onclick="_repTab_${bloqueId}('formula')">
+          <i class="bi bi-flask me-1"></i>Fórmula <span style="background:#1e1030;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;color:#d2a8ff;">${formulas.length}</span>
+        </button>
+        ${errN ? `<button class="rep-tab-btn" data-tab="error" onclick="_repTab_${bloqueId}('error')" style="border-color:#f85149;">
+          <i class="bi bi-x-circle me-1"></i>Errores <span style="background:#2d1f1f;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;color:#ffa198;">${errN}</span>
+        </button>` : ''}
+      </div>
+
+      <!-- Tabla -->
+      <div style="border:1px solid #21262d;border-radius:12px;overflow:hidden;margin-bottom:1.4rem;">
+        <div class="rep-thead">
+          <div class="rep-row">
+            <span>#</span><span>ZFER Base</span><span>Detalle</span><span>Pieza / ZPLA</span>
+            <span>Tipo</span><span>Hora</span><span>Estado</span><span>ZFER Nuevo</span><span>Error</span>
+          </div>
+        </div>
+        <div id="rep-tabla-body" style="max-height:42vh;overflow-y:auto;"></div>
+      </div>
+
+      <!-- Errores detallados -->
+      ${errN ? `
+      <div id="rep-errores-det">
+        <div style="font-size:.73rem;text-transform:uppercase;letter-spacing:.8px;color:#ffa198;margin-bottom:.7rem;font-weight:700;">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>Detalle de errores (${errN})
+        </div>
+        ${errItems.map((it,i)=>`
+        <div style="background:#1a0a0a;border:1px solid #6e1a19;border-radius:12px;padding:.9rem 1.1rem;margin-bottom:.6rem;">
+          <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.5rem;flex-wrap:wrap;">
+            <span style="font-size:.7rem;color:#484f58;font-weight:700;">#${i+1}</span>
+            <span style="font-weight:800;color:#58a6ff;font-size:.85rem;">${it.zfer_base}</span>
+            ${it.tipo==='COLOR'
+              ? `<span class="tipo-color"><i class="bi bi-palette me-1"></i>Color</span>
+                 <span style="font-size:.78rem;color:#79c0ff;">${it.color_nombre||it.color||'—'}</span>`
+              : `<span class="tipo-formula"><i class="bi bi-flask me-1"></i>Fórmula</span>
+                 <span style="font-size:.78rem;color:#d2a8ff;">${it.formula_nueva||'—'}</span>`}
+            <span style="font-size:.7rem;color:#484f58;margin-left:auto;">${it.ejecutado_el||''}</span>
+          </div>
+          <pre style="margin:0;font-size:.79rem;color:#ffa198;font-family:monospace;white-space:pre-wrap;word-break:break-word;background:#0d0606;border-radius:7px;padding:.6rem .8rem;">${(it.error_msg||'Sin detalle').replace(/</g,'&lt;')}</pre>
+        </div>`).join('')}
+      </div>` : ''}`;
+
+    // Exponer función de tab en window para onclick inline
+    window[`_repTab_${bloqueId}`] = (tab) => {
+      document.querySelectorAll(`#rep-tabs-${bloqueId} .rep-tab-btn`).forEach(b => b.classList.toggle('active', b.dataset.tab===tab));
+      const lista = tab==='todos' ? items : tab==='color' ? colores : tab==='formula' ? formulas : errItems;
+      document.getElementById('rep-tabla-body').innerHTML = renderTabla(lista);
+    };
+
+    document.getElementById('rep-tabla-body').innerHTML = renderTabla(items);
+
+  } catch(e) {
+    document.getElementById('rep-cuerpo').innerHTML = `<div style="color:#ffa198;padding:1.5rem;"><i class="bi bi-exclamation-triangle me-2"></i>Error de red: ${e.message}</div>`;
+  }
+}
+
+async function _colaActualizarBadge() {
+  try {
+    const d = await fetch(`${_COLA_URL}/estado`).then(r=>r.json());
+    const b = document.getElementById('cola-navbar-badge');
+    if (!b) return;
+    if (d.total_pendientes>0) { b.textContent=d.total_pendientes; b.style.display='inline-block'; }
+    else b.style.display='none';
+  } catch(e) {}
+}
+
+// Auto-refresh cada 30s
 _colaRefrescar();
 _colaActualizarBadge();
 setInterval(() => {
   _colaActualizarBadge();
-  if (_tabActual === 'cola') _colaRefrescar();
+  if (_tabActual==='cola') _colaRefrescar();
 }, 30000);
 </script>
+
+<!-- ── Modal reporte ────────────────────────────────────────────────────────── -->
+<div id="modal-rep" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.8);
+     z-index:9000; align-items:flex-start; justify-content:center; overflow-y:auto; padding:1.5rem 1rem;">
+  <div style="background:#0d1117; border:1px solid #30363d; border-radius:18px;
+              width:100%; max-width:1000px; margin:auto; padding:1.8rem 2rem; position:relative;">
+
+    <!-- Header modal -->
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.4rem;">
+      <div>
+        <div style="font-size:.7rem; text-transform:uppercase; letter-spacing:1px; color:#8b949e;">AGP Glass · Colombia CO01</div>
+        <h3 id="rep-titulo" style="margin:.15rem 0 0; font-size:1.2rem; font-weight:800; color:#e6edf3;">
+          <i class="bi bi-file-earmark-bar-graph me-2" style="color:#7c3aed;"></i>Reporte de Homologación
+        </h3>
+      </div>
+      <div style="display:flex; gap:.6rem; align-items:center;">
+        <a id="rep-excel-btn" href="#"
+           style="background:#1c2e1c; border:1px solid #2ea043; color:#56d364; border-radius:8px;
+                  padding:.4rem 1rem; font-size:.82rem; text-decoration:none; display:inline-flex;
+                  align-items:center; gap:.4rem; font-weight:700;">
+          <i class="bi bi-file-earmark-excel"></i> Descargar Excel
+        </a>
+        <button onclick="document.getElementById('modal-rep').style.display='none'"
+                style="background:transparent; border:1px solid #30363d; color:#8b949e;
+                       border-radius:8px; padding:.4rem .9rem; cursor:pointer; font-size:.85rem;">
+          ✕ Cerrar
+        </button>
+      </div>
+    </div>
+
+    <div id="rep-cuerpo"></div>
+  </div>
+</div>
 {% endblock %}
