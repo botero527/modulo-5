@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+{% block title %}Hojas de Ruta — AGP Intelligence{% endblock %}
+
+{% block content %}
+<style>
+  .hr-card { background:var(--card-bg); border:1px solid var(--border); border-radius:14px; padding:1.4rem 1.6rem; margin-bottom:1.2rem; }
+  .hr-section-title { font-size:.7rem; text-transform:uppercase; letter-spacing:1px; color:#8b949e; font-weight:700; margin-bottom:.7rem; }
+  .crit-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:.5rem; }
+  .crit-item { background:#161b22; border:1px solid #21262d; border-radius:10px; padding:.6rem .9rem; }
+  .crit-item.match { border-color:#2ea043; }
+  .crit-item.null  { border-color:#30363d; opacity:.6; }
+  .crit-label { font-size:.68rem; text-transform:uppercase; letter-spacing:.6px; color:#8b949e; margin-bottom:.2rem; }
+  .crit-val   { font-size:.88rem; font-weight:700; color:#e6edf3; }
+  .crit-txt   { font-size:.72rem; color:#79c0ff; margin-top:.15rem; word-break:break-all; }
+  .crit-null  { font-size:.78rem; color:#484f58; font-style:italic; }
+
+  .res-card   { background:#0d1117; border:1px solid #30363d; border-radius:12px; padding:1rem 1.2rem; margin-bottom:.8rem; transition:border-color .15s; }
+  .res-card:hover { border-color:#58a6ff; }
+  .res-id     { font-size:1.1rem; font-weight:900; color:#58a6ff; font-family:monospace; }
+  .res-desc   { font-size:.88rem; color:#e6edf3; font-weight:600; margin-top:.15rem; }
+  .res-badge  { display:inline-flex; align-items:center; gap:.3rem; background:#161b22;
+                border:1px solid #30363d; border-radius:20px; font-size:.7rem; font-weight:700;
+                padding:.15rem .55rem; color:#8b949e; white-space:nowrap; }
+  .res-field-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:.4rem; margin-top:.8rem; }
+  .res-field  { background:#161b22; border-radius:8px; padding:.4rem .7rem; font-size:.75rem; }
+  .res-fkey   { color:#8b949e; font-size:.65rem; text-transform:uppercase; }
+  .res-fval   { color:#e6edf3; font-weight:700; }
+  .res-ftxt   { color:#79c0ff; font-size:.68rem; word-break:break-all; }
+
+  .bom-table  { width:100%; border-collapse:collapse; font-size:.82rem; }
+  .bom-table th { padding:.4rem .7rem; background:#161b22; color:#8b949e; font-size:.7rem;
+                  text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #21262d; }
+  .bom-table td { padding:.4rem .7rem; border-bottom:1px solid #161b22; }
+  .bom-pos-formula { color:#58a6ff; font-weight:800; }
+  .bom-pos-base    { color:#e3b341; font-weight:700; }
+  .bom-pos-prot    { color:#56d364; font-weight:700; }
+  .bom-pos-tapas   { color:#d2a8ff; font-weight:700; }
+  .bom-pos-seri    { color:#ffa198; font-weight:700; }
+  .bom-pos-mec     { color:#ff9d45; font-weight:700; }
+  .bom-pos-acero   { color:#f85149; font-weight:700; }
+  .bom-pos-other   { color:#8b949e; }
+
+  .sql-box { background:#0d1117; border:1px solid #30363d; border-radius:10px; padding:.9rem 1.1rem;
+             font-family:monospace; font-size:.74rem; color:#8b949e; white-space:pre-wrap;
+             word-break:break-word; max-height:220px; overflow-y:auto; }
+
+  .spinner-lg { display:inline-block; width:32px; height:32px; border:3px solid rgba(0,194,255,.2);
+                border-top-color:var(--accent); border-radius:50%;
+                animation:_spin .75s linear infinite; }
+  @keyframes _spin { to { transform:rotate(360deg); } }
+
+  .tab-hr { background:transparent; border:1px solid #30363d; color:#8b949e; border-radius:8px;
+            padding:.35rem 1rem; font-size:.82rem; cursor:pointer; transition:.12s; }
+  .tab-hr.active { background:#21262d; color:#e6edf3; border-color:#58a6ff; font-weight:700; }
+
+  .input-zfer { background:#161b22; border:1px solid #30363d; color:#e6edf3; border-radius:10px;
+                padding:.55rem .9rem; font-size:.9rem; outline:none; width:100%; max-width:220px; }
+  .input-zfer:focus { border-color:var(--accent); }
+</style>
+
+<!-- Header -->
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+  <a href="/" class="back-link"><i class="bi bi-arrow-left me-1"></i>Inicio</a>
+  <div style="flex:1;">
+    <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:#8b949e;">AGP Glass · Colombia CO01</div>
+    <h2 style="margin:.1rem 0 0; font-size:1.4rem; font-weight:900; color:#e6edf3;">
+      <i class="bi bi-signpost-split me-2" style="color:var(--accent);"></i>Hojas de Ruta
+    </h2>
+    <div style="font-size:.78rem; color:#8b949e; margin-top:.1rem;">
+      Busca la hoja de ruta de producción para un ZFER o esa mrda
+    </div>
+  </div>
+</div>
+
+<!-- Formulario de búsqueda -->
+<div class="hr-card" style="border-color:#1f6feb;">
+  <div class="hr-section-title"><i class="bi bi-search me-1"></i>Búsqueda</div>
+  <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap;">
+    <div>
+      <label style="font-size:.75rem; color:#8b949e; display:block; margin-bottom:.3rem;">ZFER Base <span style="color:#484f58;">(atributos + metrología)</span></label>
+      <input id="inp-base" type="text" class="input-zfer" placeholder="ej: 700179044"
+             maxlength="18" oninput="this.value=this.value.replace(/\D/g,'')">
+    </div>
+    <div>
+      <label style="font-size:.75rem; color:#8b949e; display:block; margin-bottom:.3rem;">ZFER Nuevo <span style="color:#484f58;">(BOM desde SAP)</span></label>
+      <input id="inp-nuevo" type="text" class="input-zfer" placeholder="ej: 700185021"
+             maxlength="18" oninput="this.value=this.value.replace(/\D/g,'')">
+    </div>
+    <button id="btn-buscar" onclick="_buscar()"
+            style="background:linear-gradient(135deg,#1f6feb,#d238fd); color:#fff; border:none;
+                   border-radius:10px; padding:.55rem 1.5rem; font-size:.9rem; font-weight:700;
+                   cursor:pointer; white-space:nowrap; height:38px;">
+      <i class="bi bi-search me-1"></i>Buscar Hoja de Ruta
+    </button>
+  </div>
+  <div id="buscar-status" style="margin-top:.7rem; font-size:.8rem; color:#8b949e; display:none;"></div>
+</div>
+
+<!-- Resultado -->
+<div id="resultado" style="display:none;">
+
+  <!-- Info ZFER base -->
+  <div class="hr-card" id="res-zfer-info"></div>
+
+  <!-- Tabs -->
+  <div style="display:flex; gap:.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+    <button class="tab-hr active" data-tab="criterios" onclick="_tabHr('criterios')"><i class="bi bi-funnel me-1"></i>Criterios construidos</button>
+    <button class="tab-hr" data-tab="bom" onclick="_tabHr('bom')"><i class="bi bi-diagram-3 me-1"></i>BOM desde SAP</button>
+    <button class="tab-hr" data-tab="resultados" onclick="_tabHr('resultados')"><i class="bi bi-file-earmark-check me-1"></i>Hojas de Ruta encontradas <span id="badge-n" style="background:#1f6feb;color:#fff;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.3rem;"></span></button>
+    <button class="tab-hr" data-tab="sql" onclick="_tabHr('sql')"><i class="bi bi-code-slash me-1"></i>SQL</button>
+  </div>
+
+  <!-- Tab: Criterios -->
+  <div id="tab-criterios">
+    <div class="hr-card">
+      <div class="hr-section-title">Criterios enviados a ODATA_HR_CONSULTA</div>
+      <div id="crit-atributos" style="margin-bottom:1rem;">
+        <div style="font-size:.75rem; color:#8b949e; margin-bottom:.4rem; font-weight:600;">ATRIBUTOS (del ZFER base)</div>
+        <div class="crit-grid" id="crit-attrs-grid"></div>
+      </div>
+      <div id="crit-bom-section">
+        <div style="font-size:.75rem; color:#8b949e; margin-bottom:.4rem; font-weight:600;">POSICIONES BOM (del ZFER nuevo)</div>
+        <div class="crit-grid" id="crit-bom-grid"></div>
+      </div>
+      <div style="margin-top:1rem;">
+        <div style="font-size:.75rem; color:#8b949e; margin-bottom:.4rem; font-weight:600;">PROCESOS</div>
+        <div class="crit-grid" id="crit-proc-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: BOM -->
+  <div id="tab-bom" style="display:none;">
+    <div class="hr-card">
+      <div class="hr-section-title">Posiciones BOM leídas desde ZPPR0008</div>
+      <div id="bom-legend" style="display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:.8rem; font-size:.72rem;">
+        <span class="bom-pos-formula">■ Fórmula (100,200…)</span>
+        <span class="bom-pos-base">■ Base (99)</span>
+        <span class="bom-pos-prot">■ Protector (199,299)</span>
+        <span class="bom-pos-tapas">■ Tapas (3600,3700)</span>
+        <span class="bom-pos-seri">■ Serigrafia (9301+)</span>
+        <span class="bom-pos-mec">■ Mecanizado (9100-9899)</span>
+        <span class="bom-pos-acero">■ Acero (106,116)</span>
+      </div>
+      <div id="bom-tabla"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Resultados -->
+  <div id="tab-resultados" style="display:none;">
+    <div id="res-lista"></div>
+  </div>
+
+  <!-- Tab: SQL -->
+  <div id="tab-sql" style="display:none;">
+    <div class="hr-card">
+      <div class="hr-section-title">SQL generado</div>
+      <pre id="sql-content" class="sql-box"></pre>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const _API = "/api/hojas_ruta/buscar";
+
+function _tabHr(tab) {
+  document.querySelectorAll(".tab-hr").forEach(b => b.classList.toggle("active", b.dataset.tab===tab));
+  ["criterios","bom","resultados","sql"].forEach(t => {
+    document.getElementById(`tab-${t}`).style.display = t===tab ? "" : "none";
+  });
+}
+
+function _clasePos(pos) {
+  if ([106,116].includes(pos)) return "bom-pos-acero";
+  if ([99].includes(pos)) return "bom-pos-base";
+  if ([199,299].includes(pos)) return "bom-pos-prot";
+  if ([3600,3700].includes(pos)) return "bom-pos-tapas";
+  if (pos===9301 || (pos>=9302&&pos<=9312) || (pos>=9452&&pos<=9462)) return "bom-pos-seri";
+  if (pos>=9100&&pos<=9899) return "bom-pos-mec";
+  if ([100,200,300,400,500,600,700,800].includes(pos)) return "bom-pos-formula";
+  return "bom-pos-other";
+}
+
+function _critCard(label, val, txt) {
+  const isNull = val === null || val === undefined;
+  const cls    = isNull ? "null" : "match";
+  return `<div class="crit-item ${cls}">
+    <div class="crit-label">${label}</div>
+    ${isNull
+      ? `<div class="crit-null">NULL</div>`
+      : `<div class="crit-val">${val}</div>${txt ? `<div class="crit-txt">${txt}</div>` : ""}`
+    }
+  </div>`;
+}
+
+function _resField(label, val, txt) {
+  return `<div class="res-field">
+    <div class="res-fkey">${label}</div>
+    <div class="res-fval">${val ?? '<span style="color:#484f58;font-style:italic;">NULL</span>'}</div>
+    ${txt ? `<div class="res-ftxt">${txt}</div>` : ""}
+  </div>`;
+}
+
+async function _buscar() {
+  const base  = document.getElementById("inp-base").value.trim();
+  const nuevo = document.getElementById("inp-nuevo").value.trim();
+  if (!base || !nuevo) { alert("Ingresa ambos ZFERs"); return; }
+
+  const btn = document.getElementById("btn-buscar");
+  const st  = document.getElementById("buscar-status");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner-lg" style="width:16px;height:16px;border-width:2px;display:inline-block;margin-right:.4rem;vertical-align:middle;"></span>Consultando SAP…`;
+  st.style.display = "";
+  st.innerHTML = `<i class="bi bi-hourglass-split me-1"></i>Leyendo BOM desde ZPPR0008 — esto puede tomar unos segundos…`;
+  document.getElementById("resultado").style.display = "none";
+
+  try {
+    const resp = await fetch(_API, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({zfer_base: base, zfer_nuevo: nuevo})
+    });
+    const d = await resp.json();
+
+    btn.disabled = false;
+    btn.innerHTML = `<i class="bi bi-search me-1"></i>Buscar Hoja de Ruta`;
+    st.style.display = "none";
+
+    if (!d.ok) { alert("Error: " + d.error); return; }
+
+    _renderResultado(d, base, nuevo);
+    document.getElementById("resultado").style.display = "";
+
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = `<i class="bi bi-search me-1"></i>Buscar Hoja de Ruta`;
+    st.textContent = "Error de red: " + e.message;
+  }
+}
+
+function _renderResultado(d, zfer_base, zfer_nuevo) {
+  const zi = d.zfer_base_info || {};
+  const c  = d.criterios || {};
+  const CLAVE_FORMULA = {100:"01VEXT",200:"02VP01",300:"03VP02",400:"04VP03",500:"05VP04",600:"06VP05",700:"07VP06",800:"08VP07"};
+
+  // ── Info ZFER base ────────────────────────────────────────────────────────
+  const geoBadge = zi.geometria === "02"
+    ? `<span class="res-badge" style="border-color:#8957e5;color:#d2a8ff;"><i class="bi bi-circle me-1"></i>Curvo</span>`
+    : `<span class="res-badge"><i class="bi bi-square me-1"></i>Plano</span>`;
+  document.getElementById("res-zfer-info").innerHTML = `
+    <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:.5rem;">
+      <div>
+        <div style="font-size:.68rem; color:#8b949e; text-transform:uppercase; letter-spacing:.5px;">ZFER Base</div>
+        <div style="font-size:1.2rem; font-weight:900; color:#58a6ff; font-family:monospace;">${zfer_base}</div>
+        ${zi.texto ? `<div style="font-size:.82rem; color:#e6edf3;">${zi.texto}</div>` : ""}
+      </div>
+      <div style="width:1px; height:40px; background:#21262d;"></div>
+      <div>
+        <div style="font-size:.68rem; color:#8b949e; text-transform:uppercase; letter-spacing:.5px;">ZFER Nuevo (BOM)</div>
+        <div style="font-size:1.2rem; font-weight:900; color:#56d364; font-family:monospace;">${zfer_nuevo}</div>
+        <div style="font-size:.78rem; color:#8b949e;">${d.bom_posiciones.length} posiciones en BOM</div>
+      </div>
+      <div style="width:1px; height:40px; background:#21262d;"></div>
+      <div style="display:flex; gap:.4rem; flex-wrap:wrap; align-items:center;">
+        ${geoBadge}
+        ${c.tamano ? `<span class="res-badge">${c.tamano}</span>` : ""}
+        ${c.nivel  ? `<span class="res-badge">${c.nivel}</span>`  : ""}
+        ${zi.formula ? `<span class="res-badge" style="border-color:#6e40c9;color:#bc8cff;">${zi.formula}</span>` : ""}
+        ${zi.differentials ? `<span class="res-badge" style="border-color:#2ea043;color:#56d364;">Diff: ${zi.differentials}</span>` : ""}
+        ${zi.area != null ? `<span class="res-badge">Área: ${parseFloat(zi.area).toFixed(3)} m²</span>` : ""}
+      </div>
+    </div>`;
+
+  // ── Criterios ─────────────────────────────────────────────────────────────
+  document.getElementById("crit-attrs-grid").innerHTML =
+    _critCard("Tamaño (AREA)", c.tamano, null) +
+    _critCard("Nivel", c.nivel, null) +
+    _critCard("Geometría", c.geometria, null);
+
+  document.getElementById("crit-bom-grid").innerHTML =
+    _critCard("FORMULA", c.formula, c.txt_formula) +
+    _critCard("BASE", c.base, c.txt_base) +
+    _critCard("PROTECTORS", c.protectors, c.txt_protectors) +
+    _critCard("TAPAS", c.tapas, c.txt_tapas) +
+    _critCard("SERIGRAFIA", c.serigrafia, c.txt_serigrafia) +
+    _critCard("VITRIFICADO", c.vitrificado, c.txt_vitrificado) +
+    _critCard("MECANIZADO", c.mecanizado, c.txt_mecanizado) +
+    _critCard("EMPALME", c.empalme, c.txt_empalme);
+
+  document.getElementById("crit-proc-grid").innerHTML =
+    _critCard("ENT_HORNO_CUR", c.ent_horno_cur, null) +
+    _critCard("CURVADO", c.curvado, null) +
+    _critCard("SAL_HORNO_CUR", c.sal_horno_cur, null) +
+    _critCard("CURV_ACERO", c.curv_acero, null) +
+    _critCard("METROLOGIA", c.metrologia, null) +
+    _critCard("PRUEBA_AGUA", c.prueba_agua, null);
+
+  // ── BOM tabla ─────────────────────────────────────────────────────────────
+  const filas = d.bom_filas || [];
+  if (!filas.length) {
+    document.getElementById("bom-tabla").innerHTML = `<div style="color:#484f58;padding:1rem;">Sin posiciones en BOM</div>`;
+  } else {
+    const rows = filas.map((f,i) => {
+      const clave = CLAVE_FORMULA[f.pos] || "";
+      const cls   = _clasePos(f.pos);
+      return `<tr>
+        <td style="padding:.35rem .7rem;color:#484f58;font-size:.72rem;">${i+1}</td>
+        <td style="padding:.35rem .7rem;" class="${cls}">${f.pos}</td>
+        <td style="padding:.35rem .7rem;font-size:.8rem;color:#8b949e;font-family:monospace;">${f.nombre||'—'}</td>
+        <td style="padding:.35rem .7rem;">${clave ? `<span style="background:#0d1e2e;color:#58a6ff;border:1px solid #1f6feb;border-radius:12px;font-size:.68rem;font-weight:700;padding:.1rem .45rem;">${clave}</span>` : ""}</td>
+      </tr>`;
+    }).join("");
+    document.getElementById("bom-tabla").innerHTML = `
+      <table class="bom-table">
+        <thead><tr><th>#</th><th>Posición</th><th>Material</th><th>Clave</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  // ── Resultados HR ─────────────────────────────────────────────────────────
+  document.getElementById("badge-n").textContent = d.n_resultados;
+  const res = d.resultados || [];
+  if (!res.length) {
+    document.getElementById("res-lista").innerHTML = `
+      <div class="hr-card" style="text-align:center; padding:2.5rem; color:#484f58;">
+        <i class="bi bi-search" style="font-size:2.5rem; display:block; margin-bottom:.7rem;"></i>
+        No se encontró ninguna hoja de ruta con los criterios construidos.<br>
+        <span style="font-size:.78rem;">Revisa los criterios y el BOM.</span>
+      </div>`;
+  } else {
+    document.getElementById("res-lista").innerHTML = res.map(r => `
+      <div class="res-card">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+          <div>
+            <div class="res-id">${r.id_hruta}</div>
+            <div class="res-desc">${r.descripcion || '—'}</div>
+          </div>
+          <div style="display:flex; gap:.4rem; flex-wrap:wrap; align-items:center;">
+            ${r.sub_ruta ? `<span class="res-badge">Sub-ruta: ${r.sub_ruta}</span>` : ""}
+            ${r.tamano   ? `<span class="res-badge">${r.tamano}</span>` : ""}
+            ${r.nivel    ? `<span class="res-badge">${r.nivel}</span>` : ""}
+            ${r.geometria? `<span class="res-badge" style="border-color:#8957e5;color:#d2a8ff;">${r.geometria}</span>` : ""}
+            ${r.materiales != null ? `<span class="res-badge"><i class="bi bi-boxes me-1"></i>${r.materiales} materiales</span>` : ""}
+          </div>
+        </div>
+        <div class="res-field-grid">
+          ${_resField("FORMULA", r.formula, r.txt_formula)}
+          ${_resField("BASE", r.base, r.txt_base)}
+          ${_resField("PROTECTORS", r.protectors, r.txt_protectors)}
+          ${_resField("TAPAS", r.tapas, r.txt_tapas)}
+          ${_resField("SERIGRAFIA", r.serigrafia, r.txt_serigrafia)}
+          ${_resField("MECANIZADO", r.mecanizado, r.txt_mecanizado)}
+          ${_resField("VITRIFICADO", r.vitrificado, r.txt_vitrificado)}
+          ${_resField("EMPALME", r.empalme, r.txt_empalme)}
+          ${_resField("CURVADO", r.curvado != null ? `${r.ent_horno_cur}/${r.curvado}/${r.sal_horno_cur}` : null, null)}
+          ${_resField("CURV_ACERO", r.curv_acero, null)}
+          ${_resField("METROLOGÍA", r.metrologia, null)}
+          ${_resField("PRUEBA AGUA", r.prueba_agua, null)}
+        </div>
+      </div>`).join("");
+  }
+
+  // ── SQL ───────────────────────────────────────────────────────────────────
+  document.getElementById("sql-content").textContent = d.sql || "";
+}
+
+// Enter en inputs
+document.getElementById("inp-base").addEventListener("keydown",  e => e.key==="Enter" && document.getElementById("inp-nuevo").focus());
+document.getElementById("inp-nuevo").addEventListener("keydown", e => e.key==="Enter" && _buscar());
+</script>
+{% endblock %}

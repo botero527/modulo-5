@@ -29,7 +29,7 @@ T_RAPIDO = 1.5
 T_MEDIO  = 3.5
 T_LENTO  = 7.0
 
-_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "FESPITIA") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -405,7 +405,7 @@ class AutomatizadorSAP:
         self._esperar(T_RAPIDO)
 
         return zfer_nuevo, zfor_nuevo, zpla_seleccionado
-
+        
     # ── ZPPR0020 — Esperar fases en sesión auxiliar ───────────────────────────
 
     def zppr0020_esperar_fases(self, zfer_nuevo: str,
@@ -609,7 +609,6 @@ class AutomatizadorSAP:
                 resultado["encontrado"] = True
                 zpla_val, _ = _leer(i, _COLS_ZPLA)
                 resultado["zpla"] = zpla_val
-
                 fases = {}
                 for col in _COLS_FASE:
                     try:
@@ -1314,6 +1313,75 @@ class AutomatizadorSAP:
         return ""
 
     # ── ZPPR0008 — Validar posición acero ────────────────────────────────────
+
+    def zppr0008_leer_bom_completo(self, material: str) -> dict:
+        """
+        Entra a ZPPR0008 (modo material radRB_2), lee TODAS las posiciones del BOM.
+        Retorna {"ok": True, "posiciones": [int,...], "filas": [{pos, nombre},...], "error": ""}
+        """
+        print(f"    ZPPR0008 BOM: leyendo posiciones para {material}")
+        self._navegar("ZPPR0008")
+        self.session.findById("wnd[0]/usr/radRB_2").setFocus()
+        self.session.findById("wnd[0]/usr/radRB_2").select()
+        self._esperar(T_RAPIDO)
+        self.session.findById("wnd[0]/usr/ctxtS_MATNR2-LOW").text = material
+        self.session.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").text = "CO01"
+        self.session.findById("wnd[0]/usr/ctxtS_WERKS2-LOW").caretPosition = 4
+        self.session.findById(self._ID_BTN_EXEC).press()
+        self._esperar(T_LENTO)
+
+        grid = None
+        for _gid in ("wnd[0]/usr/cntlGRID1/shellcont/shell",
+                     "wnd[0]/usr/cntlGRID/shellcont/shell",
+                     "wnd[0]/usr/cntlALV/shellcont/shell"):
+            try:
+                grid = self.session.findById(_gid)
+                break
+            except Exception:
+                pass
+
+        if grid is None:
+            return {"ok": False, "posiciones": [], "filas": [],
+                    "error": f"ZPPR0008: grid no encontrado para {material}"}
+
+        try:
+            n = grid.RowCount
+            print(f"    ZPPR0008 BOM: {n} filas para {material}")
+            # Imprimir columnas disponibles en primera fila para diagnóstico
+            if n > 0:
+                try:
+                    print(f"    [DIAG] ZPPR0008 BOM columnas: {list(grid.ColumnOrder)}")
+                except Exception:
+                    pass
+
+            posiciones, filas = [], []
+            for i in range(n):
+                pos_int = None
+                for col in ("POSNR", "POSN", "POS"):
+                    try:
+                        v = str(grid.GetCellValue(i, col) or "").strip()
+                        if v:
+                            pos_int = int(v.lstrip("0") or "0")
+                            break
+                    except Exception:
+                        pass
+                if pos_int is None:
+                    continue
+                nombre = ""
+                for col in ("MATNR1", "MATNR", "KTNAM", "TXT_OBJEK", "OBJECTKEY", "COMPONENT"):
+                    try:
+                        v = str(grid.GetCellValue(i, col) or "").strip()
+                        if v:
+                            nombre = v
+                            break
+                    except Exception:
+                        pass
+                posiciones.append(pos_int)
+                filas.append({"pos": pos_int, "nombre": nombre})
+
+            return {"ok": True, "posiciones": posiciones, "filas": filas, "error": ""}
+        except Exception as e:
+            return {"ok": False, "posiciones": [], "filas": [], "error": str(e)}
 
     def zppr0008_validar_posicion_acero(self, zfer_base: str) -> dict:
         """
@@ -2641,6 +2709,18 @@ def procesar_combinacion(zfer_base: str, color_codigo: str, color_nombre: str,
     return auto.procesar(zfer_base, color_codigo, color_nombre, franja, pn_base, zpla,
                          nivel=nivel, tipo_pieza=tipo_pieza,
                          step_callback=step_callback)
+
+
+def leer_bom_material(material: str) -> dict:
+    """
+    Standalone: conecta a SAP, va a ZPPR0008 con el material,
+    retorna {"ok": True, "posiciones": [int,...], "filas": [{pos,nombre},...], "error": ""}
+    """
+    auto = AutomatizadorSAP()
+    if not auto.conectar():
+        return {"ok": False, "posiciones": [], "filas": [],
+                "error": "SAP GUI no disponible — verifica que SAP esté abierto y scripting habilitado."}
+    return auto.zppr0008_leer_bom_completo(material)
 
 
 def procesar_combinacion_formula_con_acero(

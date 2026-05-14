@@ -495,7 +495,7 @@ def q_zfer_head(material: str):
         cur  = conn.cursor()
         cur.execute("""
             SELECT MATERIAL, CENTRO, TEXTO_BREVE_MATERIAL, STATUS,
-                   ZFOR, GRUPO_ARTICULOS, CREADO_EL, ULTIMA_MOD
+                   ZFOR, GRUPO_ARTICULOS, CREADO_EL, ULTIMA_MOD, AREA
             FROM   dbo.ODATA_ZFER_HEAD
             WHERE  MATERIAL    = ?
               AND  CENTRO      = 'CO01'
@@ -523,7 +523,8 @@ def q_atributos(material: str) -> dict:
               AND  ATNAM IN (
                 'Z_AGP_LEVEL','Z_BEHAVIOR_DIFFERENTIALS','Z_VEHICLE_MODEL',
                 'Z_AGP_PARTNUMBER','Z_SUBPRODUCT','Z_COLOR','Z_FORMULA_CODE',
-                'Z_COMMERCIAL_THICKNESS','Z_AGP_VERSION','Z_PIECE_TYPE','Z_SHADE_BAND'
+                'Z_COMMERCIAL_THICKNESS','Z_AGP_VERSION','Z_PIECE_TYPE','Z_SHADE_BAND',
+                'Z_GEOMETRY_TYPE'
               )
         """, (material,))
         rows = cur.fetchall()
@@ -2979,6 +2980,323 @@ def api_cola_bloque_excel(bloque_id: int):
 @login_required
 def cola_page():
     return render_template("cola.html")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HOJAS DE RUTA
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Mapas fijos (tabla del cuadro de claves modelo)
+_HR_CLAVE_FORMULA = {100:"01VEXT",200:"02VP01",300:"03VP02",400:"04VP03",
+                     500:"05VP04",600:"06VP05",700:"07VP06",800:"08VP07"}
+_HR_CLAVE_BASE    = {99:"32VPMO"}
+_HR_CLAVE_PROT    = {199:"33VPR01",299:"34VPR02"}
+_HR_CLAVE_TAPAS   = {3600:"36VTPA",3700:"37VSTP"}
+
+
+def _hr_construir_criterios(attrs_base: dict, area, bom_posiciones: list,
+                             metrologia_base, prueba_agua_base) -> dict:
+    """Construye el dict de criterios para buscar en ODATA_HR_CONSULTA."""
+    bom = set(bom_posiciones)
+
+    # ── Atributos del ZFER base ──────────────────────────────────────────────
+    level_raw = str(attrs_base.get("Z_AGP_LEVEL","") or "").strip().lstrip("0") or "0"
+    try:    nivel = "BAJO" if int(level_raw) <= 3 else "ALTO"
+    except: nivel = level_raw or None
+
+    geo = str(attrs_base.get("Z_GEOMETRY_TYPE","") or "").strip()
+    geometria = "CURVO" if geo == "02" else ("PLANO" if geo == "01" else None)
+
+    try:
+        a = float(area or 0)
+        tamano = "PEQUEÑO" if a <= 0.6 else ("MEDIANO" if a <= 0.99 else "GRANDE")
+    except:
+        tamano = None
+        
+    # ── BOM → claves ─────────────────────────────────────────────────────────
+    formula_claves = [_HR_CLAVE_FORMULA[p] for p in sorted(_HR_CLAVE_FORMULA) if p in bom]
+    base_claves    = [_HR_CLAVE_BASE[p]    for p in sorted(_HR_CLAVE_BASE)    if p in bom]
+    prot_claves    = [_HR_CLAVE_PROT[p]    for p in sorted(_HR_CLAVE_PROT)    if p in bom]
+    tapas_claves   = [_HR_CLAVE_TAPAS[p]   for p in sorted(_HR_CLAVE_TAPAS)   if p in bom]
+
+    # ── SERIGRAFIA ────────────────────────────────────────────────────────────
+    has_9301      = 9301 in bom
+    ext_9302_9312 = [p for p in bom if 9302 <= p <= 9312]
+    ext_9452_9462 = [p for p in bom if 9452 <= p <= 9462]
+    seri_claves = None
+    if has_9301:
+        seri_claves = ["01VEXT"]
+        if ext_9302_9312:
+            if formula_claves:
+                seri_claves.append(formula_claves[-1])
+            if ext_9452_9462 and len(formula_claves) >= 2:
+                seri_claves.append(formula_claves[-2])
+        elif ext_9452_9462:
+            if formula_claves:
+                seri_claves.append(formula_claves[-1])
+
+    # VITRIFICADO = SERIGRAFIA
+    vit_claves = list(seri_claves) if seri_claves else None
+
+    # ── MECANIZADO: misma lógica que SERIGRAFIA ───────────────────────────────
+    mec_claves = list(seri_claves) if seri_claves else None
+
+    # ── EMPALME (solo CURVO) ──────────────────────────────────────────────────
+    # Si es CURVO: suma claves de formula+base+protectors+tapas
+    # Si es PLANO: NULL
+    # Si es CURVO pero BOM sin posiciones conocidas: marca "not_null" (IS NOT NULL)
+    es_curvo = geometria == "CURVO"
+    empalme_claves = (formula_claves + base_claves + prot_claves + tapas_claves) \
+                     if es_curvo else None
+
+    # ── CURVADO (solo CURVO) ──────────────────────────────────────────────────
+    curv = 1 if es_curvo else None
+
+    # ── CURV_ACERO ────────────────────────────────────────────────────────────
+    curv_acero = 1 if (106 in bom or 116 in bom) else None
+
+    def _nn(lst):
+        return (len(lst), ",".join(lst)) if lst else (None, None)
+
+    f_n, f_t   = _nn(formula_claves)
+    b_n, b_t   = _nn(base_claves)
+    p_n, p_t   = _nn(prot_claves)
+    ta_n, ta_t = _nn(tapas_claves)
+    s_n, s_t   = _nn(seri_claves)
+    v_n, v_t   = _nn(vit_claves)
+    m_n, m_t   = _nn(mec_claves)
+
+    if empalme_claves is None:
+        # pieza plana → EMPALME IS NULL
+        e_n, e_t = None, None
+        empalme_not_null = False
+    elif empalme_claves:
+        # pieza curva con claves conocidas → filtrar exacto
+        e_n, e_t = len(empalme_claves), ",".join(empalme_claves)
+        empalme_not_null = False
+    else:
+        # pieza curva pero BOM sin posiciones mapeadas → solo exigir IS NOT NULL
+        e_n, e_t = None, None
+        empalme_not_null = True
+
+    return {
+        "nivel": nivel, "geometria": geometria, "tamano": tamano,
+        "formula": f_n, "txt_formula": f_t,
+        "base": b_n,    "txt_base": b_t,
+        "protectors": p_n, "txt_protectors": p_t,
+        "tapas": ta_n,  "txt_tapas": ta_t,
+        "serigrafia": s_n, "txt_serigrafia": s_t,
+        "vitrificado": v_n, "txt_vitrificado": v_t,
+        "mecanizado": m_n,  "txt_mecanizado": m_t,
+        "empalme": e_n, "txt_empalme": e_t,
+        "empalme_not_null": empalme_not_null,
+        "ent_horno_cur": curv, "curvado": curv, "sal_horno_cur": curv,
+        "curv_acero": curv_acero,
+        "metrologia": metrologia_base,
+        "prueba_agua": prueba_agua_base,
+    }
+
+
+def _hr_buscar(crit: dict) -> list:
+    """Ejecuta el query sobre ODATA_HR_CONSULTA y retorna filas + SQL construido."""
+    conditions, params = ["C.TIPO_HR = 'PRODUCCION'"], []
+
+    def _campo_txt(col_n, col_t, count, txt):
+        if count is None:
+            conditions.append(f"C.{col_n} IS NULL")
+        else:
+            claves = [c.strip() for c in (txt or "").split(",") if c.strip()]
+            parts  = [f"(C.{col_n} IS NULL OR (C.{col_n} = ? AND " +
+                      " AND ".join(f"C.{col_t} LIKE ?" for _ in claves) + "))"]
+            conditions.append(parts[0])
+            params.append(count)
+            params.extend(f"%{c}%" for c in claves)
+
+    def _campo_int(col, val):
+        if val is None:
+            conditions.append(f"C.{col} IS NULL")
+        else:
+            conditions.append(f"C.{col} = ?")
+            params.append(val)
+
+    if crit["tamano"]:   conditions.append("C.TAMANO = ?");   params.append(crit["tamano"])
+    if crit["nivel"]:    conditions.append("C.NIVEL = ?");    params.append(crit["nivel"])
+    if crit["geometria"]:conditions.append("C.GEOMETRIA = ?");params.append(crit["geometria"])
+
+    _campo_txt("FORMULA",    "TXT_FORMULA",    crit["formula"],    crit["txt_formula"])
+    _campo_txt("BASE",       "TXT_BASE",       crit["base"],       crit["txt_base"])
+    _campo_txt("PROTECTORS", "TXT_PROTECTORS", crit["protectors"], crit["txt_protectors"])
+    _campo_txt("TAPAS",      "TXT_TAPAS",      crit["tapas"],      crit["txt_tapas"])
+    _campo_txt("SERIGRAFIA", "TXT_SERIGRAFIA", crit["serigrafia"], crit["txt_serigrafia"])
+    _campo_txt("VITRIFICADO","TXT_VITRIFICADO",crit["vitrificado"],crit["txt_vitrificado"])
+    _campo_txt("MECANIZADO", "TXT_MECANIZADO", crit["mecanizado"], crit["txt_mecanizado"])
+    # EMPALME: si es curvo pero BOM sin claves → solo IS NOT NULL (no filtrar exacto)
+    if crit.get("empalme_not_null"):
+        conditions.append("C.EMPALME IS NOT NULL")
+    else:
+        _campo_txt("EMPALME", "TXT_EMPALME", crit["empalme"], crit["txt_empalme"])
+
+    _campo_int("ENT_HORNO_CUR", crit["ent_horno_cur"])
+    _campo_int("CURVADO",       crit["curvado"])
+    _campo_int("SAL_HORNO_CUR", crit["sal_horno_cur"])
+    _campo_int("CURV_ACERO",    crit["curv_acero"])
+    _campo_int("METROLOGIA",    crit["metrologia"])
+    _campo_int("PRUEBA_AGUA",   crit["prueba_agua"])
+    _campo_int("PRELAMINADO",   None)   # siempre NULL por ahora
+
+    sql = f"""
+        SELECT C.ID_HRUTA, C.DESCRIPCION, C.SUB_RUTA,
+               C.TAMANO, C.NIVEL, C.GEOMETRIA, C.MATERIALES,
+               C.FORMULA, C.TXT_FORMULA, C.BASE, C.TXT_BASE,
+               C.PROTECTORS, C.TXT_PROTECTORS, C.TAPAS, C.TXT_TAPAS,
+               C.SERIGRAFIA, C.TXT_SERIGRAFIA, C.VITRIFICADO, C.TXT_VITRIFICADO,
+               C.MECANIZADO, C.TXT_MECANIZADO, C.EMPALME, C.TXT_EMPALME,
+               C.ENT_HORNO_CUR, C.CURVADO, C.SAL_HORNO_CUR,
+               C.CURV_ACERO, C.METROLOGIA, C.PRUEBA_AGUA,
+               M.TOTAL_MATERIALES
+        FROM dbo.ODATA_HR_CONSULTA C
+        LEFT JOIN (
+            SELECT ID_HRUTA, COUNT(DISTINCT MATERIAL) AS TOTAL_MATERIALES
+            FROM dbo.HR_MATERIALS GROUP BY ID_HRUTA
+        ) M ON C.ID_HRUTA = M.ID_HRUTA
+        WHERE {" AND ".join(conditions)}
+        ORDER BY C.ID_HRUTA
+    """.strip()
+
+    # SQL con valores inline para mostrar en UI
+    sql_display = sql
+    for p in params:
+        val = f"'{p}'" if isinstance(p, str) else str(p)
+        sql_display = sql_display.replace("?", val, 1)
+
+    with get_conn() as cn:
+        cur = cn.cursor()
+        cur.execute(sql, params)
+        cols = [c[0] for c in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    return rows, sql_display, params
+
+
+@app.route("/hojas_ruta")
+@login_required
+def hojas_ruta_page():
+    return render_template("hoja_ruta.html")
+
+
+@app.route("/api/hojas_ruta/buscar", methods=["POST"])
+@login_required
+def api_hojas_ruta_buscar():
+    """
+    Body: {zfer_base, zfer_nuevo}
+    1. Consulta BD con zfer_base → atributos + área + metrología/prueba_agua de HR base
+    2. Llama SAP ZPPR0008 con zfer_nuevo → posiciones BOM
+    3. Construye criterios → busca en ODATA_HR_CONSULTA
+    """
+    body       = request.get_json(force=True) or {}
+    zfer_base  = str(body.get("zfer_base","")).strip()
+    zfer_nuevo = str(body.get("zfer_nuevo","")).strip()
+    if not zfer_base or not zfer_nuevo:
+        return jsonify({"ok": False, "error": "Se requieren zfer_base y zfer_nuevo"})
+
+    try:
+        # ── 1. BD: atributos del ZFER BASE (nivel, geometría, tamaño, etc.) ───
+        attrs = q_atributos(zfer_base)
+        if "_error" in attrs:
+            return jsonify({"ok": False, "error": f"Error consultando atributos: {attrs['_error']}"})
+
+        head = q_zfer_head(zfer_base)
+        area = None
+        if head and "_error" not in head:
+            try:
+                area = float(head.get("AREA") or 0) or None
+            except Exception:
+                pass
+
+        attrs_base = attrs
+        head_base  = head
+
+        # ── 2. BD: metrología y prueba de agua del ZFER base (de su HR) ─────
+        metrologia_base = None
+        prueba_agua_base = None
+        try:
+            with get_conn() as cn:
+                cur = cn.cursor()
+                cur.execute("""
+                    SELECT TOP 1 C.METROLOGIA, C.PRUEBA_AGUA
+                    FROM dbo.ODATA_HR_CONSULTA C
+                    JOIN dbo.HR_MATERIALS M ON C.ID_HRUTA = M.ID_HRUTA
+                    WHERE M.MATERIAL = ? AND C.TIPO_HR = 'PRODUCCION'
+                """, zfer_base)
+                row = cur.fetchone()
+                if row:
+                    metrologia_base   = row[0]
+                    prueba_agua_base  = row[1]
+        except Exception as e:
+            print(f"[HR] metrología/prueba base: {e}")
+
+        # ── 3. SAP: BOM del ZFER nuevo ──────────────────────────────────────
+        try:
+            import importlib
+            sap = importlib.import_module("sap_auto")
+            bom_result = sap.leer_bom_material(zfer_nuevo)
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Error accediendo SAP: {e}"})
+
+        if not bom_result.get("ok"):
+            return jsonify({"ok": False, "error": bom_result.get("error","SAP error")})
+
+        bom_posiciones = bom_result["posiciones"]
+        bom_filas      = bom_result["filas"]
+
+        # ── 4. Construir criterios y buscar HR ───────────────────────────────
+        criterios = _hr_construir_criterios(
+            attrs, area, bom_posiciones, metrologia_base, prueba_agua_base
+        )
+        resultados, sql_usado, _ = _hr_buscar(criterios)
+
+        # Info para mostrar en UI
+        zfer_base_info = {
+            "material": zfer_base,
+            "texto": head_base.get("TEXTO_BREVE_MATERIAL","") if head_base and "_error" not in head_base else "",
+            "formula": attrs_base.get("Z_FORMULA_CODE","") if "_error" not in attrs_base else "",
+            "differentials": attrs_base.get("Z_BEHAVIOR_DIFFERENTIALS","") if "_error" not in attrs_base else "",
+            # cabecera del ZFER nuevo (usada para criterios)
+            "area": area,
+            "nivel": attrs.get("Z_AGP_LEVEL",""),
+            "geometria": attrs.get("Z_GEOMETRY_TYPE",""),
+        }
+
+        return jsonify({
+            "ok": True,
+            "zfer_base_info": zfer_base_info,
+            "bom_posiciones": bom_posiciones,
+            "bom_filas": bom_filas,
+            "criterios": criterios,
+            "resultados": [
+                {"id_hruta": r["ID_HRUTA"], "descripcion": r["DESCRIPCION"],
+                 "sub_ruta": r["SUB_RUTA"], "materiales": r.get("TOTAL_MATERIALES"),
+                 "tamano": r["TAMANO"], "nivel": r["NIVEL"], "geometria": r["GEOMETRIA"],
+                 "formula": r["FORMULA"], "txt_formula": r["TXT_FORMULA"],
+                 "base": r["BASE"], "txt_base": r["TXT_BASE"],
+                 "protectors": r["PROTECTORS"], "txt_protectors": r["TXT_PROTECTORS"],
+                 "tapas": r["TAPAS"], "txt_tapas": r["TXT_TAPAS"],
+                 "serigrafia": r["SERIGRAFIA"], "txt_serigrafia": r["TXT_SERIGRAFIA"],
+                 "mecanizado": r["MECANIZADO"], "txt_mecanizado": r["TXT_MECANIZADO"],
+                 "vitrificado": r["VITRIFICADO"], "txt_vitrificado": r["TXT_VITRIFICADO"],
+                 "empalme": r["EMPALME"], "txt_empalme": r["TXT_EMPALME"],
+                 "curv_acero": r["CURV_ACERO"], "metrologia": r["METROLOGIA"],
+                 "prueba_agua": r["PRUEBA_AGUA"],
+                 "ent_horno_cur": r["ENT_HORNO_CUR"], "curvado": r["CURVADO"],
+                 "sal_horno_cur": r["SAL_HORNO_CUR"]}
+                for r in resultados
+            ],
+            "sql": sql_usado,
+            "n_resultados": len(resultados),
+        })
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 
 @app.after_request

@@ -271,7 +271,7 @@ async function _cambiarHora(bloqueId, val) {
       body: JSON.stringify({hora: val})   // hora local directa, sin convertir a UTC
     }).then(r => r.json());
     if (d.ok) { _cargarProxBloque(); }
-    else { alert(d.error||'Error al cambiar hora'); _colaRefrescar(); }
+    else { alert(d.error||'Error al cambiar hora:)'); _colaRefrescar(); }
   } catch(e) { alert('Error'); }
 }
 
