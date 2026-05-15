@@ -1729,11 +1729,46 @@ class AutomatizadorSAP:
         # Ej: "M0606 065 001" — no la ruta del archivo (columna PLANO).
         return doc_elegido, f"Plano actualizado: DOKNR ← '{doc_elegido}'"
 
-    def mm02_cambiar_plano(self, zfer: str, res: "ResultadoItem" = None) -> bool:
+    def _buscar_doknr_por_material(self, zfer: str, con_sp: bool = False) -> tuple:
         """
-        Navega a MM02 → btn[30] → tabpZU04 → radGF_ALLE → lee DOKNR actual →
-        busca en ODATA_ZFER_RUTAS_JPG el plano más reciente sin SP →
-        reemplaza DOKNR con ese plano → guarda.
+        Busca en ODATA_ZFER_RUTAS_JPG el DOCUMENTO (DOKNR) más reciente para un MATERIAL.
+        con_sp=False → busca sin SP (flujo con→sin acero)
+        con_sp=True  → busca con SP   (flujo sin→con acero)
+        Returns: (doknr: str | None, mensaje: str)
+        """
+        try:
+            cn  = pyodbc.connect(_DB_SAP_STR, autocommit=True)
+            cur = cn.cursor()
+            if con_sp:
+                cur.execute(
+                    "SELECT TOP 1 DOCUMENTO FROM dbo.ODATA_ZFER_RUTAS_JPG "
+                    "WHERE MATERIAL = ? AND CENTRO = 'CO01' AND DOCUMENTO LIKE '% SP' "
+                    "ORDER BY ULTIMA_MOD DESC",
+                    zfer
+                )
+            else:
+                cur.execute(
+                    "SELECT TOP 1 DOCUMENTO FROM dbo.ODATA_ZFER_RUTAS_JPG "
+                    "WHERE MATERIAL = ? AND CENTRO = 'CO01' AND DOCUMENTO NOT LIKE '% SP' "
+                    "ORDER BY ULTIMA_MOD DESC",
+                    zfer
+                )
+            row = cur.fetchone()
+            cn.close()
+        except Exception as e:
+            return None, f"Error BD buscando DOKNR por material: {e}"
+
+        if not row or not row[0]:
+            sp_txt = "con SP" if con_sp else "sin SP"
+            return None, f"⚠ Sin plano {sp_txt} en BD para material {zfer}"
+
+        return str(row[0]).strip(), f"DOKNR BD ({('con SP' if con_sp else 'sin SP')}): '{row[0].strip()}'"
+
+    def mm02_cambiar_plano(self, zfer: str, res: "ResultadoItem" = None,
+                           zfer_base: str = None) -> bool:
+        """
+        Lee el DOKNR del ZFER BASE en MM02 (que sí tiene ZU04 extendido),
+        busca en BD el plano sin SP con ese nombre, y lo escribe en el ZFER nuevo.
         Retorna True si guardó, False si omitió (sin romper el flujo).
         """
         def _warn(msg):
@@ -1741,7 +1776,8 @@ class AutomatizadorSAP:
             if res:
                 res._log(f"  [PLANO] ADVERTENCIA: {msg}")
 
-        print(f"    MM02 plano: procesando {zfer}")
+        zfer_lectura = zfer_base if zfer_base else zfer
+        print(f"    MM02 plano: leyendo DOKNR de {zfer_lectura}, escribiendo en {zfer}")
         try:
             _subZU04 = ("wnd[0]/usr/tabsTABSPR1/tabpZU04"
                         "/ssubTABFRA1:SAPLMGMM:2110"
@@ -1749,7 +1785,48 @@ class AutomatizadorSAP:
                         "/subDOCU:SAPLCV140:0204")
             _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
 
-            # /nmm02 → material → Enter × 2
+            # ── 1. Leer DOKNR del ZFER BASE (tiene ZU04 extendido) ───────────
+            self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById(self._ID_MM02_MATNR).text = zfer_lectura
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+
+            try:
+                self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
+            except Exception:
+                _warn(f"btn[30] no disponible en {zfer_lectura} — omitiendo cambio de plano")
+                return False
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
+            self._esperar(T_MEDIO)
+            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
+            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
+            self._esperar(T_RAPIDO)
+
+            try:
+                doknr_base = str(self.session.findById(_grid_docu).getCellValue(0, "DOKNR") or "").strip()
+                print(f"    MM02 plano: DOKNR base='{doknr_base}'")
+            except Exception as e:
+                _warn(f"No pudo leer DOKNR de {zfer_lectura}: {e}")
+                return False
+
+            if not doknr_base:
+                _warn(f"DOKNR vacío en {zfer_lectura}, omitiendo cambio de plano")
+                return False
+
+            # ── 2. Buscar en BD el plano sin SP usando el nombre base ─────────
+            nuevo_plano, msg_bd = self._buscar_plano_bd(doknr_base)
+            print(f"    MM02 plano BD: {msg_bd}")
+            if res:
+                res._log(f"  [PLANO] {msg_bd}")
+            if not nuevo_plano:
+                return False
+
+            # ── 3. Navegar al ZFER NUEVO y escribir el plano ──────────────────
             self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
@@ -1759,12 +1836,10 @@ class AutomatizadorSAP:
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
 
-            # Vista ingeniería → tab ZU04 → radio GF_ALLE
-            # btn[30] solo existe si la vista de documentos está habilitada para este material
             try:
                 self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
             except Exception:
-                _warn("btn[30] no disponible — material sin vista de documentos, omitiendo cambio de plano")
+                _warn(f"btn[30] no disponible en ZFER nuevo {zfer} — omitiendo cambio de plano")
                 return False
             self._esperar(T_MEDIO)
             self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
@@ -1773,35 +1848,17 @@ class AutomatizadorSAP:
             self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
             self._esperar(T_RAPIDO)
 
-            # Leer DOKNR actual
             try:
-                doknr_actual = self.session.findById(_grid_docu).getCellValue(0, "DOKNR")
-                print(f"    MM02 plano: DOKNR actual='{doknr_actual}'")
-            except Exception as e:
-                _warn(f"No pudo leer DOKNR: {e}")
-                return False
+                doknr_actual = str(self.session.findById(_grid_docu).getCellValue(0, "DOKNR") or "").strip()
+            except Exception:
+                doknr_actual = ""
 
-            if not doknr_actual or not str(doknr_actual).strip():
-                _warn("DOKNR vacío en MM02, omitiendo cambio de plano")
-                return False
-
-            # Buscar plano en BD
-            nuevo_plano, msg_bd = self._buscar_plano_bd(str(doknr_actual).strip())
-            print(f"    MM02 plano BD: {msg_bd}")
-            if res:
-                res._log(f"  [PLANO] {msg_bd}")
-
-            if not nuevo_plano:
-                # No encontró plano válido → continuar sin cambiar, ya logueado
-                return False
-
-            if nuevo_plano == str(doknr_actual).strip():
+            if nuevo_plano == doknr_actual:
                 print(f"    MM02 plano: sin cambio necesario ('{nuevo_plano}')")
                 if res:
                     res._log(f"  [PLANO] Sin cambio necesario ('{nuevo_plano}')")
                 return True
 
-            # Reemplazar DOKNR → popup validación → guardar
             self.session.findById(_grid_docu).modifyCell(0, "DOKNR", nuevo_plano)
             self.session.findById(_grid_docu).currentCellColumn = "DOKNR"
             self.session.findById(_grid_docu).pressEnter()
@@ -1815,7 +1872,7 @@ class AutomatizadorSAP:
             self._esperar(T_LENTO)
             print(f"    MM02 plano guardado: {zfer} → '{nuevo_plano}'")
             if res:
-                res._log(f"  [PLANO] Guardado: '{doknr_actual}' → '{nuevo_plano}'")
+                res._log(f"  [PLANO] Guardado: '{doknr_actual or '(vacío)'}' → '{nuevo_plano}'")
             return True
         except Exception as e:
             _warn(str(e))
@@ -2002,17 +2059,19 @@ class AutomatizadorSAP:
             return None, "⚠ PLANO CON SP NO ENCONTRADO — DOCUMENTO vacío en BD."
         return doc_elegido, f"Plano con SP: DOKNR ← '{doc_elegido}'"
 
-    def mm02_cambiar_plano_con_sp(self, zfer: str, res: "ResultadoItem" = None) -> bool:
+    def mm02_cambiar_plano_con_sp(self, zfer: str, res: "ResultadoItem" = None,
+                                  zfer_base: str = None) -> bool:
         """
-        Igual que mm02_cambiar_plano pero busca el plano MÁS RECIENTE CON SP.
-        Para flujo sin acero → con acero.
+        Lee el DOKNR del ZFER BASE en MM02, busca en BD el plano CON SP con ese nombre,
+        y lo escribe en el ZFER nuevo. Para flujo sin acero → con acero.
         """
         def _warn(msg):
             print(f"    [WARN] mm02_cambiar_plano_con_sp: {msg}")
             if res:
                 res._log(f"  [PLANO-SP] ADVERTENCIA: {msg}")
 
-        print(f"    MM02 plano (con SP): procesando {zfer}")
+        zfer_lectura = zfer_base if zfer_base else zfer
+        print(f"    MM02 plano (con SP): leyendo DOKNR de {zfer_lectura}, escribiendo en {zfer}")
         try:
             _subZU04 = ("wnd[0]/usr/tabsTABSPR1/tabpZU04"
                         "/ssubTABFRA1:SAPLMGMM:2110"
@@ -2020,6 +2079,48 @@ class AutomatizadorSAP:
                         "/subDOCU:SAPLCV140:0204")
             _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
 
+            # ── 1. Leer DOKNR del ZFER BASE ───────────────────────────────────
+            self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById(self._ID_MM02_MATNR).text = zfer_lectura
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+
+            try:
+                self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
+            except Exception:
+                _warn(f"btn[30] no disponible en {zfer_lectura} — omitiendo cambio de plano")
+                return False
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
+            self._esperar(T_MEDIO)
+            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
+            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
+            self._esperar(T_RAPIDO)
+
+            try:
+                doknr_base = str(self.session.findById(_grid_docu).getCellValue(0, "DOKNR") or "").strip()
+                print(f"    MM02 plano (con SP): DOKNR base='{doknr_base}'")
+            except Exception as e:
+                _warn(f"No pudo leer DOKNR de {zfer_lectura}: {e}")
+                return False
+
+            if not doknr_base:
+                _warn(f"DOKNR vacío en {zfer_lectura}, omitiendo cambio de plano")
+                return False
+
+            # ── 2. Buscar en BD el plano CON SP usando el nombre base ─────────
+            nuevo_plano, msg_bd = self._buscar_plano_con_sp(doknr_base)
+            print(f"    MM02 plano (con SP) BD: {msg_bd}")
+            if res:
+                res._log(f"  [PLANO-SP] {msg_bd}")
+            if not nuevo_plano:
+                return False
+
+            # ── 3. Navegar al ZFER NUEVO y escribir el plano ──────────────────
             self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
@@ -2029,7 +2130,11 @@ class AutomatizadorSAP:
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
 
-            self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
+            try:
+                self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
+            except Exception:
+                _warn(f"btn[30] no disponible en ZFER nuevo {zfer} — omitiendo cambio de plano")
+                return False
             self._esperar(T_MEDIO)
             self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
             self._esperar(T_MEDIO)
@@ -2038,25 +2143,11 @@ class AutomatizadorSAP:
             self._esperar(T_RAPIDO)
 
             try:
-                doknr_actual = self.session.findById(_grid_docu).getCellValue(0, "DOKNR")
-                print(f"    MM02 plano (con SP): DOKNR actual='{doknr_actual}'")
-            except Exception as e:
-                _warn(f"No pudo leer DOKNR: {e}")
-                return False
+                doknr_actual = str(self.session.findById(_grid_docu).getCellValue(0, "DOKNR") or "").strip()
+            except Exception:
+                doknr_actual = ""
 
-            if not doknr_actual or not str(doknr_actual).strip():
-                _warn("DOKNR vacío en MM02, omitiendo cambio de plano")
-                return False
-
-            nuevo_plano, msg_bd = self._buscar_plano_con_sp(str(doknr_actual).strip())
-            print(f"    MM02 plano (con SP) BD: {msg_bd}")
-            if res:
-                res._log(f"  [PLANO-SP] {msg_bd}")
-
-            if not nuevo_plano:
-                return False
-
-            if nuevo_plano == str(doknr_actual).strip():
+            if nuevo_plano == doknr_actual:
                 print(f"    MM02 plano (con SP): sin cambio necesario ('{nuevo_plano}')")
                 if res:
                     res._log(f"  [PLANO-SP] Sin cambio necesario ('{nuevo_plano}')")
@@ -2075,7 +2166,7 @@ class AutomatizadorSAP:
             self._esperar(T_LENTO)
             print(f"    MM02 plano (con SP) guardado: {zfer} → '{nuevo_plano}'")
             if res:
-                res._log(f"  [PLANO-SP] Guardado: '{doknr_actual}' → '{nuevo_plano}'")
+                res._log(f"  [PLANO-SP] Guardado: '{doknr_actual or '(vacío)'}' → '{nuevo_plano}'")
             return True
         except Exception as e:
             _warn(str(e))
@@ -2209,7 +2300,7 @@ class AutomatizadorSAP:
                     step_callback(paso_num, desc)
                 except Exception:
                     pass
-
+                
         try:
             res._log(f"=== Inicio: {zfer_base} → color {color_codigo} ({color_nombre}) ===")
             res._log(f"  Franja={franja}  PN_base={pn_base}  ZPLA={zpla}")
@@ -2478,7 +2569,7 @@ class AutomatizadorSAP:
                 self.mm02_desactivar_diferencial_06(mat)
 
             # 5c — Plano: solo para ZFER nuevo (no ZFOR)
-            self.mm02_cambiar_plano(zfer_nuevo, res)
+            self.mm02_cambiar_plano(zfer_nuevo, res, zfer_base=zfer_base)
 
             # PASO 6 — CEWB: eliminar posición acero del ZFER nuevo
             _cb(6, f"Eliminando posición acero {pos_acero} en CEWB (ZFER={zfer_nuevo})")
@@ -2664,7 +2755,7 @@ class AutomatizadorSAP:
                 self.mm02_activar_diferencial_06(mat)
 
             # 5c — Plano con SP: solo para ZFER nuevo
-            self.mm02_cambiar_plano_con_sp(zfer_nuevo, res)
+            self.mm02_cambiar_plano_con_sp(zfer_nuevo, res, zfer_base=zfer_base)
 
             # PASO 6 — CEWB: agregar posición acero (PENDIENTE de implementar)
             res._log(f"  CEWB agregar pos {pos_acero}: PENDIENTE de implementar")
@@ -2694,7 +2785,7 @@ class AutomatizadorSAP:
 
         self._log_bd(res)
         return res
-
+    
 
 # ── Función de entrada (usada desde app.py vía threading) ────────────────────
 

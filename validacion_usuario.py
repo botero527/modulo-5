@@ -62,3 +62,10 @@ print("error 200")
 SystemError staticmethod set: AssertionError
 
 print (f"sss{sorted}")
+
+"""
+
+"""
+PythonFinalizationError = compile.__annotations__
+sorted
+

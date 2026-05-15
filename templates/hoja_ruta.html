@@ -108,6 +108,13 @@
     <button class="tab-hr" data-tab="bom" onclick="_tabHr('bom')"><i class="bi bi-diagram-3 me-1"></i>BOM desde SAP</button>
     <button class="tab-hr" data-tab="resultados" onclick="_tabHr('resultados')"><i class="bi bi-file-earmark-check me-1"></i>Hojas de Ruta encontradas <span id="badge-n" style="background:#1f6feb;color:#fff;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.3rem;"></span></button>
     <button class="tab-hr" data-tab="sql" onclick="_tabHr('sql')"><i class="bi bi-code-slash me-1"></i>SQL</button>
+    <div id="badge-identicas" style="display:none; align-items:center; gap:.4rem; margin-left:.3rem;
+         background:#2d1f3d; border:1px solid #8957e5; border-radius:8px;
+         padding:.3rem .75rem; font-size:.78rem; font-weight:700; color:#d2a8ff; cursor:default;"
+         title="Hojas de ruta con todos los campos idénticos (excepto ID)">
+      <i class="bi bi-copy"></i>
+      <span id="num-identicas"></span> idénticas
+    </div>
   </div>
 
   <!-- Tab: Criterios -->
@@ -358,6 +365,15 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
           ${_resField("PRUEBA AGUA", r.prueba_agua, null)}
         </div>
       </div>`).join("");
+  }
+
+  // ── Badge HRs idénticas ───────────────────────────────────────────────────
+  const badgeId = document.getElementById("badge-identicas");
+  if (d.n_identicas > 0) {
+    document.getElementById("num-identicas").textContent = d.n_identicas;
+    badgeId.style.display = "flex";
+  } else {
+    badgeId.style.display = "none";
   }
 
   // ── SQL ───────────────────────────────────────────────────────────────────

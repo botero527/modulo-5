@@ -3105,7 +3105,7 @@ def _hr_construir_criterios(attrs_base: dict, area, bom_posiciones: list,
 
 def _hr_buscar(crit: dict) -> list:
     """Ejecuta el query sobre ODATA_HR_CONSULTA y retorna filas + SQL construido."""
-    conditions, params = ["C.TIPO_HR = 'PRODUCCION'"], []
+    conditions, params = ["C.TIPO_HR = 'PRODUCCION'", "C.MATERIALES IS NOT NULL"], []
 
     def _campo_txt(col_n, col_t, count, txt):
         if count is None:
@@ -3181,7 +3181,14 @@ def _hr_buscar(crit: dict) -> list:
         cols = [c[0] for c in cur.description]
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
-    return rows, sql_display, params
+    # Contar HRs con todos los campos idénticos (excepto ID_HRUTA y TOTAL_MATERIALES)
+    _excluir = {"ID_HRUTA", "TOTAL_MATERIALES"}
+    _cmp_cols = [c for c in cols if c not in _excluir]
+    from collections import Counter
+    _grupos = Counter(tuple(r.get(c) for c in _cmp_cols) for r in rows)
+    n_identicas = sum(cnt for cnt in _grupos.values() if cnt > 1)
+
+    return rows, sql_display, params, n_identicas
 
 
 @app.route("/hojas_ruta")
@@ -3259,7 +3266,7 @@ def api_hojas_ruta_buscar():
         criterios = _hr_construir_criterios(
             attrs, area, bom_posiciones, metrologia_base, prueba_agua_base
         )
-        resultados, sql_usado, _ = _hr_buscar(criterios)
+        resultados, sql_usado, _, n_identicas = _hr_buscar(criterios)
 
         # Info para mostrar en UI
         zfer_base_info = {
@@ -3299,6 +3306,7 @@ def api_hojas_ruta_buscar():
             ],
             "sql": sql_usado,
             "n_resultados": len(resultados),
+            "n_identicas": n_identicas,
         })
 
     except Exception as e:
