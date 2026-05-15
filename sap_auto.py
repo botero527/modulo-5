@@ -1760,7 +1760,12 @@ class AutomatizadorSAP:
             self._esperar(T_MEDIO)
 
             # Vista ingeniería → tab ZU04 → radio GF_ALLE
-            self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
+            # btn[30] solo existe si la vista de documentos está habilitada para este material
+            try:
+                self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
+            except Exception:
+                _warn("btn[30] no disponible — material sin vista de documentos, omitiendo cambio de plano")
+                return False
             self._esperar(T_MEDIO)
             self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
             self._esperar(T_MEDIO)

@@ -1935,7 +1935,7 @@ def api_sap_reporte(batch_id: str):
             cols_f = ["#", "Fórmula Nueva", "Color Código", "Color Nombre", "Estado",
                       "ZFER Nuevo", "ZFOR Nuevo", "ZPLA Usado", "Posiciones BOM", "Duración (s)"]
             add_header_row(wsf, cols_f, row=2)
-
+            
             for i, item in enumerate(items_formula, 1):
                 r  = i + 2
                 es = item.get("estado", "")
@@ -2331,7 +2331,7 @@ def _cola_ejecutar_bloque(bloque_id: int):
             cur.execute("UPDATE dbo.M5_Bloques SET estado='EJECUTANDO' WHERE id=?", bloque_id)
             cur.execute("""
                 SELECT id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                       pn_base, nivel, tipo_pieza, formula_nueva
+                       pn_base, nivel, tipo_pieza, formula_nueva, acero_dir
                 FROM dbo.M5_Cola
                 WHERE bloque_id=? AND estado='PENDIENTE'
             """, bloque_id)
@@ -2345,7 +2345,7 @@ def _cola_ejecutar_bloque(bloque_id: int):
         cola = [{"tipo": r[2], "zfer": r[1], "color": r[3], "color_nombre": r[4],
                  "zpla": r[5], "franja": r[6] or "00", "pn_base": r[7] or "",
                  "nivel": r[8] or "", "tipo_pieza": r[9] or "", "formula_nueva": r[10] or "",
-                 "_cola_id": r[0]} for r in rows]
+                 "acero_dir": r[11] or "", "_cola_id": r[0]} for r in rows]
 
         try:
             sap = importlib.import_module("sap_auto")
@@ -2361,7 +2361,7 @@ def _cola_ejecutar_bloque(bloque_id: int):
                         cur = cn.cursor()
                         cur.execute("""
                             SELECT TOP 1 ATWRT FROM dbo.ODATA_ZFER_CLASS_001
-                            WHERE MATNR = ? AND ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS' AND ATWRT = '06'
+                            WHERE MATERIAL = ? AND ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS' AND ATWRT = '06'
                         """, zfer)
                         return cur.fetchone() is not None
                 except Exception as e:
@@ -2373,17 +2373,23 @@ def _cola_ejecutar_bloque(bloque_id: int):
                 try:
                     tipo = item["tipo"].upper()
                     if tipo == "FORMULA":
-                        # Auto-detectar dirección según diferencial 06 del ZFER base
-                        tiene_06 = _tiene_diferencial_06(item["zfer"])
-                        print(f"[COLA] {item['zfer']} diferencial 06: {tiene_06} → {'con→sin' if tiene_06 else 'sin→con'}")
-                        if tiene_06 and _proc_formula_sin:
+                        # Usar dirección explícita del usuario; fallback: auto-detectar
+                        acero_dir = item.get("acero_dir", "")
+                        if acero_dir == "con_sin":
+                            usar_sin = True
+                        elif acero_dir == "sin_con":
+                            usar_sin = False
+                        else:
+                            usar_sin = _tiene_diferencial_06(item["zfer"])
+                        print(f"[COLA] {item['zfer']} acero_dir={acero_dir or 'auto'} → {'con→sin' if usar_sin else 'sin→con'}")
+                        if usar_sin and _proc_formula_sin:
                             res = _proc_formula_sin(
                                 item["zfer"], item.get("formula_nueva",""),
                                 item["color"], item.get("color_nombre",""),
                                 item.get("franja","00"), item.get("pn_base",""),
                                 item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza","")
                             )
-                        elif not tiene_06 and _proc_formula_con:
+                        elif not usar_sin and _proc_formula_con:
                             res = _proc_formula_con(
                                 item["zfer"], item.get("formula_nueva",""),
                                 item["color"], item.get("color_nombre",""),
@@ -2601,15 +2607,15 @@ def api_cola_agregar():
                 cur.execute("""
                     INSERT INTO dbo.M5_Cola
                     (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                     pn_base, nivel, tipo_pieza, formula_nueva, descripcion)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                     pn_base, nivel, tipo_pieza, formula_nueva, descripcion, acero_dir)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, bloque_id,
                     str(it.get("zfer",""))[:20], str(it.get("tipo","color")).upper()[:20],
                     str(it.get("color",""))[:10], str(it.get("color_nombre",""))[:100],
                     str(it.get("zpla",""))[:20], str(it.get("franja","00"))[:5],
                     str(it.get("pn_base",""))[:50], str(it.get("nivel",""))[:10],
                     str(it.get("tipo_pieza",""))[:10], str(it.get("formula_nueva",""))[:30],
-                    desc[:200])
+                    desc[:200], str(it.get("acero_dir",""))[:10] or None)
 
         hora_str = hora_prog.strftime("%d/%m/%Y %H:%M") if hora_prog else ""
         return jsonify({"ok": True, "bloque_id": bloque_id, "bloque_num": bloque_num,
@@ -3012,7 +3018,7 @@ def _hr_construir_criterios(attrs_base: dict, area, bom_posiciones: list,
         tamano = "PEQUEÑO" if a <= 0.6 else ("MEDIANO" if a <= 0.99 else "GRANDE")
     except:
         tamano = None
-        
+
     # ── BOM → claves ─────────────────────────────────────────────────────────
     formula_claves = [_HR_CLAVE_FORMULA[p] for p in sorted(_HR_CLAVE_FORMULA) if p in bom]
     base_claves    = [_HR_CLAVE_BASE[p]    for p in sorted(_HR_CLAVE_BASE)    if p in bom]

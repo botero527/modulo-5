@@ -1,0 +1,450 @@
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║           AGP GLASS — MODULO 5 / AGP INTELLIGENCE                          ║
+║           Documentación técnica para reunión de programadores               ║
+║           Versión: Mayo 2026                                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. ¿QUÉ ES ESTO? — RESUMEN EJECUTIVO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AGP Intelligence es una aplicación web interna para la planta CO01 de AGP Glass
+Colombia. Su objetivo es automatizar el proceso de HOMOLOGACIÓN de vidrios
+blindados en SAP.
+
+En términos simples: dado un vidrio base (ZFER), el sistema genera todas las
+variantes posibles (diferentes colores, fórmulas, aceros), y luego ejecuta
+automáticamente las transacciones SAP necesarias para registrar cada variante
+nueva — trabajo que antes tomaba horas manuales.
+
+Empresa: AGP Glass Colombia — Planta CO01
+Entorno SAP: QUAS (pruebas) — usuario PROGRAING
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. TECNOLOGÍAS USADAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BACKEND
+  • Python 3.x
+  • Flask              — servidor web y API REST
+  • pyodbc             — conexión a SQL Server (con pool de conexiones)
+  • pywin32 (win32com) — automatización del SAP GUI via COM scripting
+
+FRONTEND
+  • HTML5 + Jinja2 (templates de Flask)
+  • Bootstrap 5.3      — layout y componentes
+  • Bootstrap Icons    — íconos
+  • Chart.js           — gráficas (en páginas de detalle)
+  • JavaScript vanilla — sin React, sin Vue; todo fetch() + DOM manipulation
+
+BASE DE DATOS
+  • Azure SQL (producción SAP):
+      Servidor:  agpcol.database.windows.net
+      BD:        agpc-productivity
+      Usuario:   Consulta (solo lectura)
+      Driver:    ODBC Driver 17 for SQL Server
+
+  • SQL Server Express LOCAL (cola de homologaciones):
+      Servidor:  localhost\SQLEXPRESS
+      BD:        MODULO_5
+      Tablas:    dbo.M5_Bloques, dbo.M5_Cola, dbo.M5_LogEjecuciones
+
+SAP
+  • SAP GUI Scripting (COM) — se conecta al SAP GUI abierto en Windows
+  • Transacciones usadas: MM02, ZMME0001, ZPPR0020, ZPPR0008, ZPPP0042, CEWB
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. ESTRUCTURA DE ARCHIVOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MODULO_5/
+├── app.py                  ← Servidor Flask. Rutas, lógica de negocio, queries BD.
+│                             Es el archivo más grande (~3300 líneas).
+├── sap_auto.py             ← Motor de automatización SAP. Todo lo que toca SAP
+│                             vive aquí. Clase AutomatizadorSAP.
+├── db_local.py             ← Utilidades para la BD local (bloqueos de colores).
+├── crear_tablas.py         ← Script one-time para crear tablas en BD local.
+├── validacion_usuario.py   ← Login con validación de dominio AGP.
+│
+├── templates/
+│   ├── base.html           ← Layout maestro (navbar, footer, lightbox de planos).
+│   ├── index.html          ← Pantalla de inicio / buscador de ZFERs.
+│   ├── zfer.html           ← Detalle de un ZFER (ficha técnica completa).
+│   ├── combinaciones.html  ← Generador de combinaciones + cola SAP. El más complejo.
+│   ├── explorar.html       ← Explorador/filtrador de todo el catálogo.
+│   ├── cola.html           ← Panel de la cola de homologaciones SAP.
+│   ├── hoja_ruta.html      ← Buscador de hojas de ruta de producción.
+│   └── login.html          ← Pantalla de login.
+│
+└── static/
+    ├── logo_agp.png
+    └── veh_map.json        ← Mapa de códigos de vehículo a nombres legibles.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. BASES DE DATOS — TABLAS CLAVE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AZURE SQL (agpc-productivity) — solo lectura:
+
+  ODATA_ZFER_HEAD          → Cabecera del ZFER: status, texto, área, grupo artículos
+  ODATA_ZFER_CLASS_001     → Atributos de clasificación SAP:
+                               MATERIAL, ATNAM (nombre atributo), ATWRT (valor)
+                               Ej: MATERIAL=700179044, ATNAM=Z_FORMULA_CODE, ATWRT=L24-4
+                               Atributos importantes:
+                                 Z_AGP_LEVEL          → nivel de protección (1-5)
+                                 Z_GEOMETRY_TYPE      → 01=PLANO, 02=CURVO
+                                 Z_FORMULA_CODE       → código de fórmula (ej: L24-4)
+                                 Z_BEHAVIOR_DIFFERENTIALS → aceros (ej: 03,06,10)
+                                 Z_COLOR              → color del vidrio
+                                 Z_AGP_PARTNUMBER     → part number AGP
+                                 Z_PIECE_TYPE         → tipo de pieza (ej: 003=windshield)
+
+  ODATA_ZCDS_Entregas_Pos_CO → Entregas / movimientos de material
+  ODATA_ZPLA_BOM           → BOM del ZPLA (clase destino por posición)
+  ODATA_ZFER_RUTAS_JPG     → Rutas de archivos de planos (imágenes JPG en red)
+  ODATA_HR_CONSULTA        → Hojas de ruta de producción con todos sus atributos
+  HR_MATERIALS             → Relación MATERIAL ↔ ID_HRUTA (muchos a uno)
+  ZFER_Characteristics_Genesis → Fórmula del ZFER (fuente primaria)
+  TCAL_CALENDARIO_COLOMBIA_DIRECT → Fórmula del ZFER (fuente fallback)
+
+SQL SERVER LOCAL (MODULO_5) — lectura/escritura:
+
+  dbo.M5_Bloques           → Un bloque = un lote de homologaciones programadas
+                               id, bloque_num, hora_prog, timer_activo,
+                               estado (PENDIENTE/EJECUTANDO/COMPLETADO),
+                               creado_el, ejecutado_el, ok_count, error_count
+
+  dbo.M5_Cola              → Ítems individuales dentro de un bloque
+                               bloque_id, zfer_base, tipo (COLOR/FORMULA),
+                               color, color_nombre, zpla, franja, pn_base,
+                               nivel, tipo_pieza, formula_nueva,
+                               acero_dir (con_sin / sin_con),
+                               estado (PENDIENTE/EJECUTANDO/COMPLETADO/ERROR)
+
+  dbo.M5_LogEjecuciones    → Historial de resultados (se mueve de M5_Cola al completar)
+  dbo.Bloqueos             → Colores bloqueados manualmente por el usuario
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. FLUJO PRINCIPAL DE LA APLICACIÓN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PASO 1 — BUSCAR UN ZFER BASE
+  Usuario va a / o /explorar → busca el material base (ej: 700179814)
+  El sistema consulta en Azure SQL: cabecera, atributos, entregas, simétrico.
+  Muestra ficha completa en /zfer/<material>
+
+PASO 2 — VER COMBINACIONES
+  Desde la ficha del ZFER → ir a /combinaciones/<material>
+  El sistema construye:
+    • Grid de 12 colores disponibles (4 columnas: Incoloro, Claros, Medio, Dark)
+    • Cards de fórmulas alternativas disponibles para ese tipo/nivel/subproducto
+    • Panel del ZFER simétrico (si existe)
+  Usuario puede marcar colores y/o fórmulas para homologar.
+
+PASO 3 — VERIFICAR DUPLICADOS
+  Antes de enviar, el sistema consulta SAP en BD para ver si ya existe
+  un ZFER con ese vehicle_code + versión + fórmula + tipo_pieza + color.
+  Muestra advertencia si el material ya existe.
+
+PASO 4 — ENVIAR A LA COLA
+  Si hay fórmulas → aparece modal para elegir dirección de acero:
+    "Con acero → Sin acero" o "Sin acero → Con acero"
+  El sistema agrega los ítems a dbo.M5_Cola dentro de un bloque programado.
+  El bloque tiene una hora de ejecución (timer). Se puede ver en /cola.
+
+PASO 5 — EJECUCIÓN SAP (automática)
+  A la hora programada, un scheduler en Flask detecta el bloque y lanza
+  un hilo worker que procesa cada ítem secuencialmente.
+  Ver sección 7 para el detalle del flujo SAP.
+
+PASO 6 — REPORTE
+  Al completar, el bloque queda en estado COMPLETADO (visible 7 días).
+  El usuario puede ver el reporte visual en /cola y descargar Excel con 5 hojas.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. PÁGINAS / RUTAS DE LA APP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GET  /                          → Inicio: buscador de ZFER
+GET  /zfer/<material>           → Ficha completa del ZFER
+GET  /combinaciones/<material>  → Generador de combinaciones + cola SAP
+GET  /explorar                  → Explorador filtrable de todo el catálogo
+GET  /cola                      → Panel de la cola de homologaciones
+GET  /hojas_ruta                → Buscador de hojas de ruta de producción
+GET  /login  POST /login        → Autenticación
+GET  /logout                    → Cerrar sesión
+
+APIs (JSON):
+  GET  /api/cola/estado                    → estado del bloque activo
+  GET  /api/cola/bloques                   → lista de bloques con ítems
+  POST /api/cola/agregar                   → agrega ítems a la cola
+  POST /api/cola/bloque/<id>/ejecutar      → ejecutar bloque manualmente
+  POST /api/cola/bloque/<id>/borrar        → borrar bloque
+  GET  /api/cola/bloque/<id>/reporte       → JSON del reporte
+  GET  /api/cola/bloque/<id>/excel         → descarga Excel
+  POST /api/hojas_ruta/buscar              → busca HRs dado zfer_base + zfer_nuevo
+  GET  /api/plano/<material>               → imagen del plano (desde red \\192.168.2.2)
+  POST /api/sap/verificar_duplicados       → verifica si ya existe en SAP
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. AUTOMATIZACIÓN SAP — sap_auto.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+La clase AutomatizadorSAP se conecta al SAP GUI abierto en Windows usando
+COM scripting (win32com). Esto significa que SAP GUI DEBE estar abierto y
+con una sesión activa para que funcione.
+
+REQUISITOS PREVIOS SAP:
+  • SAP GUI abierto con sesión activa en QUAS
+  • Scripting habilitado: Opciones → Accesibilidad → Enable Scripting ✓
+
+HAY DOS FLUJOS PRINCIPALES DE FÓRMULA:
+
+──────────────────────────────────────────────
+FLUJO A: Con acero → Sin acero (procesar_formula_sin_acero)
+──────────────────────────────────────────────
+Cuando el ZFER base YA tiene diferencial de acero (06) y la variante nueva
+NO lo tendrá.
+
+  PASO 0: ZPPP0042 — Verificar que el ZFER base existe y tiene VERID
+  PASO 1: ZMME0001 — Homologar cambio de fórmula
+            • Radio: Homologar
+            • Material base, Centro CO01
+            • Radio: Cambio de fórmula (radRB2_A1)
+            • Campo fórmula nueva (P_FORMU)
+            • F4 → selecciona ZPLA → F8 ejecutar
+            • Lee ZFER_NUEVO, ZFOR_NUEVO del grid resultado
+  PASO 2: ZPPR0020 — Esperar que pasen las fases de producción
+            • Polling cada 30s, máx 10 min
+            • Busca la fila del ZFER_NUEVO, cuenta fases con "S"
+            • OK cuando fase 8+ tiene "S"
+  PASO 3: ZMME0001 (segunda vez con ZFER_NUEVO)
+            • Comparar BOM (Comparar BOM → popup con posiciones en error)
+            • Por cada posición: INSERT en tabla, llenar POSNR + CLASE_DESTINO
+            • Segunda Comparar BOM → verificar → COPY_ITEM
+            • Ejecutar BOM (ciclos hasta 0 errores)
+  PASO 4: MM02 — Actualizar PN, desmarcar diferencial 06, cambiar plano
+  PASO 5: CEWB — Eliminar posición de acero (0116 ó 0106) del BOM
+
+──────────────────────────────────────────────
+FLUJO B: Sin acero → Con acero (procesar_formula_con_acero)
+──────────────────────────────────────────────
+Cuando el ZFER base NO tiene diferencial de acero y la variante nueva SÍ
+lo tendrá.
+
+  PASO 0: ZPPP0042 — Verificar ZFER base
+  PASO 1: ZMME0001 — Homologar (igual que flujo A)
+  PASO 2: ZPPR0008 (sesión auxiliar) — Validar que el ZPLA tiene pos 0106 ó 0116
+  PASO 3: ZPPR0020 — Esperar fases (igual que flujo A)
+  PASO 4: BOM — Comparar y copiar (igual que flujo A)
+  PASO 5: MM02 — PN + activar diferencial 06 + plano con SP
+  PASO 6: CEWB — Agregar posición acero (PENDIENTE — lógica compleja por implementar)
+
+──────────────────────────────────────────────
+FLUJO C: Cambio de Color (procesar_combinacion_color)
+──────────────────────────────────────────────
+Más sencillo que los de fórmula. Solo cambia el color del vidrio.
+
+  PASO 1: MM02 leer clasificación (PARTNUMBER, COLOR, FRANJA)
+  PASO 2: ZMME0001 — Radio Cambio de Color, llena P_COLOR + P_FRANJ
+  PASO 3: ZPPR0020 — Esperar fases
+  PASO 4: ZMME0001 (segunda vez) — BOM
+  PASO 5: MM02 — Actualizar PARTNUMBER con nuevo número de color
+
+TIMING (constantes en sap_auto.py):
+  T_RAPIDO = 0.4s   (entre clicks simples)
+  T_MEDIO  = 1.2s   (después de navegación o F4)
+  T_LENTO  = 2.5s   (después de transacciones pesadas)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. FUNCIONES PRINCIPALES DE app.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CONEXIÓN BD:
+  get_conn()           → conexión Azure SQL (con pool _PooledConn, max 5)
+  _get_conn_local()    → conexión SQL Server Express local
+
+QUERIES BD (todas retornan dict o list):
+  q_zfer_head(material)      → cabecera ODATA_ZFER_HEAD
+  q_atributos(material)      → dict {ATNAM: ATWRT} de ODATA_ZFER_CLASS_001
+                                IMPORTANTE: incluye Z_GEOMETRY_TYPE desde Mayo 2026
+  q_entregas(material)       → lista de entregas/movimientos
+  q_variantes_por_pn(pn)     → variantes del mismo part number base
+  q_formulas(piece, nivel, sub, formula_base) → fórmulas alternativas disponibles
+
+SCHEDULER (hilo de fondo):
+  _cola_scheduler()          → corre en background thread, revisa cada 60s
+                                si hay bloques con timer vencido → ejecutar
+                                limpia bloques COMPLETADO con >7 días
+
+COLA SAP:
+  _cola_ejecutar_bloque(id)  → hilo worker, procesa un bloque completo
+                                lee items de M5_Cola, llama a sap_auto,
+                                archiva resultados en M5_LogEjecuciones
+
+HOJAS DE RUTA:
+  _hr_construir_criterios()  → construye dict de criterios desde atributos + BOM
+  _hr_buscar(criterios)      → genera SQL dinámico y busca en ODATA_HR_CONSULTA
+                                retorna (filas, sql_con_valores, params)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. PÁGINA DE HOJAS DE RUTA (/hojas_ruta)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+El usuario ingresa dos ZFERs: el BASE y el NUEVO (homologado).
+
+El sistema hace:
+  1. BD (ZFER base): nivel, geometría, tamaño, metrología, prueba de agua
+  2. SAP ZPPR0008 (ZFER nuevo): lee el BOM completo (posiciones y clases)
+  3. Mapea posiciones BOM → claves modelo:
+       100→01VEXT, 200→02VP01, 300→03VP02... (fórmula)
+       99→32VPMO (base)
+       199→33VPR01, 299→34VPR02 (protectores)
+       3600→36VTPA, 3700→37VSTP (tapas)
+       9301+9302-9312+9452-9462 → serigrafia/mecanizado/vitrificado
+       106/116 → tiene acero curvado
+  4. Construye criterios de búsqueda
+  5. Genera SQL dinámico con OR IS NULL (tolera HRs más genéricas)
+  6. Retorna HRs coincidentes con todos sus campos
+
+Lógica EMPALME:
+  • PLANO → siempre NULL
+  • CURVO con BOM → suma todas las claves (fórmula+base+protectores+tapas)
+  • CURVO sin BOM → IS NOT NULL (al menos debe existir)
+
+Lógica CURVADO (y ENT_HORNO_CUR, SAL_HORNO_CUR):
+  • CURVO → 1
+  • PLANO → NULL
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+10. AUTENTICACIÓN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  • Login con usuario/contraseña (dominio AGP)
+  • validacion_usuario.py valida contra Active Directory o lista local
+  • Sesión Flask con cookie firmada
+  • Decorador @login_required en todas las rutas protegidas
+  • El usuario logueado aparece en el navbar (nombre antes del @)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11. COLA SAP — CICLO DE VIDA DE UN BLOQUE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  PENDIENTE → (timer vence o ejecución manual) → EJECUTANDO → COMPLETADO
+                                                               ↓
+                                              Se mantiene visible 7 días
+                                              Luego se borra automáticamente
+                                              al reiniciar el servidor
+
+  M5_Bloques: un registro por lote
+  M5_Cola: N registros (uno por ítem/combinación)
+  M5_LogEjecuciones: copia de los ítems una vez ejecutados (historial)
+
+  IMPORTANTE: el scheduler compara horas en Python (_dt.now()) NO en SQL
+  (GETDATE()) porque el servidor Azure puede estar en UTC y Python en hora local.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+12. CONCEPTOS SAP QUE HAY QUE CONOCER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ZFER  → Material tipo "vidrio terminado" (ej: 700179814)
+  ZFOR  → Material tipo "fórmula" (ej: 501159082)
+  ZPLA  → Material tipo "plano/diseño" (ej: 503027138)
+  CO01  → Centro de producción Colombia
+
+  Homologación → proceso SAP que crea un nuevo ZFER a partir de uno base
+                 cambiando el color, la fórmula, o el diferencial de acero
+
+  Diferencial de acero (06) → atributo Z_BEHAVIOR_DIFFERENTIALS = '06'
+                               indica que el vidrio lleva acero dentro (blindado)
+
+  Part Number (PN) → código tipo  1812_003_L24-4_01_000
+                     partes:      [pedido]_[pieza]_[fórmula]_[color#]_[versión]
+                     El campo [color#] se reemplaza en cada homologación de color.
+
+  Posiciones BOM ZPPR0008:
+    100, 200, 300...  → laminados de fórmula
+    99                → base/molde
+    199, 299          → protectores
+    3600, 3700        → tapas
+    9301+             → serigrafia / mecanizado
+    106, 116          → diferencial de acero
+
+  VERID → versión de la receta en SAP (ej: "5000")
+  FRANJA → franja decorativa del vidrio: 00=sin franja, 01=azul, 02=verde, 03=gris, NA=no aplica
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+13. CÓMO EJECUTAR EL PROYECTO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  # Requisitos Python
+  pip install flask pyodbc pywin32 openpyxl Pillow
+
+  # Requisitos sistema
+  - ODBC Driver 17 for SQL Server instalado
+  - SAP GUI instalado y abierto con sesión activa (para automatización)
+  - SQL Server Express local corriendo (para cola)
+  - Acceso a red \\192.168.2.2 (para ver planos)
+
+  # Levantar servidor
+  cd MODULO_5
+  python app.py
+  → Abre en http://localhost:5000
+
+  # Primera vez: crear tablas locales
+  python crear_tablas.py
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+14. PENDIENTES / EN CONSTRUCCIÓN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. CEWB — Agregar posición acero (flujo Sin→Con):
+     La lógica de AGREGAR una posición de acero en el BOM via CEWB es compleja
+     y está pendiente. El usuario explicará el paso a paso cuando esté listo.
+
+  2. Hojas de Ruta — testing con datos reales:
+     La página existe y el SQL se genera, falta confirmar con más ZFERs
+     que los criterios producidos son correctos.
+
+  3. ZMMR0005 — Verificación de lista de materiales generada:
+     Mencionado como paso futuro, no implementado aún.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+15. NOTAS DE ARQUITECTURA / DECISIONES TÉCNICAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  • Pool de conexiones BD: se mantienen máx 5 conexiones abiertas a Azure SQL
+    para evitar latencia de reconexión en cada request.
+
+  • El scheduler de la cola corre en un hilo daemon de Python (background).
+    Compara tiempos con datetime.now() Python (no GETDATE() de SQL) porque
+    Azure SQL puede estar en UTC.
+
+  • SAP GUI Scripting: un solo hilo toca SAP a la vez. No hay paralelismo
+    en la automatización SAP — procesa los ítems de la cola uno por uno.
+
+  • Los ítems completados pasan de M5_Cola a M5_LogEjecuciones y el bloque
+    queda COMPLETADO visible (no se borra inmediatamente) para que el usuario
+    pueda ver el reporte. Se limpia a los 7 días.
+
+  • La dirección de acero (con→sin o sin→con) es elegida manualmente por el
+    usuario al enviar fórmulas a la cola, para evitar errores de auto-detección.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                          AGP Glass Colombia — CO01 — 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
