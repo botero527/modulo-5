@@ -24,10 +24,15 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
-# ── Tiempos de espera ─────────────────────────────────────────────────────────
-T_RAPIDO = 1.5
-T_MEDIO  = 3.5
-T_LENTO  = 7.0
+# ── Tiempos de espera (máximos por categoría) ────────────────────────────────
+T_RAPIDO = 1.5   # máx para clicks / campos simples
+T_MEDIO  = 4.0   # máx para navegación entre pantallas
+T_LENTO  = 10.0  # máx para ejecutar transacciones pesadas
+
+# Mínimos garantizados antes de empezar a hacer poll
+_T_MIN_RAPIDO = 0.2
+_T_MIN_MEDIO  = 0.5
+_T_MIN_LENTO  = 1.0
 
 _SAP_USER = os.environ.get("SAP_USER", "FESPITIA") #PROGRAING
 
@@ -149,8 +154,28 @@ class AutomatizadorSAP:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
-    def _esperar(self, seg: float = T_RAPIDO):
-        time.sleep(seg)
+    def _esperar(self, max_seg: float = T_RAPIDO):
+        """
+        Espera inteligente: duerme el mínimo garantizado, luego hace poll de
+        application.Busy cada 100ms hasta que SAP esté listo o se alcance max_seg.
+        """
+        # mínimo garantizado según categoría
+        if max_seg <= T_RAPIDO:
+            time.sleep(_T_MIN_RAPIDO)
+        elif max_seg <= T_MEDIO:
+            time.sleep(_T_MIN_MEDIO)
+        else:
+            time.sleep(_T_MIN_LENTO)
+
+        t0 = time.time()
+        while time.time() - t0 < max_seg:
+            try:
+                if not self.app.Busy:
+                    return
+            except Exception:
+                pass
+            time.sleep(0.1)
+        # si llegó al tope: continúa de todas formas (no falla)
 
     def _navegar(self, tcode: str):
         self.session.findById(self._ID_TCODE_BOX).text = f"/N{tcode}"

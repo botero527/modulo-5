@@ -43,6 +43,7 @@ _USUARIOS = {
     "cegarcia@agpglass.com":           "1001092159",
     "lfalla@agpglass.com":             "1022930033",
     "leo@agpglass.com":                "123",
+    "prueba@agpglass.com":              "prueba123"
 }
 
 def _usuario_actual() -> str:
@@ -3085,6 +3086,29 @@ def _hr_construir_criterios(attrs_base: dict, area, bom_posiciones: list,
         e_n, e_t = None, None
         empalme_not_null = True
 
+    # ── Validador antenas pasta plata en paquete (posiciones 9452–9456) ────────
+    alertas = []
+    antenas_pp = [p for p in bom if 9452 <= p <= 9456]
+    if antenas_pp:
+        # Última posición de vidrio de fórmula presente en el BOM
+        formula_pos_en_bom = sorted(p for p in _HR_CLAVE_FORMULA if p in bom)
+        if formula_pos_en_bom:
+            ultima_pos_formula = formula_pos_en_bom[-1]       # ej: 400
+            digito_formula = str(ultima_pos_formula)[0]        # ej: "4"
+            for pos_antena in antenas_pp:
+                digito_antena = str(pos_antena)[-1]            # ej: 9454 → "4"
+                if digito_antena != digito_formula:
+                    alertas.append(
+                        f"⚠ Posición antena {pos_antena} no coincide con última posición "
+                        f"de fórmula {ultima_pos_formula} "
+                        f"(dígito fórmula='{digito_formula}', dígito antena='{digito_antena}')"
+                    )
+        else:
+            alertas.append(
+                f"⚠ Posiciones de antena {antenas_pp} encontradas pero no hay "
+                f"posiciones de fórmula (100-800) en el BOM para validar"
+            )
+
     return {
         "nivel": nivel, "geometria": geometria, "tamano": tamano,
         "formula": f_n, "txt_formula": f_t,
@@ -3100,6 +3124,7 @@ def _hr_construir_criterios(attrs_base: dict, area, bom_posiciones: list,
         "curv_acero": curv_acero,
         "metrologia": metrologia_base,
         "prueba_agua": prueba_agua_base,
+        "alertas": alertas,
     }
 
 
@@ -3107,14 +3132,16 @@ def _hr_buscar(crit: dict) -> list:
     """Ejecuta el query sobre ODATA_HR_CONSULTA y retorna filas + SQL construido."""
     conditions, params = ["C.TIPO_HR = 'PRODUCCION'", "C.MATERIALES IS NOT NULL"], []
 
-    def _campo_txt(col_n, col_t, count, txt):
+    def _campo_txt(col_n, col_t, count, txt, excluir_null=False):
         if count is None:
             conditions.append(f"C.{col_n} IS NULL")
         else:
             claves = [c.strip() for c in (txt or "").split(",") if c.strip()]
-            parts  = [f"(C.{col_n} IS NULL OR (C.{col_n} = ? AND " +
-                      " AND ".join(f"C.{col_t} LIKE ?" for _ in claves) + "))"]
-            conditions.append(parts[0])
+            # excluir_null=True → solo trae filas con valor exacto (no acepta NULL)
+            # excluir_null=False → acepta NULL o valor exacto (comportamiento original)
+            inner = f"C.{col_n} = ? AND " + " AND ".join(f"C.{col_t} LIKE ?" for _ in claves)
+            cond  = f"({inner})" if excluir_null else f"(C.{col_n} IS NULL OR ({inner}))"
+            conditions.append(cond)
             params.append(count)
             params.extend(f"%{c}%" for c in claves)
 
@@ -3133,9 +3160,9 @@ def _hr_buscar(crit: dict) -> list:
     _campo_txt("BASE",       "TXT_BASE",       crit["base"],       crit["txt_base"])
     _campo_txt("PROTECTORS", "TXT_PROTECTORS", crit["protectors"], crit["txt_protectors"])
     _campo_txt("TAPAS",      "TXT_TAPAS",      crit["tapas"],      crit["txt_tapas"])
-    _campo_txt("SERIGRAFIA", "TXT_SERIGRAFIA", crit["serigrafia"], crit["txt_serigrafia"])
-    _campo_txt("VITRIFICADO","TXT_VITRIFICADO",crit["vitrificado"],crit["txt_vitrificado"])
-    _campo_txt("MECANIZADO", "TXT_MECANIZADO", crit["mecanizado"], crit["txt_mecanizado"])
+    _campo_txt("SERIGRAFIA", "TXT_SERIGRAFIA", crit["serigrafia"], crit["txt_serigrafia"], excluir_null=True)
+    _campo_txt("VITRIFICADO","TXT_VITRIFICADO",crit["vitrificado"],crit["txt_vitrificado"], excluir_null=True)
+    _campo_txt("MECANIZADO", "TXT_MECANIZADO", crit["mecanizado"], crit["txt_mecanizado"],  excluir_null=True)
     # EMPALME: si es curvo pero BOM sin claves → solo IS NOT NULL (no filtrar exacto)
     if crit.get("empalme_not_null"):
         conditions.append("C.EMPALME IS NOT NULL")
@@ -3307,6 +3334,7 @@ def api_hojas_ruta_buscar():
             "sql": sql_usado,
             "n_resultados": len(resultados),
             "n_identicas": n_identicas,
+            "alertas": criterios.get("alertas", []),
         })
 
     except Exception as e:

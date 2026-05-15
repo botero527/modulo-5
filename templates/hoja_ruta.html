@@ -103,10 +103,11 @@
   <div class="hr-card" id="res-zfer-info"></div>
 
   <!-- Tabs -->
-  <div style="display:flex; gap:.5rem; margin-bottom:1rem; flex-wrap:wrap;">
-    <button class="tab-hr active" data-tab="criterios" onclick="_tabHr('criterios')"><i class="bi bi-funnel me-1"></i>Criterios construidos</button>
-    <button class="tab-hr" data-tab="bom" onclick="_tabHr('bom')"><i class="bi bi-diagram-3 me-1"></i>BOM desde SAP</button>
-    <button class="tab-hr" data-tab="resultados" onclick="_tabHr('resultados')"><i class="bi bi-file-earmark-check me-1"></i>Hojas de Ruta encontradas <span id="badge-n" style="background:#1f6feb;color:#fff;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.3rem;"></span></button>
+  <div style="display:flex; gap:.5rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
+    <button class="tab-hr active" data-tab="candidata" onclick="_tabHr('candidata')"><i class="bi bi-star-fill me-1" style="color:#e3b341;"></i>Candidata</button>
+    <button class="tab-hr" data-tab="otras" onclick="_tabHr('otras')"><i class="bi bi-file-earmark-check me-1"></i>Otras opciones <span id="badge-n" style="background:#1f6feb;color:#fff;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.3rem;"></span></button>
+    <button class="tab-hr" data-tab="criterios" onclick="_tabHr('criterios')"><i class="bi bi-funnel me-1"></i>Criterios</button>
+    <button class="tab-hr" data-tab="bom" onclick="_tabHr('bom')"><i class="bi bi-diagram-3 me-1"></i>BOM</button>
     <button class="tab-hr" data-tab="sql" onclick="_tabHr('sql')"><i class="bi bi-code-slash me-1"></i>SQL</button>
     <div id="badge-identicas" style="display:none; align-items:center; gap:.4rem; margin-left:.3rem;
          background:#2d1f3d; border:1px solid #8957e5; border-radius:8px;
@@ -117,8 +118,28 @@
     </div>
   </div>
 
+  <!-- Tab: Candidata -->
+  <div id="tab-candidata">
+    <!-- Alertas de validación BOM -->
+    <div id="alertas-validacion" style="display:none; margin-bottom:.8rem; padding:.7rem 1rem;
+         background:#2d2208; border:1px solid #e3b341; border-radius:8px;
+         color:#e3b341; font-size:.82rem; flex-direction:column; gap:.4rem;"></div>
+    <div id="candidata-contenido"></div>
+  </div>
+
+  <!-- Tab: Otras opciones -->
+  <div id="tab-otras" style="display:none;">
+    <div style="margin-bottom:.8rem;">
+      <input id="inp-filtro-otras" type="text" placeholder="Buscar por ID, descripción, sub-ruta…"
+             oninput="_filtrarOtras()"
+             style="background:#161b22; border:1px solid #30363d; color:#e6edf3; border-radius:10px;
+                    padding:.45rem .9rem; font-size:.82rem; outline:none; width:100%; max-width:380px;">
+    </div>
+    <div id="otras-lista"></div>
+  </div>
+
   <!-- Tab: Criterios -->
-  <div id="tab-criterios">
+  <div id="tab-criterios" style="display:none;">
     <div class="hr-card">
       <div class="hr-section-title">Criterios enviados a ODATA_HR_CONSULTA</div>
       <div id="crit-atributos" style="margin-bottom:1rem;">
@@ -153,11 +174,6 @@
     </div>
   </div>
 
-  <!-- Tab: Resultados -->
-  <div id="tab-resultados" style="display:none;">
-    <div id="res-lista"></div>
-  </div>
-
   <!-- Tab: SQL -->
   <div id="tab-sql" style="display:none;">
     <div class="hr-card">
@@ -173,9 +189,24 @@ const _API = "/api/hojas_ruta/buscar";
 
 function _tabHr(tab) {
   document.querySelectorAll(".tab-hr").forEach(b => b.classList.toggle("active", b.dataset.tab===tab));
-  ["criterios","bom","resultados","sql"].forEach(t => {
+  ["candidata","otras","criterios","bom","sql"].forEach(t => {
     document.getElementById(`tab-${t}`).style.display = t===tab ? "" : "none";
   });
+}
+
+let _todasHRs = [];
+
+function _filtrarOtras() {
+  const q = (document.getElementById("inp-filtro-otras").value || "").toLowerCase();
+  const filtradas = q
+    ? _todasHRs.filter(r =>
+        (r.id_hruta||"").toLowerCase().includes(q) ||
+        (r.descripcion||"").toLowerCase().includes(q) ||
+        (r.sub_ruta||"").toLowerCase().includes(q))
+    : _todasHRs;
+  document.getElementById("otras-lista").innerHTML = filtradas.length
+    ? filtradas.map(_hrCard).join("")
+    : `<div style="color:#484f58;padding:1rem;text-align:center;">Sin resultados para "${q}"</div>`;
 }
 
 function _clasePos(pos) {
@@ -198,6 +229,38 @@ function _critCard(label, val, txt) {
       ? `<div class="crit-null">NULL</div>`
       : `<div class="crit-val">${val}</div>${txt ? `<div class="crit-txt">${txt}</div>` : ""}`
     }
+  </div>`;
+}
+
+function _hrCard(r) {
+  return `<div class="res-card">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+      <div>
+        <div class="res-id">${r.id_hruta}</div>
+        <div class="res-desc">${r.descripcion || '—'}</div>
+      </div>
+      <div style="display:flex; gap:.4rem; flex-wrap:wrap; align-items:center;">
+        ${r.sub_ruta ? `<span class="res-badge">Sub-ruta: ${r.sub_ruta}</span>` : ""}
+        ${r.tamano   ? `<span class="res-badge">${r.tamano}</span>` : ""}
+        ${r.nivel    ? `<span class="res-badge">${r.nivel}</span>` : ""}
+        ${r.geometria? `<span class="res-badge" style="border-color:#8957e5;color:#d2a8ff;">${r.geometria}</span>` : ""}
+        ${r.materiales != null ? `<span class="res-badge"><i class="bi bi-boxes me-1"></i>${r.materiales} materiales</span>` : ""}
+      </div>
+    </div>
+    <div class="res-field-grid">
+      ${_resField("FORMULA", r.formula, r.txt_formula)}
+      ${_resField("BASE", r.base, r.txt_base)}
+      ${_resField("PROTECTORS", r.protectors, r.txt_protectors)}
+      ${_resField("TAPAS", r.tapas, r.txt_tapas)}
+      ${_resField("SERIGRAFIA", r.serigrafia, r.txt_serigrafia)}
+      ${_resField("MECANIZADO", r.mecanizado, r.txt_mecanizado)}
+      ${_resField("VITRIFICADO", r.vitrificado, r.txt_vitrificado)}
+      ${_resField("EMPALME", r.empalme, r.txt_empalme)}
+      ${_resField("CURVADO", r.curvado != null ? `${r.ent_horno_cur}/${r.curvado}/${r.sal_horno_cur}` : null, null)}
+      ${_resField("CURV_ACERO", r.curv_acero, null)}
+      ${_resField("METROLOGÍA", r.metrologia, null)}
+      ${_resField("PRUEBA AGUA", r.prueba_agua, null)}
+    </div>
   </div>`;
 }
 
@@ -236,6 +299,7 @@ async function _buscar() {
     if (!d.ok) { alert("Error: " + d.error); return; }
 
     _renderResultado(d, base, nuevo);
+    _tabHr("candidata");
     document.getElementById("resultado").style.display = "";
 
   } catch(e) {
@@ -324,48 +388,103 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
       </table>`;
   }
 
-  // ── Resultados HR ─────────────────────────────────────────────────────────
-  document.getElementById("badge-n").textContent = d.n_resultados;
+  // ── Candidata + Otras opciones ───────────────────────────────────────────
   const res = d.resultados || [];
+  _todasHRs = res;
+  document.getElementById("badge-n").textContent = res.length;
+
+  // Candidata: mayor MATERIALES sin superar 950
+  const elegibles = res.filter(r => r.materiales != null && r.materiales <= 950);
+  const candidata = elegibles.length
+    ? elegibles.reduce((a, b) => b.materiales > a.materiales ? b : a)
+    : null;
+
+  // ── Tab Candidata ─────────────────────────────────────────────────────────
+  const alertasEl = document.getElementById("alertas-validacion");
+  const alertas   = d.alertas || [];
+  if (alertas.length) {
+    alertasEl.innerHTML = alertas.map(a =>
+      `<div style="display:flex;align-items:flex-start;gap:.5rem;">
+         <i class="bi bi-exclamation-triangle-fill" style="color:#e3b341;flex-shrink:0;margin-top:.1rem;"></i>
+         <span>${a}</span>
+       </div>`
+    ).join("");
+    alertasEl.style.display = "flex";
+  } else {
+    alertasEl.style.display = "none";
+    alertasEl.innerHTML = "";
+  }
+
   if (!res.length) {
-    document.getElementById("res-lista").innerHTML = `
+    document.getElementById("candidata-contenido").innerHTML = `
       <div class="hr-card" style="text-align:center; padding:2.5rem; color:#484f58;">
         <i class="bi bi-search" style="font-size:2.5rem; display:block; margin-bottom:.7rem;"></i>
         No se encontró ninguna hoja de ruta con los criterios construidos.<br>
         <span style="font-size:.78rem;">Revisa los criterios y el BOM.</span>
       </div>`;
+  } else if (!candidata) {
+    document.getElementById("candidata-contenido").innerHTML = `
+      <div class="hr-card" style="text-align:center; padding:2rem; color:#e3b341; border-color:#e3b341;">
+        <i class="bi bi-exclamation-triangle" style="font-size:2rem; display:block; margin-bottom:.6rem;"></i>
+        Todas las hojas de ruta encontradas superan 950 materiales.<br>
+        <span style="font-size:.78rem; color:#8b949e;">Revisa las "Otras opciones" para elegir manualmente.</span>
+      </div>` + res.map(_hrCard).join("");
   } else {
-    document.getElementById("res-lista").innerHTML = res.map(r => `
-      <div class="res-card">
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+    // Barra de capacidad
+    const pct     = Math.round((candidata.materiales / 950) * 100);
+    const barColor = pct >= 90 ? "#f85149" : pct >= 70 ? "#e3b341" : "#2ea043";
+    document.getElementById("candidata-contenido").innerHTML = `
+      <div style="background:linear-gradient(135deg,#0d1f12,#0d1117); border:2px solid #2ea043;
+                  border-radius:16px; padding:1.4rem 1.6rem; margin-bottom:1rem;">
+        <div style="display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem;">
+          <i class="bi bi-star-fill" style="color:#e3b341; font-size:1.1rem;"></i>
+          <span style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:#56d364; font-weight:700;">Hoja de Ruta Candidata</span>
+          <span style="margin-left:auto; font-size:.72rem; color:#8b949e;">Mayor capacidad disponible ≤ 950</span>
+        </div>
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:.8rem;">
           <div>
-            <div class="res-id">${r.id_hruta}</div>
-            <div class="res-desc">${r.descripcion || '—'}</div>
+            <div class="res-id" style="font-size:1.4rem;">${candidata.id_hruta}</div>
+            <div class="res-desc" style="font-size:.95rem;">${candidata.descripcion || '—'}</div>
           </div>
-          <div style="display:flex; gap:.4rem; flex-wrap:wrap; align-items:center;">
-            ${r.sub_ruta ? `<span class="res-badge">Sub-ruta: ${r.sub_ruta}</span>` : ""}
-            ${r.tamano   ? `<span class="res-badge">${r.tamano}</span>` : ""}
-            ${r.nivel    ? `<span class="res-badge">${r.nivel}</span>` : ""}
-            ${r.geometria? `<span class="res-badge" style="border-color:#8957e5;color:#d2a8ff;">${r.geometria}</span>` : ""}
-            ${r.materiales != null ? `<span class="res-badge"><i class="bi bi-boxes me-1"></i>${r.materiales} materiales</span>` : ""}
+          <div style="text-align:right; min-width:140px;">
+            <div style="font-size:2rem; font-weight:900; color:#56d364; line-height:1;">${candidata.materiales}</div>
+            <div style="font-size:.72rem; color:#8b949e;">materiales actuales</div>
+            <div style="font-size:.72rem; color:#484f58;">máx. 950</div>
           </div>
+        </div>
+        <!-- Barra de capacidad -->
+        <div style="background:#21262d; border-radius:20px; height:8px; overflow:hidden; margin-bottom:.4rem;">
+          <div style="height:100%; width:${pct}%; background:${barColor}; border-radius:20px; transition:width .4s;"></div>
+        </div>
+        <div style="font-size:.7rem; color:#8b949e; margin-bottom:1rem;">${pct}% de capacidad utilizada (${candidata.materiales}/950)</div>
+        <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.8rem;">
+          ${candidata.sub_ruta ? `<span class="res-badge">Sub-ruta: ${candidata.sub_ruta}</span>` : ""}
+          ${candidata.tamano   ? `<span class="res-badge">${candidata.tamano}</span>` : ""}
+          ${candidata.nivel    ? `<span class="res-badge">${candidata.nivel}</span>` : ""}
+          ${candidata.geometria? `<span class="res-badge" style="border-color:#8957e5;color:#d2a8ff;">${candidata.geometria}</span>` : ""}
         </div>
         <div class="res-field-grid">
-          ${_resField("FORMULA", r.formula, r.txt_formula)}
-          ${_resField("BASE", r.base, r.txt_base)}
-          ${_resField("PROTECTORS", r.protectors, r.txt_protectors)}
-          ${_resField("TAPAS", r.tapas, r.txt_tapas)}
-          ${_resField("SERIGRAFIA", r.serigrafia, r.txt_serigrafia)}
-          ${_resField("MECANIZADO", r.mecanizado, r.txt_mecanizado)}
-          ${_resField("VITRIFICADO", r.vitrificado, r.txt_vitrificado)}
-          ${_resField("EMPALME", r.empalme, r.txt_empalme)}
-          ${_resField("CURVADO", r.curvado != null ? `${r.ent_horno_cur}/${r.curvado}/${r.sal_horno_cur}` : null, null)}
-          ${_resField("CURV_ACERO", r.curv_acero, null)}
-          ${_resField("METROLOGÍA", r.metrologia, null)}
-          ${_resField("PRUEBA AGUA", r.prueba_agua, null)}
+          ${_resField("FORMULA", candidata.formula, candidata.txt_formula)}
+          ${_resField("BASE", candidata.base, candidata.txt_base)}
+          ${_resField("PROTECTORS", candidata.protectors, candidata.txt_protectors)}
+          ${_resField("TAPAS", candidata.tapas, candidata.txt_tapas)}
+          ${_resField("SERIGRAFIA", candidata.serigrafia, candidata.txt_serigrafia)}
+          ${_resField("MECANIZADO", candidata.mecanizado, candidata.txt_mecanizado)}
+          ${_resField("VITRIFICADO", candidata.vitrificado, candidata.txt_vitrificado)}
+          ${_resField("EMPALME", candidata.empalme, candidata.txt_empalme)}
+          ${_resField("CURVADO", candidata.curvado != null ? `${candidata.ent_horno_cur}/${candidata.curvado}/${candidata.sal_horno_cur}` : null, null)}
+          ${_resField("CURV_ACERO", candidata.curv_acero, null)}
+          ${_resField("METROLOGÍA", candidata.metrologia, null)}
+          ${_resField("PRUEBA AGUA", candidata.prueba_agua, null)}
         </div>
-      </div>`).join("");
+      </div>`;
   }
+
+  // ── Tab Otras opciones ────────────────────────────────────────────────────
+  document.getElementById("inp-filtro-otras").value = "";
+  document.getElementById("otras-lista").innerHTML = res.length
+    ? res.map(_hrCard).join("")
+    : `<div style="color:#484f58;padding:1rem;text-align:center;">Sin resultados</div>`;
 
   // ── Badge HRs idénticas ───────────────────────────────────────────────────
   const badgeId = document.getElementById("badge-identicas");
