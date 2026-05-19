@@ -726,6 +726,36 @@
   </div>
 </div>
 
+<!-- ── Modal cambio de hoja de ruta (colores) ────────────────────────────── -->
+<div id="modal-hr-color" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.78);
+     z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:16px;
+              padding:1.6rem 2rem; max-width:420px; width:92%; box-shadow:0 8px 40px #000a;">
+    <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:#8b949e; margin-bottom:.5rem;">
+      <i class="bi bi-signpost-split me-1" style="color:#58a6ff;"></i>Hoja de Ruta — Cambio de Color
+    </div>
+    <div style="font-size:1rem; font-weight:700; color:#e6edf3; margin-bottom:1.1rem;">
+      ¿Los colores seleccionados requieren cambio de hoja de ruta?
+    </div>
+    <div style="font-size:.82rem; color:#8b949e; margin-bottom:1.2rem;">
+      Si marcas <b style="color:#56d364;">Sí</b>, después de homologar cada color se buscará
+      la hoja de ruta candidata y se asignará automáticamente en CA02.
+    </div>
+    <div style="display:flex; justify-content:flex-end; gap:.7rem;">
+      <button id="hr-color-no"
+              style="background:transparent; border:1px solid #30363d; color:#8b949e;
+                     border-radius:8px; padding:.4rem 1.2rem; cursor:pointer; font-size:.85rem;">
+        <i class="bi bi-x me-1"></i>No, solo homologar
+      </button>
+      <button id="hr-color-si"
+              style="background:#1a7f37; color:#fff; font-weight:700; border:none;
+                     border-radius:8px; padding:.4rem 1.2rem; cursor:pointer; font-size:.85rem;">
+        <i class="bi bi-check-lg me-1"></i>Sí, cambiar HR
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════════════════════════════════════
      SECCIÓN: COMBINACIONES POR FÓRMULA
      ══════════════════════════════════════════════════════════════════════════ -->
@@ -1134,7 +1164,16 @@ async function _enviarTodoACola() {
         return;
       }
       // Inyectar acero_dir en todos los ítems de fórmula
-      cola.forEach(it => { if (it.tipo === "formula") it.acero_dir = acero_dir; });
+      // Fórmulas: cambiar_hr siempre true (obligatorio)
+      cola.forEach(it => {
+        if (it.tipo === "formula") { it.acero_dir = acero_dir; it.cambiar_hr = true; }
+      });
+    }
+
+    // Si hay colores, preguntar si requieren cambio de hoja de ruta
+    if (nC > 0) {
+      const hrColor = await _pedirHrColor();
+      cola.forEach(it => { if (it.tipo === "color") it.cambiar_hr = hrColor; });
     }
 
     if (!confirm(`¿Enviar ${partes.join(" + ")} a la Cola SAP?\n${textoBloque}\n\nSe ejecutará a la hora programada del bloque.`)) {
@@ -1198,6 +1237,22 @@ function _pedirDireccionAcero() {
       if (!sel) { alert("Selecciona una dirección."); return; }
       modal.style.display = "none";
       resolve(sel.value);
+    };
+  });
+}
+
+// ── Modal cambio HR (colores) ─────────────────────────────────────────────────
+function _pedirHrColor() {
+  return new Promise(resolve => {
+    const modal = document.getElementById("modal-hr-color");
+    modal.style.display = "flex";
+    document.getElementById("hr-color-si").onclick = () => {
+      modal.style.display = "none";
+      resolve(true);
+    };
+    document.getElementById("hr-color-no").onclick = () => {
+      modal.style.display = "none";
+      resolve(false);
     };
   });
 }

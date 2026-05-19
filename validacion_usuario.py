@@ -7,5 +7,10 @@ print(f"{numero + numera}")
 
 edad = 18 
 
-if edad <18
-print("prbo hpta ")
+if edad <18:
+ print("prbo hpta ")
+else :
+ print("ayudaaa")  
+
+
+ 

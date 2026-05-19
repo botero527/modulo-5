@@ -2094,6 +2094,29 @@ def _get_conn_local():
     return pyodbc.connect(_DB_LOCAL_STR, autocommit=True)
 
 
+def _migracion_bd_local():
+    """Aplica migraciones de columnas faltantes en la BD local (idempotente)."""
+    migraciones = [
+        ("dbo.M5_Cola", "cambiar_hr", "ALTER TABLE dbo.M5_Cola ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
+    ]
+    try:
+        cn  = _get_conn_local()
+        cur = cn.cursor()
+        for tabla, col, sql in migraciones:
+            cur.execute(f"""
+                IF NOT EXISTS (
+                    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_NAME='{tabla.split('.')[-1]}' AND COLUMN_NAME='{col}'
+                )
+                EXEC('{sql}')
+            """)
+        cn.close()
+    except Exception as e:
+        print(f"[MIGRACIÓN] error: {e}")
+
+_migracion_bd_local()
+
+
 @app.route("/api/ruta/<zfer>", methods=["GET"])
 @login_required
 def api_ruta_get(zfer: str):
@@ -2332,7 +2355,7 @@ def _cola_ejecutar_bloque(bloque_id: int):
             cur.execute("UPDATE dbo.M5_Bloques SET estado='EJECUTANDO' WHERE id=?", bloque_id)
             cur.execute("""
                 SELECT id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                       pn_base, nivel, tipo_pieza, formula_nueva, acero_dir
+                       pn_base, nivel, tipo_pieza, formula_nueva, acero_dir, cambiar_hr
                 FROM dbo.M5_Cola
                 WHERE bloque_id=? AND estado='PENDIENTE'
             """, bloque_id)
@@ -2346,7 +2369,7 @@ def _cola_ejecutar_bloque(bloque_id: int):
         cola = [{"tipo": r[2], "zfer": r[1], "color": r[3], "color_nombre": r[4],
                  "zpla": r[5], "franja": r[6] or "00", "pn_base": r[7] or "",
                  "nivel": r[8] or "", "tipo_pieza": r[9] or "", "formula_nueva": r[10] or "",
-                 "acero_dir": r[11] or "", "_cola_id": r[0]} for r in rows]
+                 "acero_dir": r[11] or "", "cambiar_hr": bool(r[12]), "_cola_id": r[0]} for r in rows]
 
         try:
             sap = importlib.import_module("sap_auto")
@@ -2410,6 +2433,30 @@ def _cola_ejecutar_bloque(bloque_id: int):
                     estado_item = "OK" if getattr(res, "estado", "") == "OK" else "ERROR"
                     zfer_nuevo  = getattr(res, "zfer_nuevo", "") or ""
                     error_msg   = getattr(res, "error",     "") or ""
+
+                    # ── Cambio de Hoja de Ruta (CA02) ──────────────────────────
+                    # Fórmula: siempre obligatorio si el SAP salió OK
+                    # Color:   solo si el usuario marcó cambiar_hr=True
+                    if estado_item == "OK" and zfer_nuevo:
+                        hacer_hr = (tipo == "FORMULA") or item.get("cambiar_hr", False)
+                        if hacer_hr:
+                            print(f"[COLA] {item['zfer']} → buscando HR candidata para {zfer_nuevo}…")
+                            hr_id, hr_desc, hr_err = _hr_buscar_candidata(item["zfer"], zfer_nuevo)
+                            if hr_err:
+                                print(f"[COLA] HR candidata no encontrada: {hr_err}")
+                                error_msg = (error_msg + f" | HR: {hr_err}").strip(" |")
+                            else:
+                                print(f"[COLA] HR candidata: {hr_id} ({hr_desc})")
+                                try:
+                                    hr_res = sap.cambiar_hoja_ruta(zfer_nuevo, hr_id)
+                                    if hr_res["ok"]:
+                                        print(f"[COLA] HR cambiada: {zfer_nuevo} → HR {hr_id}")
+                                    else:
+                                        error_msg = (error_msg + f" | CA02: {hr_res['error']}").strip(" |")
+                                except Exception as hr_ex:
+                                    print(f"[COLA] error CA02: {hr_ex}")
+                                    error_msg = (error_msg + f" | CA02: {str(hr_ex)[:200]}").strip(" |")
+
                 except Exception as ex:
                     estado_item, zfer_nuevo, error_msg = "ERROR", "", str(ex)[:500]
                     print(f"[COLA] item {item['_cola_id']} error: {ex}")
@@ -2605,18 +2652,22 @@ def api_cola_agregar():
             # Insertar items
             for it in items:
                 desc = f"{it.get('tipo','COLOR').upper()} · {it.get('zfer','')} · color {it.get('color','')} · {it.get('formula_nueva','')}"
+                tipo_item  = str(it.get("tipo","color")).upper()
+                # cambiar_hr: fórmulas siempre True, colores según elección del usuario
+                cambiar_hr = True if tipo_item == "FORMULA" else bool(it.get("cambiar_hr", False))
                 cur.execute("""
                     INSERT INTO dbo.M5_Cola
                     (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                     pn_base, nivel, tipo_pieza, formula_nueva, descripcion, acero_dir)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     pn_base, nivel, tipo_pieza, formula_nueva, descripcion, acero_dir, cambiar_hr)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, bloque_id,
-                    str(it.get("zfer",""))[:20], str(it.get("tipo","color")).upper()[:20],
+                    str(it.get("zfer",""))[:20], tipo_item[:20],
                     str(it.get("color",""))[:10], str(it.get("color_nombre",""))[:100],
                     str(it.get("zpla",""))[:20], str(it.get("franja","00"))[:5],
                     str(it.get("pn_base",""))[:50], str(it.get("nivel",""))[:10],
                     str(it.get("tipo_pieza",""))[:10], str(it.get("formula_nueva",""))[:30],
-                    desc[:200], str(it.get("acero_dir",""))[:10] or None)
+                    desc[:200], str(it.get("acero_dir",""))[:10] or None,
+                    1 if cambiar_hr else 0)
 
         hora_str = hora_prog.strftime("%d/%m/%Y %H:%M") if hora_prog else ""
         return jsonify({"ok": True, "bloque_id": bloque_id, "bloque_num": bloque_num,
@@ -3126,6 +3177,62 @@ def _hr_construir_criterios(attrs_base: dict, area, bom_posiciones: list,
         "prueba_agua": prueba_agua_base,
         "alertas": alertas,
     }
+
+
+def _hr_buscar_candidata(zfer_base: str, zfer_nuevo: str) -> tuple:
+    """
+    Dado zfer_base (atributos BD) y zfer_nuevo (BOM SAP), busca la HR candidata:
+    la de mayor MATERIALES que no supere 950.
+    Retorna (id_hruta: str | None, descripcion: str, error: str | None)
+    """
+    try:
+        import importlib
+        sap = importlib.import_module("sap_auto")
+        bom_result = sap.leer_bom_material(zfer_nuevo)
+        if not bom_result.get("ok"):
+            return None, "", f"SAP BOM error: {bom_result.get('error','')}"
+        bom_posiciones = bom_result["posiciones"]
+    except Exception as e:
+        return None, "", f"Error leyendo BOM: {e}"
+
+    try:
+        attrs = q_atributos(zfer_base)
+        if "_error" in attrs:
+            return None, "", f"Error atributos: {attrs['_error']}"
+        head  = q_zfer_head(zfer_base)
+        area  = None
+        if head and "_error" not in head:
+            try: area = float(head.get("AREA") or 0) or None
+            except Exception: pass
+
+        metrologia_base = prueba_agua_base = None
+        try:
+            with get_conn() as cn:
+                cur = cn.cursor()
+                cur.execute("""
+                    SELECT TOP 1 C.METROLOGIA, C.PRUEBA_AGUA
+                    FROM dbo.ODATA_HR_CONSULTA C
+                    JOIN dbo.HR_MATERIALS M ON C.ID_HRUTA = M.ID_HRUTA
+                    WHERE M.MATERIAL = ? AND C.TIPO_HR = 'PRODUCCION'
+                """, zfer_base)
+                row = cur.fetchone()
+                if row:
+                    metrologia_base  = row[0]
+                    prueba_agua_base = row[1]
+        except Exception:
+            pass
+
+        criterios = _hr_construir_criterios(attrs, area, bom_posiciones, metrologia_base, prueba_agua_base)
+        resultados, _, _, _ = _hr_buscar(criterios)
+
+        elegibles = [r for r in resultados if r.get("TOTAL_MATERIALES") is not None and r["TOTAL_MATERIALES"] <= 950]
+        if not elegibles:
+            return None, "", "Sin HRs candidatas con materiales ≤ 950"
+        candidata = max(elegibles, key=lambda r: r["TOTAL_MATERIALES"])
+        return str(candidata["ID_HRUTA"]), candidata.get("DESCRIPCION",""), None
+
+    except Exception as e:
+        return None, "", f"Error buscando candidata: {e}"
 
 
 def _hr_buscar(crit: dict) -> list:

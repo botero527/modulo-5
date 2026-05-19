@@ -34,7 +34,7 @@ _T_MIN_RAPIDO = 0.2
 _T_MIN_MEDIO  = 0.5
 _T_MIN_LENTO  = 1.0
 
-_SAP_USER = os.environ.get("SAP_USER", "FESPITIA") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -1810,38 +1810,40 @@ class AutomatizadorSAP:
                         "/subDOCU:SAPLCV140:0204")
             _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
 
-            # ── 1. Leer DOKNR del ZFER BASE (tiene ZU04 extendido) ───────────
-            self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
-            self.session.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_MEDIO)
-            self.session.findById(self._ID_MM02_MATNR).text = zfer_lectura
-            self.session.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_MEDIO)
-            self.session.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_MEDIO)
-
+            # ── 1. Leer DOKNR del ZFER BASE desde SAP (primario) ─────────────
+            doknr_base = ""
             try:
+                self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
+                self.session.findById("wnd[0]").sendVKey(0)
+                self._esperar(T_MEDIO)
+                self.session.findById(self._ID_MM02_MATNR).text = zfer_lectura
+                self.session.findById(self._ID_MM02_MATNR).caretPosition = len(zfer_lectura)
+                self.session.findById("wnd[0]").sendVKey(0)
+                self._esperar(T_MEDIO)
+                self.session.findById("wnd[0]").sendVKey(0)
+                self._esperar(T_MEDIO)
                 self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
-            except Exception:
-                _warn(f"btn[30] no disponible en {zfer_lectura} — omitiendo cambio de plano")
-                return False
-            self._esperar(T_MEDIO)
-            self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
-            self._esperar(T_MEDIO)
-            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
-            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
-            self._esperar(T_RAPIDO)
-
-            try:
+                self._esperar(T_MEDIO)
+                self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
+                self._esperar(T_MEDIO)
+                self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
+                self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
+                self._esperar(T_RAPIDO)
                 doknr_base = str(self.session.findById(_grid_docu).getCellValue(0, "DOKNR") or "").strip()
-                print(f"    MM02 plano: DOKNR base='{doknr_base}'")
-            except Exception as e:
-                _warn(f"No pudo leer DOKNR de {zfer_lectura}: {e}")
-                return False
+                print(f"    MM02 plano: DOKNR SAP base='{doknr_base}'")
+            except Exception as e_sap:
+                print(f"    MM02 plano: SAP no disponible ({e_sap}), intentando BD…")
 
+            # Fallback: BD si SAP no devolvió nada
             if not doknr_base:
-                _warn(f"DOKNR vacío en {zfer_lectura}, omitiendo cambio de plano")
-                return False
+                doknr_base_bd, msg_bd0 = self._buscar_doknr_por_material(zfer_lectura, con_sp=False)
+                print(f"    MM02 plano BD fallback: {msg_bd0}")
+                if res:
+                    res._log(f"  [PLANO] BD fallback: {msg_bd0}")
+                if not doknr_base_bd:
+                    _warn(f"Sin DOKNR en SAP ni BD para {zfer_lectura} — omitiendo cambio de plano")
+                    return False
+                doknr_base = doknr_base_bd
 
             # ── 2. Buscar en BD el plano sin SP usando el nombre base ─────────
             nuevo_plano, msg_bd = self._buscar_plano_bd(doknr_base)
@@ -2104,38 +2106,40 @@ class AutomatizadorSAP:
                         "/subDOCU:SAPLCV140:0204")
             _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
 
-            # ── 1. Leer DOKNR del ZFER BASE ───────────────────────────────────
-            self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
-            self.session.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_MEDIO)
-            self.session.findById(self._ID_MM02_MATNR).text = zfer_lectura
-            self.session.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_MEDIO)
-            self.session.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_MEDIO)
-
+            # ── 1. Leer DOKNR del ZFER BASE desde SAP (primario) ─────────────
+            doknr_base = ""
             try:
+                self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
+                self.session.findById("wnd[0]").sendVKey(0)
+                self._esperar(T_MEDIO)
+                self.session.findById(self._ID_MM02_MATNR).text = zfer_lectura
+                self.session.findById(self._ID_MM02_MATNR).caretPosition = len(zfer_lectura)
+                self.session.findById("wnd[0]").sendVKey(0)
+                self._esperar(T_MEDIO)
+                self.session.findById("wnd[0]").sendVKey(0)
+                self._esperar(T_MEDIO)
                 self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
-            except Exception:
-                _warn(f"btn[30] no disponible en {zfer_lectura} — omitiendo cambio de plano")
-                return False
-            self._esperar(T_MEDIO)
-            self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
-            self._esperar(T_MEDIO)
-            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
-            self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
-            self._esperar(T_RAPIDO)
-
-            try:
+                self._esperar(T_MEDIO)
+                self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
+                self._esperar(T_MEDIO)
+                self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
+                self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
+                self._esperar(T_RAPIDO)
                 doknr_base = str(self.session.findById(_grid_docu).getCellValue(0, "DOKNR") or "").strip()
-                print(f"    MM02 plano (con SP): DOKNR base='{doknr_base}'")
-            except Exception as e:
-                _warn(f"No pudo leer DOKNR de {zfer_lectura}: {e}")
-                return False
+                print(f"    MM02 plano (con SP): DOKNR SAP base='{doknr_base}'")
+            except Exception as e_sap:
+                print(f"    MM02 plano (con SP): SAP no disponible ({e_sap}), intentando BD…")
 
+            # Fallback: BD si SAP no devolvió nada
             if not doknr_base:
-                _warn(f"DOKNR vacío en {zfer_lectura}, omitiendo cambio de plano")
-                return False
+                doknr_base_bd, msg_bd0 = self._buscar_doknr_por_material(zfer_lectura, con_sp=True)
+                print(f"    MM02 plano (con SP) BD fallback: {msg_bd0}")
+                if res:
+                    res._log(f"  [PLANO-SP] BD fallback: {msg_bd0}")
+                if not doknr_base_bd:
+                    _warn(f"Sin DOKNR en SAP ni BD para {zfer_lectura} — omitiendo cambio de plano")
+                    return False
+                doknr_base = doknr_base_bd
 
             # ── 2. Buscar en BD el plano CON SP usando el nombre base ─────────
             nuevo_plano, msg_bd = self._buscar_plano_con_sp(doknr_base)
@@ -2192,6 +2196,187 @@ class AutomatizadorSAP:
             print(f"    MM02 plano (con SP) guardado: {zfer} → '{nuevo_plano}'")
             if res:
                 res._log(f"  [PLANO-SP] Guardado: '{doknr_actual or '(vacío)'}' → '{nuevo_plano}'")
+            return True
+        except Exception as e:
+            _warn(str(e))
+            return False
+
+    # ── CA02 — Cambio de Hoja de Ruta ────────────────────────────────────────
+
+    def ca02_desasignar_hr(self, zfer_nuevo: str, res=None) -> bool:
+        """
+        CA02 con MATNR=zfer_nuevo → busca la asignación de HR → la borra → guarda.
+        Retorna True si OK, False si hubo advertencia (sin romper el flujo).
+        """
+        def _warn(msg):
+            print(f"    [WARN] ca02_desasignar: {msg}")
+            if res: res._log(f"  [HR-DESASIGNAR] ADVERTENCIA: {msg}")
+
+        print(f"    CA02 desasignar HR: {zfer_nuevo}")
+        _TBL = "wnd[1]/usr/tblSAPLCZDITCTRL_1010"
+        try:
+            self.session.findById(self._ID_TCODE_BOX).text = "/nca02"
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]/usr/ctxtRC27M-MATNR").text = zfer_nuevo
+            self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS").text = "CO01"
+            self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS").caretPosition = 4
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]/tbar[1]/btn[5]").press()
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]/tbar[1]/btn[31]").press()
+            self._esperar(T_MEDIO)
+
+            # Buscar fila que tenga este MATNR (escanear filas 0..9)
+            tbl = self.session.findById(_TBL)
+            fila_encontrada = None
+            for row in range(10):
+                try:
+                    val = str(tbl.getCellValue(row, "MATNR") or "").strip()
+                    if val == zfer_nuevo:
+                        fila_encontrada = row
+                        break
+                except Exception:
+                    break
+
+            if fila_encontrada is None:
+                _warn(f"No se encontró asignación de HR para {zfer_nuevo} en CA02")
+                try: self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+                except Exception: pass
+                return False
+
+            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{fila_encontrada}]").setFocus()
+            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{fila_encontrada}]").caretPosition = 9
+            self._esperar(T_RAPIDO)
+            self.session.findById("wnd[1]/tbar[0]/btn[14]").press()   # Borrar fila
+            self._esperar(T_RAPIDO)
+
+            # Confirmaciones
+            for _id in ("wnd[2]/tbar[0]/btn[0]", "wnd[2]/usr/btnSPOP-OPTION1"):
+                try:
+                    self.session.findById(_id).press()
+                    self._esperar(T_RAPIDO)
+                except Exception:
+                    pass
+
+            try:
+                self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+                self._esperar(T_RAPIDO)
+            except Exception:
+                pass
+
+            self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
+            self._esperar(T_LENTO)
+            print(f"    CA02 desasignación guardada: {zfer_nuevo}")
+            if res: res._log(f"  [HR-DESASIGNAR] OK: {zfer_nuevo}")
+            return True
+        except Exception as e:
+            _warn(str(e))
+            return False
+
+    def ca02_asignar_hr(self, zfer_nuevo: str, id_hruta: str, res=None) -> bool:
+        """
+        CA02 con PLNNR=id_hruta → abre popup de materiales → escribe zfer_nuevo en
+        la primera fila vacía → guarda.
+        Retorna True si OK, False si advertencia.
+        """
+        def _warn(msg):
+            print(f"    [WARN] ca02_asignar: {msg}")
+            if res: res._log(f"  [HR-ASIGNAR] ADVERTENCIA: {msg}")
+
+        print(f"    CA02 asignar HR {id_hruta} → {zfer_nuevo}")
+        _TBL = "wnd[1]/usr/tblSAPLCZDITCTRL_1010"
+        try:
+            self.session.findById(self._ID_TCODE_BOX).text = "/nca02"
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]/usr/ctxtRC27M-MATNR").text = ""
+            self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS").text = "CO01"
+            self.session.findById("wnd[0]/usr/ctxtRC271-PLNNR").text = str(id_hruta)
+            self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS").caretPosition = 4
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]/tbar[1]/btn[5]").press()
+            self._esperar(T_MEDIO)
+            self.session.findById("wnd[0]/tbar[1]/btn[31]").press()
+            self._esperar(T_MEDIO)
+
+            # Obtener tabla — intentar paths alternativos
+            tbl = None
+            for _tbl_id in (_TBL,
+                            "wnd[1]/usr/tblSAPLCZDITCTRL_1010",
+                            "wnd[1]/usr/tbl0100/tblSAPLCZDITCTRL_1010"):
+                try:
+                    tbl = self.session.findById(_tbl_id)
+                    if tbl is not None:
+                        _TBL = _tbl_id
+                        break
+                except Exception:
+                    pass
+
+            if tbl is None:
+                _warn("No se encontró la tabla de materiales en CA02")
+                try: self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+                except Exception: pass
+                return False
+
+            # Scroll hasta el final para encontrar la primera fila vacía
+            try:
+                max_pos = tbl.verticalScrollbar.maximum
+                if max_pos > 0:
+                    tbl.verticalScrollbar.position = max_pos
+                    self._esperar(T_RAPIDO)
+            except Exception:
+                pass
+
+            total = tbl.RowCount
+            vis_rows = tbl.VisibleRowCount
+            fila_vacia = None
+            # Buscar desde la última fila visible hacia arriba
+            for row in range(total - 1, -1, -1):
+                try:
+                    val = str(tbl.getCellValue(row, "MATNR") or "").strip()
+                    if not val:
+                        fila_vacia = row
+                    else:
+                        break   # primera fila con dato desde abajo → parar
+                except Exception:
+                    fila_vacia = row
+                    break
+
+            if fila_vacia is None:
+                _warn("No se encontró fila vacía en la tabla de materiales de CA02")
+                try: self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+                except Exception: pass
+                return False
+
+            print(f"    CA02 asignar: fila vacía={fila_vacia}, total={total}")
+            # Scroll para que la fila vacía sea visible antes de modificar
+            try:
+                tbl.verticalScrollbar.position = max(0, fila_vacia - vis_rows + 1)
+                self._esperar(T_RAPIDO)
+            except Exception:
+                pass
+
+            tbl.modifyCell(fila_vacia, "PLNAL", "1")
+            self._esperar(T_RAPIDO)
+            tbl.modifyCell(fila_vacia, "MATNR", zfer_nuevo)
+            self._esperar(T_RAPIDO)
+            tbl.modifyCell(fila_vacia, "WERKS", "CO01")
+            self._esperar(T_RAPIDO)
+            self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+            self._esperar(T_MEDIO)
+
+            self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
+            self._esperar(T_LENTO)
+            try:
+                self.session.findById("wnd[0]/tbar[0]/btn[15]").press()
+                self._esperar(T_RAPIDO)
+            except Exception:
+                pass
+            print(f"    CA02 asignación guardada: HR {id_hruta} → {zfer_nuevo}")
+            if res: res._log(f"  [HR-ASIGNAR] OK: HR={id_hruta} → {zfer_nuevo}")
             return True
         except Exception as e:
             _warn(str(e))
@@ -2887,3 +3072,18 @@ def procesar_combinacion_formula_sin_acero(
         franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
         step_callback=step_callback,
     )
+
+
+def cambiar_hoja_ruta(zfer_nuevo: str, id_hruta: str) -> dict:
+    """
+    Standalone: desasigna la HR actual del zfer_nuevo en CA02 y asigna id_hruta.
+    Retorna {"ok": True/False, "error": str}
+    """
+    auto = AutomatizadorSAP()
+    if not auto.conectar():
+        return {"ok": False, "error": "SAP GUI no disponible"}
+    auto.ca02_desasignar_hr(zfer_nuevo)
+    ok_asi = auto.ca02_asignar_hr(zfer_nuevo, id_hruta)
+    if ok_asi:
+        return {"ok": True, "error": ""}
+    return {"ok": False, "error": "ca02_asignar falló — revisa logs SAP"}
