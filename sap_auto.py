@@ -34,7 +34,7 @@ _T_MIN_RAPIDO = 0.2
 _T_MIN_MEDIO  = 0.5
 _T_MIN_LENTO  = 1.0
 
-_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "FESPITIA") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -1669,23 +1669,21 @@ class AutomatizadorSAP:
         self._esperar(T_MEDIO)
 
         # En popup wnd[1]: desmarcar checkbox fila 5 (el "06")
-        try:
-            chk = "wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]"
-            self.session.findById(chk).selected = False
-            self.session.findById(chk).setFocus()
-            self.session.findById("wnd[1]").sendVKey(2)   # confirmar selección
-            self._esperar(T_RAPIDO)
-        except Exception as e:
-            print(f"    [WARN] Diferencial popup check: {e}")
-
-        # Cerrar popup
+        # Según VBS confirmado: selected=False → setFocus → sendVKey(2) × 2 → close()
+        chk = "wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]"
+        for _ in range(2):
+            try:
+                self.session.findById(chk).selected = False
+                self.session.findById(chk).setFocus()
+                self.session.findById("wnd[1]").sendVKey(2)
+                self._esperar(T_RAPIDO)
+            except Exception as e:
+                print(f"    [WARN] Diferencial popup check: {e}")
+                break
         try:
             self.session.findById("wnd[1]").close()
         except Exception:
-            try:
-                self.session.findById("wnd[1]").sendVKey(12)
-            except Exception:
-                pass
+            pass
         self._esperar(T_RAPIDO)
 
         # Guardar con btn[11] y salir con F3 → OPTION1
@@ -1704,6 +1702,17 @@ class AutomatizadorSAP:
 
     # ── MM02 — Cambio de plano (tab ZU04) ────────────────────────────────────
 
+    def _plano_base(self, doknr: str) -> str:
+        """
+        Extrae el núcleo de un DOKNR quitando desde la derecha cualquier
+        combinación de letras cortas (versión A/B/AA…) y 'SP'.
+        Ej:  "M1344 000 001 A SP" → "M1344 000 001"
+             "M1344 000 001 SP"   → "M1344 000 001"
+             "M1344 000 001 A"    → "M1344 000 001"
+             "M1344 000 001"      → "M1344 000 001"
+        """
+        return re.sub(r'(\s+[A-Za-z]{1,3})+$', '', doknr.strip()).strip()
+
     def _buscar_plano_bd(self, doknr_actual: str) -> tuple:
         """
         Dado el DOKNR leído de MM02 (puede tener SP y/o letra al final),
@@ -1711,10 +1720,7 @@ class AutomatizadorSAP:
         ordenado por ULTIMA_MOD DESC para siempre tomar la versión vigente.
         Returns: (plano_nuevo: str | None, mensaje: str)
         """
-        # Quitar SP y cualquier sufijo de letra(s) para obtener la base de búsqueda
-        # Ej: "M1344 000 001 A SP" → "M1344 000 001"
-        #     "M1344 000 001 SP"   → "M1344 000 001"
-        base = re.sub(r'(\s+[A-Z]+)?\s+SP\s*$', '', doknr_actual, flags=re.IGNORECASE).strip()
+        base = self._plano_base(doknr_actual)
         if not base:
             return None, f"DOKNR '{doknr_actual}' no tiene base reconocible"
 
@@ -2015,22 +2021,20 @@ class AutomatizadorSAP:
         self.session.findById("wnd[0]").sendVKey(2)
         self._esperar(T_MEDIO)
 
-        try:
-            chk = "wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]"
-            self.session.findById(chk).selected = True   # ← activa en vez de desactivar
-            self.session.findById(chk).setFocus()
-            self.session.findById("wnd[1]").sendVKey(2)
-            self._esperar(T_RAPIDO)
-        except Exception as e:
-            print(f"    [WARN] Activar diferencial popup check: {e}")
-
+        chk = "wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]"
+        for _ in range(2):
+            try:
+                self.session.findById(chk).selected = True
+                self.session.findById(chk).setFocus()
+                self.session.findById("wnd[1]").sendVKey(2)
+                self._esperar(T_RAPIDO)
+            except Exception as e:
+                print(f"    [WARN] Activar diferencial popup check: {e}")
+                break
         try:
             self.session.findById("wnd[1]").close()
         except Exception:
-            try:
-                self.session.findById("wnd[1]").sendVKey(12)
-            except Exception:
-                pass
+            pass
         self._esperar(T_RAPIDO)
 
         try:
@@ -2054,8 +2058,7 @@ class AutomatizadorSAP:
         más reciente QUE SÍ tenga SP, ordenado por ULTIMA_MOD DESC.
         Returns: (plano_nuevo: str | None, mensaje: str)
         """
-        # Quitar sufijo SP si ya lo tiene, para obtener la base
-        base = re.sub(r'(\s+[A-Z]+)?\s+SP\s*$', '', doknr_actual, flags=re.IGNORECASE).strip()
+        base = self._plano_base(doknr_actual)
         if not base:
             return None, f"DOKNR '{doknr_actual}' no tiene base reconocible"
 
@@ -2228,14 +2231,16 @@ class AutomatizadorSAP:
             self.session.findById("wnd[0]/tbar[1]/btn[31]").press()
             self._esperar(T_MEDIO)
 
-            # Buscar fila que tenga este MATNR (escanear filas 0..9)
+            # Buscar fila que tenga este MATNR — escanear todas las filas por bloques
             tbl = self.session.findById(_TBL)
+            total    = tbl.RowCount
+            vis_rows = tbl.VisibleRowCount
             fila_encontrada = None
-            for row in range(10):
+            for abs_row in range(total):
                 try:
-                    val = str(tbl.getCellValue(row, "MATNR") or "").strip()
+                    val = str(tbl.getCellValue(abs_row, "MATNR") or "").strip()
                     if val == zfer_nuevo:
-                        fila_encontrada = row
+                        fila_encontrada = abs_row
                         break
                 except Exception:
                     break
@@ -2246,8 +2251,15 @@ class AutomatizadorSAP:
                 except Exception: pass
                 return False
 
-            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{fila_encontrada}]").setFocus()
-            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{fila_encontrada}]").caretPosition = 9
+            # Scroll para que la fila sea visible, luego usar índice visual (no absoluto)
+            scroll_target = max(0, fila_encontrada - vis_rows + 1)
+            tbl.verticalScrollbar.position = scroll_target
+            self._esperar(T_RAPIDO)
+            vis_row = fila_encontrada - tbl.verticalScrollbar.position
+            print(f"    CA02 desasignar: fila_abs={fila_encontrada} vis_row={vis_row}")
+
+            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{vis_row}]").setFocus()
+            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{vis_row}]").caretPosition = 9
             self._esperar(T_RAPIDO)
             self.session.findById("wnd[1]/tbar[0]/btn[14]").press()   # Borrar fila
             self._esperar(T_RAPIDO)
@@ -2298,51 +2310,63 @@ class AutomatizadorSAP:
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
             self.session.findById("wnd[0]/tbar[1]/btn[5]").press()
-            self._esperar(T_MEDIO)
+            self._esperar(T_LENTO)   # más tiempo para que cargue la HR
             self.session.findById("wnd[0]/tbar[1]/btn[31]").press()
-            self._esperar(T_MEDIO)
+            self._esperar(T_LENTO)   # popup puede tardar con muchos materiales
 
-            # Obtener tabla — intentar paths alternativos
+            # Obtener tabla — probar paths y verificar que sea válida
             tbl = None
-            for _tbl_id in (_TBL,
-                            "wnd[1]/usr/tblSAPLCZDITCTRL_1010",
-                            "wnd[1]/usr/tbl0100/tblSAPLCZDITCTRL_1010"):
+            for _tbl_id in ("wnd[1]/usr/tblSAPLCZDITCTRL_1010",
+                            "wnd[1]/usr/tbl0100/tblSAPLCZDITCTRL_1010",
+                            _TBL):
                 try:
-                    tbl = self.session.findById(_tbl_id)
-                    if tbl is not None:
-                        _TBL = _tbl_id
-                        break
+                    _obj = self.session.findById(_tbl_id)
+                    _ = _obj.RowCount   # verificar que es un objeto válido
+                    tbl  = _obj
+                    _TBL = _tbl_id
+                    break
                 except Exception:
                     pass
 
             if tbl is None:
-                _warn("No se encontró la tabla de materiales en CA02")
+                _warn("No se encontró la tabla de materiales en CA02 (asignar)")
                 try: self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
                 except Exception: pass
                 return False
 
-            # Scroll hasta el final para encontrar la primera fila vacía
+            total    = tbl.RowCount
+            vis_rows = tbl.VisibleRowCount
+
+            # ── Buscar primera fila vacía (MATNR vacío) ──────────────────────
+            # Escanear desde el final hacia arriba usando getCellValue (índice absoluto)
+            fila_vacia = None
             try:
                 max_pos = tbl.verticalScrollbar.maximum
-                if max_pos > 0:
-                    tbl.verticalScrollbar.position = max_pos
-                    self._esperar(T_RAPIDO)
             except Exception:
-                pass
+                max_pos = max(0, total - vis_rows)
 
-            total = tbl.RowCount
-            vis_rows = tbl.VisibleRowCount
-            fila_vacia = None
-            # Buscar desde la última fila visible hacia arriba
-            for row in range(total - 1, -1, -1):
+            # Bajar al final en bloques para encontrar la primera fila vacía
+            for scroll in range(max_pos, -1, -max(1, vis_rows)):
                 try:
-                    val = str(tbl.getCellValue(row, "MATNR") or "").strip()
-                    if not val:
-                        fila_vacia = row
-                    else:
-                        break   # primera fila con dato desde abajo → parar
+                    tbl.verticalScrollbar.position = scroll
+                    self._esperar(0.3)
                 except Exception:
-                    fila_vacia = row
+                    pass
+                # Revisar las filas visibles en esta posición (de abajo a arriba)
+                for vis in range(vis_rows - 1, -1, -1):
+                    abs_row = scroll + vis
+                    if abs_row >= total:
+                        continue
+                    try:
+                        val = str(tbl.getCellValue(abs_row, "MATNR") or "").strip()
+                    except Exception:
+                        val = ""
+                    if not val:
+                        fila_vacia = abs_row
+                    else:
+                        # Encontramos una fila con dato → no hay vacías antes de aquí
+                        break
+                if fila_vacia is not None:
                     break
 
             if fila_vacia is None:
@@ -2351,19 +2375,32 @@ class AutomatizadorSAP:
                 except Exception: pass
                 return False
 
-            print(f"    CA02 asignar: fila vacía={fila_vacia}, total={total}")
-            # Scroll para que la fila vacía sea visible antes de modificar
+            # ── Hacer scroll para que la fila vacía sea visible ───────────────
+            scroll_target = max(0, fila_vacia - vis_rows + 1)
             try:
-                tbl.verticalScrollbar.position = max(0, fila_vacia - vis_rows + 1)
+                tbl.verticalScrollbar.position = scroll_target
                 self._esperar(T_RAPIDO)
             except Exception:
-                pass
+                scroll_target = 0
 
-            tbl.modifyCell(fila_vacia, "PLNAL", "1")
+            vis_row = fila_vacia - tbl.verticalScrollbar.position
+            print(f"    CA02 asignar: fila_abs={fila_vacia} vis_row={vis_row} scroll={tbl.verticalScrollbar.position}")
+
+            # ── Escribir usando findById con índice VISIBLE ([col, vis_row]) ──
+            # ctxtMAPL-MATNR[col,vis_row] requiere vis_row, no índice absoluto
+            _plnal = f"{_TBL}/txtMAPL-PLNAL[0,{vis_row}]"
+            _matnr = f"{_TBL}/ctxtMAPL-MATNR[2,{vis_row}]"
+            _werks  = f"{_TBL}/ctxtMAPL-WERKS[3,{vis_row}]"
+
+            self.session.findById(_matnr).setFocus()
             self._esperar(T_RAPIDO)
-            tbl.modifyCell(fila_vacia, "MATNR", zfer_nuevo)
-            self._esperar(T_RAPIDO)
-            tbl.modifyCell(fila_vacia, "WERKS", "CO01")
+            try:
+                self.session.findById(_plnal).text = "1"
+            except Exception:
+                pass
+            self.session.findById(_matnr).text = zfer_nuevo
+            self.session.findById(_werks).text  = "CO01"
+            self.session.findById(_werks).caretPosition = 4
             self._esperar(T_RAPIDO)
             self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
             self._esperar(T_MEDIO)
