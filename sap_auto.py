@@ -25,14 +25,14 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 # ── Tiempos de espera (máximos por categoría) ────────────────────────────────
-T_RAPIDO = 1.5   # máx para clicks / campos simples
-T_MEDIO  = 4.0   # máx para navegación entre pantallas
-T_LENTO  = 10.0  # máx para ejecutar transacciones pesadas
+T_RAPIDO = 0.8   # máx para clicks / campos simples
+T_MEDIO  = 2.5   # máx para navegación entre pantallas
+T_LENTO  = 8.0   # máx para ejecutar transacciones pesadas
 
 # Mínimos garantizados antes de empezar a hacer poll
-_T_MIN_RAPIDO = 0.2
-_T_MIN_MEDIO  = 0.5
-_T_MIN_LENTO  = 1.0
+_T_MIN_RAPIDO = 0.05
+_T_MIN_MEDIO  = 0.15
+_T_MIN_LENTO  = 0.4
 
 _SAP_USER = os.environ.get("SAP_USER", "FESPITIA") #PROGRAING
 
@@ -434,7 +434,7 @@ class AutomatizadorSAP:
     # ── ZPPR0020 — Esperar fases en sesión auxiliar ───────────────────────────
 
     def zppr0020_esperar_fases(self, zfer_nuevo: str,
-                                intervalo_seg: int = 10,
+                                intervalo_seg: int = 5,
                                 max_espera_seg: int = 600) -> dict:
         """
         Abre sesión auxiliar SAP para ZPPR0020 (deja ZMME0001 intacta en sesión
@@ -461,7 +461,7 @@ class AutomatizadorSAP:
             print("     ZPPR0020: navegando...")
             ses2.findById(self._ID_TCODE_BOX).text = "ZPPR0020"
             ses2.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_LENTO * 2)   # máquina lenta: doble espera
+            self._esperar(T_LENTO)   # esperar carga ZPPR0020
 
             # cerrar cualquier popup post-navegación
             for _ in range(3):
@@ -2349,7 +2349,7 @@ class AutomatizadorSAP:
             for scroll in range(max_pos, -1, -max(1, vis_rows)):
                 try:
                     tbl.verticalScrollbar.position = scroll
-                    self._esperar(0.3)
+                    self._esperar(T_RAPIDO)
                 except Exception:
                     pass
                 # Revisar las filas visibles en esta posición (de abajo a arriba)

@@ -2206,61 +2206,38 @@ def api_simetria_buscar(zfer: str):
         _NO_SIM = {"ok": True, "aplica": True,
                    "pieza_contraria": pieza_contraria, "encontrados": []}
 
-        # ── Estrategia 1: LIKE en PARTNUMBER (1 query, muy rápida) ────────────
-        pn_parsed = _parsear_partnumber(attrs.get("Z_AGP_PARTNUMBER", ""))
-        if pn_parsed:
-            def _e(s): return s.replace("!", "!!").replace("%", "!%").replace("_", "!_")
-            pat = "!_".join([_e(pn_parsed["vehiculo"]), _e(pn_parsed["version"]),
-                              _e(pn_parsed["formula"]),  _e(pn_parsed["color"]), "%"])
-            conn = get_conn()
-            cur  = conn.cursor()
-            cur.execute("""
-                SELECT TOP 5 c.MATERIAL, h.TEXTO_BREVE_MATERIAL,
-                       (SELECT TOP 1 ATWRT FROM dbo.ODATA_ZFER_CLASS_001
-                        WHERE MATERIAL=c.MATERIAL AND CENTRO='CO01'
-                          AND ATNAM='Z_PIECE_TYPE') AS piece_type
-                FROM dbo.ODATA_ZFER_CLASS_001 c
-                JOIN dbo.ODATA_ZFER_HEAD h
-                    ON h.MATERIAL=c.MATERIAL AND h.CENTRO='CO01'
-                WHERE c.CENTRO='CO01' AND c.ATNAM='Z_AGP_PARTNUMBER'
-                  AND c.ATWRT LIKE ? ESCAPE '!'
-                  AND c.MATERIAL <> ?
-                  AND UPPER(ISNULL(h.STATUS,'')) != 'ZZ'
-                ORDER BY TRY_CAST(c.MATERIAL AS BIGINT) DESC
-            """, pat, zfer)
-            rows = cur.fetchall()
-            conn.close()
-
-            resultados = []
-            for mat, desc, pt in rows:
-                pts = [p.strip().zfill(3) for p in (pt or "").split(",") if p.strip()]
-                if pieza_contraria in pts:
-                    resultados.append({"zfer": str(mat), "desc": str(desc or ""),
-                                       "pieza_contraria": pieza_contraria})
-            if resultados:
-                return jsonify({"ok": True, "aplica": True,
-                                "pieza_contraria": pieza_contraria,
-                                "encontrados": resultados})
-            # Sin resultados por PN → intentar fallback solo si tiene atributos clave
-            if not attrs.get("Z_VEHICLE_CODE") and not attrs.get("Z_FORMULA_CODE"):
-                return jsonify(_NO_SIM)
-
-        # ── Estrategia 2: INTERSECT con los 4 atributos más discriminantes ────
-        key_map = {
-            "Z_VEHICLE_CODE": attrs.get("Z_VEHICLE_CODE", ""),
-            "Z_FORMULA_CODE": attrs.get("Z_FORMULA_CODE", ""),
-            "Z_COLOR":        attrs.get("Z_COLOR",        ""),
-            "Z_AGP_LEVEL":    attrs.get("Z_AGP_LEVEL",    ""),
+        # ── INTERSECT: todos los atributos que deben coincidir exactamente ────
+        # Solo cambia Z_PIECE_TYPE (LH↔RH, etc.) — todo lo demás idéntico
+        criterios = {
+            "Z_VEHICLE_MODEL":          attrs.get("Z_VEHICLE_MODEL",          ""),
+            "Z_SUBPRODUCT":             attrs.get("Z_SUBPRODUCT",             ""),
+            "Z_FORMULA_CODE":           attrs.get("Z_FORMULA_CODE",           ""),
+            "Z_COLOR":                  attrs.get("Z_COLOR",                  ""),
+            "Z_SHADE_BAND":             attrs.get("Z_SHADE_BAND",             ""),
+            "Z_AGP_LEVEL":              attrs.get("Z_AGP_LEVEL",              ""),
+            "Z_BEHAVIOR_DIFFERENTIALS": attrs.get("Z_BEHAVIOR_DIFFERENTIALS", ""),
+            "Z_COMMERCIAL_THICKNESS":   attrs.get("Z_COMMERCIAL_THICKNESS",   ""),
+            "Z_AGP_VERSION":            attrs.get("Z_AGP_VERSION",            ""),
         }
+
         intersects, params_i = [], []
-        for atnam, val in key_map.items():
+        for atnam, val in criterios.items():
             if not val:
                 continue
-            intersects.append(
-                f"SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
-                f"WHERE CENTRO='CO01' AND ATNAM='{atnam}' AND ATWRT=?"
-            )
+            # Z_COMMERCIAL_THICKNESS se almacena desde ATFLV (numérico), no ATWRT
+            if atnam == "Z_COMMERCIAL_THICKNESS":
+                intersects.append(
+                    f"SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
+                    f"WHERE CENTRO='CO01' AND ATNAM='{atnam}' AND CAST(ATFLV AS VARCHAR(50))=?"
+                )
+            else:
+                intersects.append(
+                    f"SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
+                    f"WHERE CENTRO='CO01' AND ATNAM='{atnam}' AND ATWRT=?"
+                )
             params_i.append(val)
+
+        # Debe tener la pieza contraria (LH→RH, etc.)
         intersects.append(
             "SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
             "WHERE CENTRO='CO01' AND ATNAM='Z_PIECE_TYPE' AND ATWRT LIKE ?"
