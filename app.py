@@ -619,19 +619,23 @@ def q_variantes_por_pn(vehiculo: str, version: str, formula: str, pieza: str) ->
         return [{"_error": str(e)}]
 
 
+
 def q_zplas_compatibles(formula_code: str, piece_type: str,
-                        shade_band: str = "", differentials_base: str = "") -> list:
+                        shade_band: str = "", differentials_base: str = "",
+                        tiene_acero_base: bool | None = None) -> list:
     """
-    Busca ZPLAs en ODATA_ZPLA_CLASS_001 (CO01, TIPO_MAT=ZPLA) compatibles con
-    la fórmula, tipo de pieza, franja y diferencial del ZFER base.
-    Los atributos Z_PIECE_TYPE y Z_BEHAVIOR_DIFFERENTIALS son multi-valor (comas).
+    Busca ZPLAs compatibles con la fórmula, tipo de pieza, franja y diferencial del ZFER base.
+
+    tiene_acero_base (detectado por diferencial 06 del ZFER base):
+      False → solo ZPLAs SIN diferencial 06 (sin acero)
+      True  → solo ZPLAs CON diferencial 06 (con acero)
+      None  → sin filtro por acero
     """
     if not formula_code or not piece_type:
         return []
     try:
         conn = get_conn()
         cur  = conn.cursor()
-        # Pre-filtra por fórmula ANTES del GROUP BY para no agrupar toda la tabla
         cur.execute("""
             SELECT
                 c.MATERIAL,
@@ -656,27 +660,29 @@ def q_zplas_compatibles(formula_code: str, piece_type: str,
         rows = cur.fetchall()
         conn.close()
 
-        # Diferencial(es) del ZFER base como set para comparar
         base_diffs = {d.strip() for d in differentials_base.split(",") if d.strip()}
 
         resultado = []
-        # Query devuelve 6 cols: MATERIAL, color, piece_types, shade_band, differentials, level
         for mat, color, piece_types_str, zpla_shade, differentials, level in rows:
             if not color:
                 continue
-            # Z_PIECE_TYPE multi-valor: verificar que el tipo de pieza base esté incluido
+            # Z_PIECE_TYPE multi-valor
             pieces = [p.strip() for p in (piece_types_str or "").split(",") if p.strip()]
             if piece_type not in pieces:
                 continue
-            # Franja: si el ZFER base tiene franja específica, el ZPLA debe coincidir
+            # Franja
             if shade_band and shade_band not in ("00", ""):
                 if (zpla_shade or "00") not in (shade_band, "00"):
                     continue
-            # Diferencial: el ZPLA debe contener AL MENOS UNO de los diferenciales del ZFER base
-            # Si el ZFER base no tiene diferencial definido, no filtrar
+            # Diferencial base vs ZPLA
+            zpla_diffs = {d.strip() for d in (differentials or "").split(",") if d.strip()}
             if base_diffs:
-                zpla_diffs = {d.strip() for d in (differentials or "").split(",") if d.strip()}
                 if zpla_diffs and not base_diffs.intersection(zpla_diffs):
+                    continue
+            # Filtro acero: el diferencial 06 indica acero
+            if tiene_acero_base is not None:
+                zpla_tiene_acero = "06" in zpla_diffs
+                if tiene_acero_base != zpla_tiene_acero:
                     continue
             resultado.append({
                 "material":      mat,
@@ -1121,6 +1127,9 @@ def _cargar_datos_zfer(material: str, nivel: str = "", subproducto: str = "") ->
     subproducto   = subproducto or attrs.get("Z_SUBPRODUCT", "")
     pn_parsed     = _parsear_partnumber(partnumber)
 
+    # Detectar si el ZFER base tiene acero: diferencial 06 = con acero
+    tiene_acero_base = "06" in {d.strip() for d in differentials.split(",") if d.strip()}
+
     # Stage 2: 3 queries dependientes de attrs, en paralelo
     with ThreadPoolExecutor(max_workers=3) as ex:
         fut_variantes = ex.submit(
@@ -1128,7 +1137,7 @@ def _cargar_datos_zfer(material: str, nivel: str = "", subproducto: str = "") ->
             pn_parsed["vehiculo"], pn_parsed["version"],
             pn_parsed["formula"],  pn_parsed["pieza"]
         ) if pn_parsed else None
-        fut_zplas    = ex.submit(q_zplas_compatibles, formula_code, piece_type, shade_band, differentials)
+        fut_zplas    = ex.submit(q_zplas_compatibles, formula_code, piece_type, shade_band, differentials, tiene_acero_base)
         fut_formulas = ex.submit(q_formulas_por_pieza, piece_type, nivel, subproducto, formula_code)
 
     variantes    = fut_variantes.result() if fut_variantes else []
@@ -1260,7 +1269,8 @@ def api_colores_disponibles(material: str):
     differentials = attrs.get("Z_BEHAVIOR_DIFFERENTIALS", "")
     partnumber    = attrs.get("Z_AGP_PARTNUMBER", "")
     pn_parsed     = _parsear_partnumber(partnumber)
-    shade_band_val = attrs.get("Z_SHADE_BAND", "00") or "00"
+    shade_band_val  = attrs.get("Z_SHADE_BAND", "00") or "00"
+    tiene_acero_mat = "06" in {d.strip() for d in differentials.split(",") if d.strip()}
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         fut_variantes = ex.submit(
@@ -1268,7 +1278,7 @@ def api_colores_disponibles(material: str):
             pn_parsed["vehiculo"], pn_parsed["version"],
             pn_parsed["formula"],  pn_parsed["pieza"]
         ) if pn_parsed else None
-        fut_zplas = ex.submit(q_zplas_compatibles, formula_code, piece_type, shade_band_val, differentials)
+        fut_zplas = ex.submit(q_zplas_compatibles, formula_code, piece_type, shade_band_val, differentials, tiene_acero_mat)
 
     variantes = fut_variantes.result() if fut_variantes else []
     zplas     = fut_zplas.result()
@@ -1292,6 +1302,9 @@ def api_colores_disponibles(material: str):
             "color_codigo": cod,
             "color_nombre": nombre,
             "zpla":         zpla_list[0]["material"],
+            "zpla_list":    [z["material"] for z in zpla_list],
+            "zpla_count":   len(zpla_list),
+            "differentials": zpla_list[0].get("differentials", ""),
         })
     disponibles.sort(key=lambda x: x["color_codigo"])
     return jsonify({"ok": True, "colores": disponibles,

@@ -185,12 +185,25 @@
           {% endif %}
         </div>
         {% elif c.estado == 'DISPONIBLE' %}
-        <div style="display:flex; align-items:center; justify-content:space-between;">
-          <div style="font-size:.73rem; color:var(--muted);">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:.4rem;">
+          <div style="font-size:.73rem; color:var(--muted); flex:1; min-width:0;">
             <span style="color:#e3b341; font-weight:600;">ZPLA:</span>
+            {% if c.zpla_count > 1 %}
+            <select class="zpla-selector"
+                    style="margin-left:.25rem; background:#1c1a10; color:#e6edf3; border:1px solid #5a3e00;
+                           border-radius:5px; font-size:.7rem; font-weight:700; padding:.05rem .2rem;
+                           max-width:110px; cursor:pointer;"
+                    onchange="document.getElementById('chk-{{ zfer_id }}-{{ c.color_codigo }}').dataset.zpla=this.value">
+              {% for zm in c.zpla_list %}
+              <option value="{{ zm }}">{{ zm }}</option>
+              {% endfor %}
+            </select>
+            {% else %}
             <span style="font-weight:700; color:#e6edf3; margin-left:.25rem;">{{ c.zpla }}</span>
+            {% endif %}
           </div>
           <input type="checkbox" class="col-queue-check"
+                 id="chk-{{ zfer_id }}-{{ c.color_codigo }}"
                  data-zfer="{{ zfer_id }}"
                  data-color="{{ c.color_codigo }}"
                  data-color-nombre="{{ c.color_nombre }}"
@@ -1688,7 +1701,15 @@ function _renderFormulaCards(formulas, opts = {}) {
         </td>
         <td style="padding:.5rem .8rem;"><span class="tag t-color">${c.color}</span></td>
         <td style="padding:.5rem .8rem; font-weight:600;">${c.color_nombre}</td>
-        <td style="padding:.5rem .8rem; color:var(--muted); font-size:.82rem; font-weight:600;">${c.zpla}</td>
+        <td style="padding:.5rem .8rem; color:var(--muted); font-size:.82rem; font-weight:600;">
+          ${(c.zpla_count > 1)
+            ? `<select style="background:#1c1a10;color:#e6edf3;border:1px solid #5a3e00;border-radius:5px;font-size:.75rem;font-weight:700;padding:.05rem .2rem;cursor:pointer;"
+                       onchange="this.closest('tr').querySelector('.${p}chk-fc').dataset.zpla=this.value">
+                 ${c.zpla_list.map(zm=>`<option value="${zm}">${zm}</option>`).join('')}
+               </select>`
+            : c.zpla
+          }
+        </td>
         <td style="padding:.5rem .8rem; color:#484f58; font-size:.78rem;">${c.differentials || '—'}</td>
         <td id="${p}fc-estado-${idx}-${c.color}" style="padding:.5rem .8rem;">
           <span style="color:#484f58; font-size:.72rem;">

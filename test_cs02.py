@@ -33,7 +33,11 @@ def leer_postp(session, vis):
         return str(session.findById(f"{_TBL}/ctxtRC29P-POSTP[1,{vis}]").text or "").strip()
     except Exception:
         return None
-    
+"""
+def dig_tabla(session):
+  try :
+   tbl = aconter = 
+"""
 def diag_tabla(session):
     print("\n── Diagnóstico tabla CS02 ──")
     try:
