@@ -34,7 +34,7 @@ _T_MIN_RAPIDO = 0.05
 _T_MIN_MEDIO  = 0.15
 _T_MIN_LENTO  = 0.4
 
-_SAP_USER = os.environ.get("SAP_USER", "FESPITIA") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -1661,29 +1661,23 @@ class AutomatizadorSAP:
         self.session.findById(tbl).verticalScrollbar.position = 6
         self._esperar(T_RAPIDO)
 
-        # Fila visual 7 = Z_BEHAVIOR_DIFFERENTIALS (con scroll en pos 6)
-        campo_name = tbl + "/ctxtRCTMS-MNAME[0,7]"
+        # Fila visual 7, columna MWERT (1) = Z_BEHAVIOR_DIFFERENTIALS (confirma VBS)
+        campo_name = tbl + "/ctxtRCTMS-MWERT[1,7]"
         self.session.findById(campo_name).setFocus()
-        self.session.findById(campo_name).caretPosition = 16
+        self.session.findById(campo_name).caretPosition = 8
         self.session.findById("wnd[0]").sendVKey(2)   # abre popup de valores
         self._esperar(T_MEDIO)
 
-        # En popup wnd[1]: desmarcar checkbox fila 5 (el "06")
-        # Según VBS confirmado: selected=False → setFocus → sendVKey(2) × 2 → close()
+        # En popup wnd[1]: desmarcar checkbox fila 5 (el "06") → btn[8] para confirmar
+        # Confirmado por VBS: selected=False → setFocus → btn[8].press()
         chk = "wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]"
-        for _ in range(2):
-            try:
-                self.session.findById(chk).selected = False
-                self.session.findById(chk).setFocus()
-                self.session.findById("wnd[1]").sendVKey(2)
-                self._esperar(T_RAPIDO)
-            except Exception as e:
-                print(f"    [WARN] Diferencial popup check: {e}")
-                break
         try:
-            self.session.findById("wnd[1]").close()
-        except Exception:
-            pass
+            self.session.findById(chk).selected = False
+            self.session.findById(chk).setFocus()
+            self._esperar(T_RAPIDO)
+            self.session.findById("wnd[1]/tbar[0]/btn[8]").press()
+        except Exception as e:
+            print(f"    [WARN] Diferencial popup check: {e}")
         self._esperar(T_RAPIDO)
 
         # Guardar con btn[11] y salir con F3 → OPTION1
@@ -2015,26 +2009,20 @@ class AutomatizadorSAP:
         self.session.findById(tbl).verticalScrollbar.position = 6
         self._esperar(T_RAPIDO)
 
-        campo_name = tbl + "/ctxtRCTMS-MNAME[0,7]"
+        campo_name = tbl + "/ctxtRCTMS-MWERT[1,7]"
         self.session.findById(campo_name).setFocus()
-        self.session.findById(campo_name).caretPosition = 16
+        self.session.findById(campo_name).caretPosition = 8
         self.session.findById("wnd[0]").sendVKey(2)
         self._esperar(T_MEDIO)
 
         chk = "wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]"
-        for _ in range(2):
-            try:
-                self.session.findById(chk).selected = True
-                self.session.findById(chk).setFocus()
-                self.session.findById("wnd[1]").sendVKey(2)
-                self._esperar(T_RAPIDO)
-            except Exception as e:
-                print(f"    [WARN] Activar diferencial popup check: {e}")
-                break
         try:
-            self.session.findById("wnd[1]").close()
-        except Exception:
-            pass
+            self.session.findById(chk).selected = True
+            self.session.findById(chk).setFocus()
+            self._esperar(T_RAPIDO)
+            self.session.findById("wnd[1]/tbar[0]/btn[8]").press()
+        except Exception as e:
+            print(f"    [WARN] Activar diferencial popup check: {e}")
         self._esperar(T_RAPIDO)
 
         try:
@@ -2206,10 +2194,24 @@ class AutomatizadorSAP:
 
     # ── CA02 — Cambio de Hoja de Ruta ────────────────────────────────────────
 
+    def _ca02_leer_matnr_vis(self, tbl_path: str, vis_row: int) -> str:
+        """Lee MATNR de fila visual vis_row via findById (getCellValue no funciona en esta tabla)."""
+        try:
+            return str(self.session.findById(f"{tbl_path}/ctxtMAPL-MATNR[2,{vis_row}]").text or "").strip()
+        except Exception:
+            return ""
+
+    def _ca02_scroll(self, tbl, pos: int):
+        try:
+            tbl.verticalScrollbar.position = pos
+            self._esperar(T_RAPIDO)
+        except Exception:
+            pass
+
     def ca02_desasignar_hr(self, zfer_nuevo: str, res=None) -> bool:
         """
         CA02 con MATNR=zfer_nuevo → busca la asignación de HR → la borra → guarda.
-        Retorna True si OK, False si hubo advertencia (sin romper el flujo).
+        Lee celdas via findById por posición de scroll (getCellValue no funciona aquí).
         """
         def _warn(msg):
             print(f"    [WARN] ca02_desasignar: {msg}")
@@ -2231,53 +2233,53 @@ class AutomatizadorSAP:
             self.session.findById("wnd[0]/tbar[1]/btn[31]").press()
             self._esperar(T_MEDIO)
 
-            # Buscar fila que tenga este MATNR — escanear todas las filas por bloques
-            tbl = self.session.findById(_TBL)
-            total    = tbl.RowCount
-            vis_rows = tbl.VisibleRowCount
-            fila_encontrada = None
-            for abs_row in range(total):
-                try:
-                    val = str(tbl.getCellValue(abs_row, "MATNR") or "").strip()
-                    if val == zfer_nuevo:
-                        fila_encontrada = abs_row
+            # Si la tabla no existe o la HR no fue asignada, btn[31] puede no abrir popup
+            try:
+                tbl        = self.session.findById(_TBL)
+                vis_rows   = tbl.VisibleRowCount
+                max_scroll = tbl.verticalScrollbar.maximum
+            except Exception:
+                _warn(f"Sin HR asignada para {zfer_nuevo} (popup no disponible — esperado para ZFER nuevo)")
+                try: self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+                except Exception: pass
+                return False
+
+            # Escanear via findById en cada posición de scroll
+            fila_scroll = None
+            fila_vis    = None
+            for sp in range(max_scroll + 1):
+                self._ca02_scroll(tbl, sp)
+                for vis in range(vis_rows):
+                    if self._ca02_leer_matnr_vis(_TBL, vis) == zfer_nuevo:
+                        fila_scroll = sp
+                        fila_vis    = vis
                         break
-                except Exception:
+                if fila_scroll is not None:
                     break
 
-            if fila_encontrada is None:
+            if fila_scroll is None:
                 _warn(f"No se encontró asignación de HR para {zfer_nuevo} en CA02")
                 try: self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
                 except Exception: pass
                 return False
 
-            # Scroll para que la fila sea visible, luego usar índice visual (no absoluto)
-            scroll_target = max(0, fila_encontrada - vis_rows + 1)
-            tbl.verticalScrollbar.position = scroll_target
+            print(f"    CA02 desasignar: scroll={fila_scroll} vis_row={fila_vis}")
+            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{fila_vis}]").setFocus()
+            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{fila_vis}]").caretPosition = 9
             self._esperar(T_RAPIDO)
-            vis_row = fila_encontrada - tbl.verticalScrollbar.position
-            print(f"    CA02 desasignar: fila_abs={fila_encontrada} vis_row={vis_row}")
-
-            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{vis_row}]").setFocus()
-            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{vis_row}]").caretPosition = 9
+            self.session.findById("wnd[1]/tbar[0]/btn[14]").press()
             self._esperar(T_RAPIDO)
-            self.session.findById("wnd[1]/tbar[0]/btn[14]").press()   # Borrar fila
-            self._esperar(T_RAPIDO)
-
-            # Confirmaciones
             for _id in ("wnd[2]/tbar[0]/btn[0]", "wnd[2]/usr/btnSPOP-OPTION1"):
                 try:
                     self.session.findById(_id).press()
                     self._esperar(T_RAPIDO)
                 except Exception:
                     pass
-
             try:
                 self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
                 self._esperar(T_RAPIDO)
             except Exception:
                 pass
-
             self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
             self._esperar(T_LENTO)
             print(f"    CA02 desasignación guardada: {zfer_nuevo}")
@@ -2291,7 +2293,7 @@ class AutomatizadorSAP:
         """
         CA02 con PLNNR=id_hruta → abre popup de materiales → escribe zfer_nuevo en
         la primera fila vacía → guarda.
-        Retorna True si OK, False si advertencia.
+        Lee celdas via findById por posición de scroll (getCellValue no funciona aquí).
         """
         def _warn(msg):
             print(f"    [WARN] ca02_asignar: {msg}")
@@ -2310,88 +2312,40 @@ class AutomatizadorSAP:
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
             self.session.findById("wnd[0]/tbar[1]/btn[5]").press()
-            self._esperar(T_LENTO)   # más tiempo para que cargue la HR
+            self._esperar(T_LENTO)
             self.session.findById("wnd[0]/tbar[1]/btn[31]").press()
-            self._esperar(T_LENTO)   # popup puede tardar con muchos materiales
+            self._esperar(T_LENTO)
 
-            # Obtener tabla — probar paths y verificar que sea válida
-            tbl = None
-            for _tbl_id in ("wnd[1]/usr/tblSAPLCZDITCTRL_1010",
-                            "wnd[1]/usr/tbl0100/tblSAPLCZDITCTRL_1010",
-                            _TBL):
-                try:
-                    _obj = self.session.findById(_tbl_id)
-                    _ = _obj.RowCount   # verificar que es un objeto válido
-                    tbl  = _obj
-                    _TBL = _tbl_id
-                    break
-                except Exception:
-                    pass
+            tbl = self.session.findById(_TBL)
+            vis_rows   = tbl.VisibleRowCount
+            max_scroll = tbl.verticalScrollbar.maximum
 
-            if tbl is None:
-                _warn("No se encontró la tabla de materiales en CA02 (asignar)")
-                try: self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
-                except Exception: pass
-                return False
-
-            total    = tbl.RowCount
-            vis_rows = tbl.VisibleRowCount
-
-            # ── Buscar primera fila vacía (MATNR vacío) ──────────────────────
-            # Escanear desde el final hacia arriba usando getCellValue (índice absoluto)
-            fila_vacia = None
-            try:
-                max_pos = tbl.verticalScrollbar.maximum
-            except Exception:
-                max_pos = max(0, total - vis_rows)
-
-            # Bajar al final en bloques para encontrar la primera fila vacía
-            for scroll in range(max_pos, -1, -max(1, vis_rows)):
-                try:
-                    tbl.verticalScrollbar.position = scroll
-                    self._esperar(T_RAPIDO)
-                except Exception:
-                    pass
-                # Revisar las filas visibles en esta posición (de abajo a arriba)
+            # Buscar primera fila vacía escaneando desde el final via findById
+            fila_scroll = None
+            fila_vis    = None
+            for sp in range(max_scroll, -1, -1):
+                self._ca02_scroll(tbl, sp)
                 for vis in range(vis_rows - 1, -1, -1):
-                    abs_row = scroll + vis
-                    if abs_row >= total:
-                        continue
-                    try:
-                        val = str(tbl.getCellValue(abs_row, "MATNR") or "").strip()
-                    except Exception:
-                        val = ""
+                    val = self._ca02_leer_matnr_vis(_TBL, vis)
                     if not val:
-                        fila_vacia = abs_row
+                        fila_scroll = sp
+                        fila_vis    = vis
                     else:
-                        # Encontramos una fila con dato → no hay vacías antes de aquí
-                        break
-                if fila_vacia is not None:
+                        if fila_scroll is not None:
+                            break
+                if fila_scroll is not None:
                     break
 
-            if fila_vacia is None:
+            if fila_scroll is None:
                 _warn("No se encontró fila vacía en la tabla de materiales de CA02")
                 try: self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
                 except Exception: pass
                 return False
 
-            # ── Hacer scroll para que la fila vacía sea visible ───────────────
-            scroll_target = max(0, fila_vacia - vis_rows + 1)
-            try:
-                tbl.verticalScrollbar.position = scroll_target
-                self._esperar(T_RAPIDO)
-            except Exception:
-                scroll_target = 0
-
-            vis_row = fila_vacia - tbl.verticalScrollbar.position
-            print(f"    CA02 asignar: fila_abs={fila_vacia} vis_row={vis_row} scroll={tbl.verticalScrollbar.position}")
-
-            # ── Escribir usando findById con índice VISIBLE ([col, vis_row]) ──
-            # ctxtMAPL-MATNR[col,vis_row] requiere vis_row, no índice absoluto
-            _plnal = f"{_TBL}/txtMAPL-PLNAL[0,{vis_row}]"
-            _matnr = f"{_TBL}/ctxtMAPL-MATNR[2,{vis_row}]"
-            _werks  = f"{_TBL}/ctxtMAPL-WERKS[3,{vis_row}]"
-
+            print(f"    CA02 asignar: scroll={fila_scroll} vis_row={fila_vis}")
+            _matnr = f"{_TBL}/ctxtMAPL-MATNR[2,{fila_vis}]"
+            _werks  = f"{_TBL}/ctxtMAPL-WERKS[3,{fila_vis}]"
+            _plnal  = f"{_TBL}/txtMAPL-PLNAL[0,{fila_vis}]"
             self.session.findById(_matnr).setFocus()
             self._esperar(T_RAPIDO)
             try:
@@ -2404,7 +2358,6 @@ class AutomatizadorSAP:
             self._esperar(T_RAPIDO)
             self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
             self._esperar(T_MEDIO)
-
             self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
             self._esperar(T_LENTO)
             try:
@@ -2854,6 +2807,208 @@ class AutomatizadorSAP:
         self._log_bd(res)
         return res
 
+    # ── CS02 — Agregar posición acero en BOM del ZFOR ────────────────────────
+
+    def cs02_agregar_posicion_acero(self, zfor: str, pos_acero: str, zhal: str, res=None) -> bool:
+        """
+        CS02 con MATNR=zfor, Utilización=1, Centro=CO01.
+        Escanea tabla TCMA buscando fila con POSTP=='' (vacía).
+        Escribe POSNR=pos_acero, POSTP=l, IDNRK=zhal, MENGE=1 → guarda.
+
+        IDs confirmados por VBS (QUAS):
+          Pantalla inicial: ctxtRC29N-MATNR, ctxtRC29N-WERKS, ctxtRC29N-STLAN
+          Tabla: wnd[0]/usr/tabsTS_ITOV/tabpTCMA/ssubSUBPAGE:SAPLCSDI:0152/tblSAPLCSDITCMAT
+            col 0 = txtRC29P-POSNR   col 1 = ctxtRC29P-POSTP   col 2 = ctxtRC29P-IDNRK
+          Sub-screen MENGE: wnd[0]/usr/subPOS_PHPT:SAPLCSDI:0830/txtRC29P-MENGE
+          Guardar: wnd[0]/tbar[0]/btn[11]
+        Detección fila vacía: POSTP=='' (SAP pre-llena POSNR con 9310/9320/... — NO usar POSNR)
+        """
+        _TBL = ("wnd[0]/usr/tabsTS_ITOV/tabpTCMA"
+                "/ssubSUBPAGE:SAPLCSDI:0152/tblSAPLCSDITCMAT")
+
+        def _warn(msg):
+            print(f"    [WARN] cs02_agregar: {msg}")
+            if res: res._log(f"  [CS02] ⚠ {msg}")
+
+        def _leer_postp(vis):
+            try:
+                return str(self.session.findById(f"{_TBL}/ctxtRC29P-POSTP[1,{vis}]").text or "").strip()
+            except Exception:
+                return None  # None = fila no existe
+
+        def _leer_posnr(vis):
+            try:
+                return str(self.session.findById(f"{_TBL}/txtRC29P-POSNR[0,{vis}]").text or "").strip()
+            except Exception:
+                return None
+
+        def _leer_idnrk(vis):
+            try:
+                return str(self.session.findById(f"{_TBL}/ctxtRC29P-IDNRK[2,{vis}]").text or "").strip()
+            except Exception:
+                return ""
+
+        # Normalizar: "0116" → "116"
+        pos_num = str(pos_acero).lstrip("0") or pos_acero
+
+        print(f"    CS02: ZFOR={zfor} pos={pos_num} ZHAL={zhal}")
+        if res: res._log(f"  [CS02] Iniciando: ZFOR={zfor} pos={pos_num} ZHAL={zhal}")
+
+        try:
+            # ── Navegar a CS02 ──────────────────────────────────────────────
+            self._cerrar_dialogs_abiertos()
+            self.session.findById(self._ID_TCODE_BOX).text = "/ncs02"
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+
+            # ── Pantalla inicial: ZFOR + Centro + Utilización ───────────────
+            try:
+                self.session.findById("wnd[0]/usr/ctxtRC29N-MATNR").text = zfor
+            except Exception as e:
+                raise RuntimeError(f"No se pudo escribir ZFOR en pantalla inicial CS02: {e}")
+
+            try:
+                self.session.findById("wnd[0]/usr/ctxtRC29N-WERKS").text = "CO01"
+            except Exception as e:
+                _warn(f"Centro CO01 no disponible: {e}")
+
+            try:
+                self.session.findById("wnd[0]/usr/ctxtRC29N-STLAN").text = "1"
+            except Exception as e:
+                _warn(f"Utilización=1 no disponible: {e}")
+
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+
+            # ── Seleccionar tab TCMA (componentes) ─────────────────────────
+            try:
+                self.session.findById("wnd[0]/usr/tabsTS_ITOV/tabpTCMA").select()
+                self._esperar(T_RAPIDO)
+            except Exception:
+                pass  # ya puede estar activo
+
+            # ── Obtener parámetros de la tabla ─────────────────────────────
+            tbl      = None
+            max_sb   = 0
+            vis_rows = 19
+            try:
+                tbl      = self.session.findById(_TBL)
+                max_sb   = tbl.verticalScrollbar.maximum
+                vis_rows = tbl.VisibleRowCount
+                print(f"    CS02 tabla: VisibleRows={vis_rows} scrollMax={max_sb}")
+                if res: res._log(f"  [CS02] Tabla: vis={vis_rows} scroll_max={max_sb}")
+            except Exception as e:
+                _warn(f"No se pudo leer tabla CS02 ({e}) — usando defaults vis=19 scroll=0")
+
+            # ── Verificar si la posición ya existe (evitar duplicado) ───────
+            for sp_check in range(max_sb + 1):
+                if tbl:
+                    self._ca02_scroll(tbl, sp_check)
+                for vis in range(vis_rows):
+                    posnr = _leer_posnr(vis)
+                    if posnr is None:
+                        break
+                    postp = _leer_postp(vis)
+                    idnrk = _leer_idnrk(vis)
+                    # Posición ya existe si POSNR coincide y POSTP no está vacío
+                    if posnr == pos_num and postp not in ("", None):
+                        _warn(f"Posición {pos_num} ya existe en BOM (IDNRK={idnrk}) — omitiendo CS02")
+                        if res: res._log(f"  [CS02] Posición {pos_num} ya existía con IDNRK={idnrk} — no se duplicó")
+                        return True  # no es error, ya está
+                if sp_check == max_sb:
+                    break
+
+            # ── Buscar primera fila vacía (POSTP=='') ───────────────────────
+            fila_vis    = None
+            fila_scroll = 0
+            for sp in range(max_sb + 1):
+                if tbl:
+                    self._ca02_scroll(tbl, sp)
+                for vis in range(vis_rows):
+                    posnr = _leer_posnr(vis)
+                    if posnr is None:
+                        break  # fin de tabla
+                    postp = _leer_postp(vis)
+                    if postp == "":  # fila disponible
+                        fila_vis    = vis
+                        fila_scroll = sp
+                        print(f"    CS02 fila vacía: vis={vis} scroll={sp} POSNR={posnr!r}")
+                        if res: res._log(f"  [CS02] Fila vacía en vis={vis} scroll={sp}")
+                        break
+                if fila_vis is not None:
+                    break
+
+            if fila_vis is None:
+                msg = f"No se encontró fila vacía en BOM del ZFOR {zfor} — revisar CS02 manualmente"
+                _warn(msg)
+                if res: res._log(f"  [CS02] ❌ {msg}")
+                return False
+
+            # ── Escribir POSNR, POSTP, IDNRK ──────────────────────────────
+            try:
+                self.session.findById(f"{_TBL}/txtRC29P-POSNR[0,{fila_vis}]").text = pos_num
+            except Exception as e:
+                raise RuntimeError(f"No se pudo escribir POSNR={pos_num}: {e}")
+
+            try:
+                self.session.findById(f"{_TBL}/ctxtRC29P-POSTP[1,{fila_vis}]").text = "l"
+            except Exception as e:
+                raise RuntimeError(f"No se pudo escribir POSTP=l: {e}")
+
+            try:
+                campo_idnrk = f"{_TBL}/ctxtRC29P-IDNRK[2,{fila_vis}]"
+                self.session.findById(campo_idnrk).text = zhal
+                self.session.findById(campo_idnrk).setFocus()
+                self.session.findById(campo_idnrk).caretPosition = len(zhal)
+            except Exception as e:
+                raise RuntimeError(f"No se pudo escribir IDNRK={zhal}: {e}")
+
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+
+            # ── Sub-screen MENGE=1 (aparece tras Enter) ────────────────────
+            try:
+                menge_id = "wnd[0]/usr/subPOS_PHPT:SAPLCSDI:0830/txtRC29P-MENGE"
+                self.session.findById(menge_id).text = "1"
+                self.session.findById(menge_id).caretPosition = 1
+                self.session.findById("wnd[0]").sendVKey(0)
+                self._esperar(T_RAPIDO)
+            except Exception as e_menge:
+                _warn(f"Sub-screen MENGE no apareció ({e_menge}) — puede ser normal si SAP lo tomó automático")
+
+            # ── Cerrar popups de confirmación si aparecen ──────────────────
+            for btn_popup in ("wnd[1]/usr/btnSPOP-OPTION1", "wnd[1]/tbar[0]/btn[0]"):
+                try:
+                    self.session.findById(btn_popup).press()
+                    self._esperar(T_RAPIDO)
+                except Exception:
+                    pass
+
+            # ── Guardar ────────────────────────────────────────────────────
+            self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
+            self._esperar(T_LENTO)
+
+            # ── Verificar que no quedó mensaje de error en statusbar ───────
+            try:
+                status = str(self.session.findById("wnd[0]/sbar").text or "").strip()
+                if status:
+                    print(f"    CS02 statusbar: {status!r}")
+                    if res: res._log(f"  [CS02] Statusbar tras guardar: {status}")
+                    if any(w in status.upper() for w in ("ERROR", "INCORRECTO", "NO EXISTE", "NO SE PUEDE")):
+                        _warn(f"Posible error al guardar CS02: {status}")
+                        return False
+            except Exception:
+                pass
+
+            print(f"    CS02 OK: ZFOR={zfor} pos={pos_num} ZHAL={zhal}")
+            if res: res._log(f"  [CS02] ✓ Guardado: pos={pos_num} ZHAL={zhal}")
+            return True
+
+        except Exception as e:
+            _warn(str(e))
+            if res: res._log(f"  [CS02] ❌ Excepción: {e}")
+            return False
+
     # ─────────────────────────────────────────────────────────────────────────
     # FLUJO: sin acero → con acero
     # ─────────────────────────────────────────────────────────────────────────
@@ -2863,6 +3018,7 @@ class AutomatizadorSAP:
             color_codigo: str, color_nombre: str,
             franja: str = "00", pn_base: str = "", zpla: str = "",
             nivel: str = "", tipo_pieza: str = "",
+            zhal: str = "",
             step_callback=None) -> ResultadoItem:
         """
         Flujo completo: cambio de fórmula sin acero → con acero.
@@ -3004,8 +3160,18 @@ class AutomatizadorSAP:
             # 5c — Plano con SP: solo para ZFER nuevo
             self.mm02_cambiar_plano_con_sp(zfer_nuevo, res, zfer_base=zfer_base)
 
-            # PASO 6 — CEWB: agregar posición acero (PENDIENTE de implementar)
-            res._log(f"  CEWB agregar pos {pos_acero}: PENDIENTE de implementar")
+            # PASO 6 — CS02: agregar posición acero en BOM del ZFOR
+            _cb(6, f"Agregando posición acero {pos_acero} en CS02 (ZFOR={zfor_nuevo})")
+            if zfor_nuevo and zhal:
+                ok_cs02 = self.cs02_agregar_posicion_acero(zfor_nuevo, pos_acero, zhal, res)
+                if ok_cs02:
+                    res._log(f"  CS02: posición {pos_acero} agregada con ZHAL={zhal}")
+                else:
+                    res._log(f"  [WARN] CS02: falló agregar posición {pos_acero} — revisar BOM manualmente")
+            elif not zfor_nuevo:
+                res._log(f"  [WARN] CS02 omitido: sin ZFOR nuevo")
+            else:
+                res._log(f"  [WARN] CS02 omitido: sin código ZHAL")
 
             # Volver a pantalla inicial
             try:
@@ -3071,6 +3237,7 @@ def procesar_combinacion_formula_con_acero(
         color_codigo: str, color_nombre: str,
         franja: str = "00", pn_base: str = "", zpla: str = "",
         nivel: str = "", tipo_pieza: str = "",
+        zhal: str = "",
         step_callback=None) -> "ResultadoItem":
     """Entrada pública para flujo sin acero → con acero."""
     auto = AutomatizadorSAP()
@@ -3085,7 +3252,7 @@ def procesar_combinacion_formula_con_acero(
     return auto.procesar_formula_con_acero(
         zfer_base, formula_nueva, color_codigo, color_nombre,
         franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
-        step_callback=step_callback,
+        zhal=zhal, step_callback=step_callback,
     )
 
 

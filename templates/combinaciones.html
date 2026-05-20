@@ -711,6 +711,37 @@
         </div>
       </label>
     </div>
+
+    <!-- Sección ZHAL — solo visible cuando se elige sin→con -->
+    <div id="zhal-section" style="display:none; margin-bottom:1.2rem;">
+      <div style="border-top:1px solid #30363d; padding-top:.9rem; margin-top:.2rem;">
+        <div style="font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; color:#8b949e; margin-bottom:.5rem;">
+          <i class="bi bi-box-seam me-1" style="color:#7c3aed;"></i>Código ZHAL (posición acero 0116)
+        </div>
+        <!-- Estado: buscando -->
+        <div id="zhal-buscando" style="display:none; font-size:.82rem; color:#8b949e;">
+          <span class="spinner-border spinner-border-sm me-1"></span>Buscando en BD…
+        </div>
+        <!-- Estado: encontrado -->
+        <div id="zhal-encontrado" style="display:none; align-items:center; gap:.6rem;
+             background:#0d2918; border:1px solid #238636; border-radius:8px; padding:.55rem .8rem;">
+          <i class="bi bi-check-circle-fill" style="color:#56d364; font-size:.95rem;"></i>
+          <span style="font-size:.82rem; color:#8b949e;">ZHAL encontrado:</span>
+          <span id="zhal-valor" style="font-weight:700; font-size:.88rem; color:#56d364; font-family:monospace;"></span>
+        </div>
+        <!-- Estado: no encontrado → ingreso manual -->
+        <div id="zhal-manual" style="display:none;">
+          <div style="font-size:.78rem; color:#f0883e; margin-bottom:.4rem;">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>No se encontró en BD — ingresa el código manualmente
+          </div>
+          <input id="zhal-input" type="text" placeholder="Ej: 600019676"
+                 style="width:100%; background:#0d1117; border:1px solid #f0883e; border-radius:6px;
+                        color:#e6edf3; padding:.4rem .7rem; font-size:.88rem; font-family:monospace;
+                        outline:none;">
+        </div>
+      </div>
+    </div>
+
     <div style="display:flex; gap:.6rem; justify-content:flex-end;">
       <button id="acero-dir-cancel"
               style="background:#21262d; border:1px solid #30363d; color:#e6edf3;
@@ -1154,19 +1185,24 @@ async function _enviarTodoACola() {
       ? `Bloque ${ds.bloque_num} · ${ds.hora_prog}${ds.pendientes > 0 ? ` · ${ds.pendientes} ya en cola` : ""}${ds.ya_paso ? " ⚠ hora ya pasó" : ""}`
       : "Se creará un nuevo bloque (mañana 7am)";
 
-    // Si hay fórmulas, preguntar dirección de acero
+    // Si hay fórmulas, preguntar dirección de acero (y ZHAL si es sin→con)
     let acero_dir = null;
     if (nF > 0) {
-      acero_dir = await _pedirDireccionAcero();
-      if (!acero_dir) {
+      const zferFormula = cola.find(c => c.tipo === "formula")?.zfer || ZFER_BASE;
+      const respAcero = await _pedirDireccionAcero(zferFormula);
+      if (!respAcero) {
         if (statusGlb) statusGlb.textContent = "";
         if (btnEjec) btnEjec.disabled = false;
         return;
       }
-      // Inyectar acero_dir en todos los ítems de fórmula
-      // Fórmulas: cambiar_hr siempre true (obligatorio)
+      acero_dir = respAcero.dir;
+      // Inyectar acero_dir (y zhal si aplica) en todos los ítems de fórmula
       cola.forEach(it => {
-        if (it.tipo === "formula") { it.acero_dir = acero_dir; it.cambiar_hr = true; }
+        if (it.tipo === "formula") {
+          it.acero_dir  = acero_dir;
+          it.cambiar_hr = true;
+          if (acero_dir === "sin_con" && respAcero.zhal) it.zhal = respAcero.zhal;
+        }
       });
     }
 
@@ -1210,21 +1246,62 @@ if (btnEjec) btnEjec.addEventListener("click", _enviarTodoACola);
 
 
 // ── Modal dirección acero ─────────────────────────────────────────────────────
-function _pedirDireccionAcero() {
+// Retorna { dir: "sin_con"|"con_sin", zhal: "600019676"|null } o null si canceló
+function _pedirDireccionAcero(zferBase) {
   return new Promise(resolve => {
-    const modal = document.getElementById("modal-acero-dir");
-    // reset selección
+    const modal     = document.getElementById("modal-acero-dir");
+    const secZhal   = document.getElementById("zhal-section");
+    const divBusc   = document.getElementById("zhal-buscando");
+    const divFound  = document.getElementById("zhal-encontrado");
+    const spanVal   = document.getElementById("zhal-valor");
+    const divManual = document.getElementById("zhal-manual");
+    const inputZhal = document.getElementById("zhal-input");
+
+    // Reset
     document.querySelectorAll("input[name='acero_dir_radio']").forEach(r => r.checked = false);
     ["lbl-con-sin","lbl-sin-con"].forEach(id => {
       document.getElementById(id).style.borderColor = "#30363d";
     });
+    secZhal.style.display = "none";
+    divBusc.style.display = divFound.style.display = "none";
+    divManual.style.display = "none";
+    inputZhal.value = "";
+    let _zhalCache = null;
+
     modal.style.display = "flex";
 
-    // resaltar opción al seleccionar
+    async function _buscarZhal() {
+      secZhal.style.display = "block";
+      divBusc.style.display = "flex";
+      divFound.style.display = divManual.style.display = "none";
+      _zhalCache = null;
+      try {
+        const r = await fetch(`/api/buscar_zhal/${zferBase}`).then(x => x.json());
+        divBusc.style.display = "none";
+        if (r.ok && r.zhal) {
+          _zhalCache = r.zhal;
+          spanVal.textContent = r.zhal;
+          divFound.style.display = "flex";
+        } else {
+          divManual.style.display = "block";
+        }
+      } catch(e) {
+        divBusc.style.display = "none";
+        divManual.style.display = "block";
+      }
+    }
+
+    // Resaltar opción y mostrar sección ZHAL solo para sin→con
     document.querySelectorAll("input[name='acero_dir_radio']").forEach(r => {
       r.onchange = () => {
         document.getElementById("lbl-con-sin").style.borderColor = r.value === "con_sin" ? "#00c2ff" : "#30363d";
         document.getElementById("lbl-sin-con").style.borderColor = r.value === "sin_con" ? "#7c3aed" : "#30363d";
+        if (r.value === "sin_con") {
+          _buscarZhal();
+        } else {
+          secZhal.style.display = "none";
+          _zhalCache = null;
+        }
       };
     });
 
@@ -1235,8 +1312,13 @@ function _pedirDireccionAcero() {
     document.getElementById("acero-dir-confirm").onclick = () => {
       const sel = document.querySelector("input[name='acero_dir_radio']:checked");
       if (!sel) { alert("Selecciona una dirección."); return; }
+      let zhal = null;
+      if (sel.value === "sin_con") {
+        zhal = _zhalCache || inputZhal.value.trim();
+        if (!zhal) { alert("Ingresa el código ZHAL para continuar."); return; }
+      }
       modal.style.display = "none";
-      resolve(sel.value);
+      resolve({ dir: sel.value, zhal });
     };
   });
 }

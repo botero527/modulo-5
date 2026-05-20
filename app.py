@@ -2098,6 +2098,7 @@ def _migracion_bd_local():
     """Aplica migraciones de columnas faltantes en la BD local (idempotente)."""
     migraciones = [
         ("dbo.M5_Cola", "cambiar_hr", "ALTER TABLE dbo.M5_Cola ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
+        ("dbo.M5_Cola", "zhal",       "ALTER TABLE dbo.M5_Cola ADD zhal NVARCHAR(20) NULL"),
     ]
     try:
         cn  = _get_conn_local()
@@ -2177,6 +2178,59 @@ def api_ruta_set(zfer: str):
         """, zfer, ruta, desc, tiene_sim, zfer_sim, pieza_contra)
         cn.close()
         return jsonify({"ok": True, "zfer": zfer})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/buscar_zhal/<zfer>")
+@login_required
+def api_buscar_zhal(zfer: str):
+    """
+    Busca el código ZHAL para el flujo sin acero → con acero.
+    Lógica: toma Z_VEHICLE_MODEL + Z_AGP_VERSION + Z_PIECE_TYPE del ZFER base,
+    busca otro ZFER con Z_BEHAVIOR_DIFFERENTIALS=06 y esos mismos atributos,
+    luego retorna el COMPONENTE (IDNRK) en posición 0106 o 0116 de su BOM.
+    """
+    zfer = zfer.strip()
+    try:
+        attrs = q_atributos(zfer)
+        vehiculo  = attrs.get("Z_VEHICLE_MODEL", "")
+        version   = attrs.get("Z_AGP_VERSION",   "")
+        pieza     = attrs.get("Z_PIECE_TYPE",     "")
+
+        if not (vehiculo and version and pieza):
+            return jsonify({"ok": True, "zhal": None,
+                            "msg": f"Atributos insuficientes (vehiculo={vehiculo} version={version} pieza={pieza})"})
+
+        conn = get_conn()
+        cur  = conn.cursor()
+        cur.execute("""
+            SELECT TOP 1 b.IDNRK
+            FROM dbo.ODATA_ZFER_BOM b
+            WHERE b.CENTRO = 'CO01'
+              AND b.POSNR  IN ('0106','0116')
+              AND b.MATNR IN (
+                SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001
+                WHERE CENTRO='CO01' AND ATNAM='Z_VEHICLE_MODEL' AND ATWRT=?
+                INTERSECT
+                SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001
+                WHERE CENTRO='CO01' AND ATNAM='Z_AGP_VERSION' AND ATWRT=?
+                INTERSECT
+                SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001
+                WHERE CENTRO='CO01' AND ATNAM='Z_PIECE_TYPE' AND ATWRT=?
+                INTERSECT
+                SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001
+                WHERE CENTRO='CO01' AND ATNAM='Z_BEHAVIOR_DIFFERENTIALS' AND ATWRT='06'
+              )
+              AND b.MATNR <> ?
+            ORDER BY TRY_CAST(b.MATNR AS BIGINT) DESC
+        """, vehiculo, version, pieza, zfer)
+        row = cur.fetchone()
+        conn.close()
+
+        if row and row[0]:
+            return jsonify({"ok": True, "zhal": str(row[0]).strip(), "msg": ""})
+        return jsonify({"ok": True, "zhal": None, "msg": "No se encontró ZHAL en BD"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 200
 
@@ -2332,7 +2386,7 @@ def _cola_ejecutar_bloque(bloque_id: int):
             cur.execute("UPDATE dbo.M5_Bloques SET estado='EJECUTANDO' WHERE id=?", bloque_id)
             cur.execute("""
                 SELECT id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                       pn_base, nivel, tipo_pieza, formula_nueva, acero_dir, cambiar_hr
+                       pn_base, nivel, tipo_pieza, formula_nueva, acero_dir, cambiar_hr, zhal
                 FROM dbo.M5_Cola
                 WHERE bloque_id=? AND estado='PENDIENTE'
             """, bloque_id)
@@ -2346,7 +2400,8 @@ def _cola_ejecutar_bloque(bloque_id: int):
         cola = [{"tipo": r[2], "zfer": r[1], "color": r[3], "color_nombre": r[4],
                  "zpla": r[5], "franja": r[6] or "00", "pn_base": r[7] or "",
                  "nivel": r[8] or "", "tipo_pieza": r[9] or "", "formula_nueva": r[10] or "",
-                 "acero_dir": r[11] or "", "cambiar_hr": bool(r[12]), "_cola_id": r[0]} for r in rows]
+                 "acero_dir": r[11] or "", "cambiar_hr": bool(r[12]), "zhal": r[13] or "",
+                 "_cola_id": r[0]} for r in rows]
 
         try:
             sap = importlib.import_module("sap_auto")
@@ -2395,7 +2450,8 @@ def _cola_ejecutar_bloque(bloque_id: int):
                                 item["zfer"], item.get("formula_nueva",""),
                                 item["color"], item.get("color_nombre",""),
                                 item.get("franja","00"), item.get("pn_base",""),
-                                item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza","")
+                                item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza",""),
+                                zhal=item.get("zhal","")
                             )
                         else:
                             raise RuntimeError("No se encontró función de procesamiento de fórmula en sap_auto")
@@ -2632,11 +2688,12 @@ def api_cola_agregar():
                 tipo_item  = str(it.get("tipo","color")).upper()
                 # cambiar_hr: fórmulas siempre True, colores según elección del usuario
                 cambiar_hr = True if tipo_item == "FORMULA" else bool(it.get("cambiar_hr", False))
+                zhal_val = str(it.get("zhal",""))[:20] or None if tipo_item == "FORMULA" else None
                 cur.execute("""
                     INSERT INTO dbo.M5_Cola
                     (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                     pn_base, nivel, tipo_pieza, formula_nueva, descripcion, acero_dir, cambiar_hr)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     pn_base, nivel, tipo_pieza, formula_nueva, descripcion, acero_dir, cambiar_hr, zhal)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, bloque_id,
                     str(it.get("zfer",""))[:20], tipo_item[:20],
                     str(it.get("color",""))[:10], str(it.get("color_nombre",""))[:100],
@@ -2644,7 +2701,7 @@ def api_cola_agregar():
                     str(it.get("pn_base",""))[:50], str(it.get("nivel",""))[:10],
                     str(it.get("tipo_pieza",""))[:10], str(it.get("formula_nueva",""))[:30],
                     desc[:200], str(it.get("acero_dir",""))[:10] or None,
-                    1 if cambiar_hr else 0)
+                    1 if cambiar_hr else 0, zhal_val)
 
         hora_str = hora_prog.strftime("%d/%m/%Y %H:%M") if hora_prog else ""
         return jsonify({"ok": True, "bloque_id": bloque_id, "bloque_num": bloque_num,
