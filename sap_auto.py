@@ -2807,6 +2807,180 @@ class AutomatizadorSAP:
         self._log_bd(res)
         return res
 
+    # ── Flujo mismo acero (sin→sin o con→con) ───────────────────────────────
+
+    def procesar_formula_mismo_acero(
+            self, zfer_base: str, formula_nueva: str,
+            color_codigo: str, color_nombre: str,
+            franja: str = "00", pn_base: str = "", zpla: str = "",
+            nivel: str = "", tipo_pieza: str = "",
+            cambio_hr: bool = False,
+            step_callback=None) -> ResultadoItem:
+        """
+        Flujo cambio de fórmula sin cambio de acero (sin→sin o con→con).
+        Pasos: ZPPP0042 → ZMME0001 fórmula → ZPPR0020 → BOM → MM02 (solo PN) → CA02 (si cambio_hr).
+        NO hace diferencial 06, NO cambia plano, NO toca CS02/CEWB.
+        """
+        res = ResultadoItem(
+            batch_id     = str(uuid.uuid4())[:8],
+            zfer_base    = zfer_base,
+            color_codigo = color_codigo,
+            formula      = str(formula_nueva or ""),
+            tipo_pieza   = str(tipo_pieza or ""),
+            estado       = "EN_PROCESO",
+            fecha_inicio = datetime.datetime.now(),
+        )
+
+        n_pasos = 6 if cambio_hr else 5
+
+        def _cb(paso_num: int, desc: str):
+            res._log(f"PASO {paso_num}/{n_pasos}: {desc}")
+            if step_callback:
+                try:
+                    step_callback(paso_num, desc)
+                except Exception:
+                    pass
+
+        try:
+            res._log(f"=== Inicio fórmula mismo acero: {zfer_base} → fórmula {formula_nueva} color {color_codigo} ===")
+            res._log(f"  Franja={franja}  PN_base={pn_base}  ZPLA={zpla}  cambio_hr={cambio_hr}")
+
+            p_color = color_codigo.strip()
+            p_franj = franja or "00"
+            zplas_validos = [z.strip() for z in str(zpla).split(",") if z.strip()]
+            res._log(f"  color_nombre={color_nombre or '—'}")
+
+            # PASO 0 — ZPPP0042
+            _cb(0, f"Validando ZFER base en SAP (ZPPP0042) — {zfer_base}")
+            val = self.zppp0042_validar(zfer_base)
+            if not val["ok"]:
+                raise RuntimeError(f"ZPPP0042: {val['error']}")
+            res._log(f"  VERID={val['verid']} — OK")
+
+            # Caso BE
+            forzar_be    = False
+            nivel_norm   = str(nivel or "").strip().lstrip("0") or "0"
+            tipopza_norm = str(tipo_pieza or "").strip().lstrip("0") or "0"
+            if nivel_norm in ("2", "3") and tipopza_norm in ("9", "90"):
+                try:
+                    clases_zfer = self._leer_clases_zpla_sap(zfer_base)
+                    clase_0100  = clases_zfer.get("0100", clases_zfer.get("100", ""))
+                    if clase_0100.upper().endswith("800") or clase_0100.upper().endswith("800_"):
+                        forzar_be = True
+                        res._log("  Caso BE activo")
+                except Exception as e:
+                    res._log(f"  [WARN] BE check: {e}")
+
+            # PASO 1 — ZMME0001 Cambio de Fórmula
+            _cb(1, f"Homologando cambio de fórmula en SAP (ZMME0001) — {formula_nueva}")
+            zfer_nuevo, zfor_nuevo, zpla_usado = self.zmme0001_ejecutar_formula(
+                zfer_base, p_color, p_franj, formula_nueva, zplas_validos, forzar_be=forzar_be
+            )
+            res.zfer_nuevo = zfer_nuevo
+            res.zfor_nuevo = zfor_nuevo
+            res.zpla       = zpla_usado
+
+            # PASO 2 — ZPPR0020
+            _cb(2, f"Esperando aprobación del proceso SAP (ZPPR0020) — {zfer_nuevo}")
+            fase_res = self.zppr0020_esperar_fases(zfer_nuevo)
+            if not fase_res["ok"]:
+                raise RuntimeError(f"ZPPR0020 falló — {fase_res['fase_error']}: {fase_res['detalle']}")
+            if not zpla_usado and fase_res.get("zpla"):
+                zpla_usado = fase_res["zpla"]
+                res.zpla   = zpla_usado
+            res._log(f"  ZPPR0020 OK | ZPLA={zpla_usado}")
+
+            # PASO 3 — ZMME0001 BOM
+            _cb(3, "Comparando y copiando estructura de materiales (BOM)")
+            try:
+                self.session.findById(self._ID_RAD_HOMOLOG).setFocus()
+                self.session.findById(self._ID_RAD_HOMOLOG).select()
+                self._esperar(T_RAPIDO)
+                self.session.findById(self._ID_CTX_CENTER).text = "CO01"
+                self.session.findById(self._ID_RAD_FORMULA).setFocus()
+                self.session.findById(self._ID_RAD_FORMULA).select()
+                self._esperar(T_RAPIDO)
+                self.session.findById(self._ID_CTX_P_COLOR).text = p_color
+                self.session.findById(self._ID_CTX_P_FRANJ).text = p_franj
+                self.session.findById(self._ID_TXT_FORMU).text   = formula_nueva
+                zpla_actual = ""
+                try:
+                    zpla_actual = self.session.findById(self._ID_CTX_P_ZPLA).text.strip()
+                except Exception:
+                    pass
+                if not zpla_actual and zpla_usado:
+                    self.session.findById(self._ID_CTX_P_ZPLA).text = f" {zpla_usado}"
+            except Exception as e_p3:
+                print(f"     [WARN] Re-establecer campos paso 3: {e_p3}")
+
+            self.session.findById(self._ID_MATER_LOW).text = zfer_nuevo
+            self.session.findById(self._ID_MATER_LOW).caretPosition = len(zfer_nuevo)
+            self._esperar(T_RAPIDO)
+
+            clases = {}
+            if zpla_usado:
+                clases = self._leer_clases_zpla_sap(zpla_usado)
+                res._log(f"  Clases leídas desde SAP: {clases}")
+            else:
+                res._log("  [WARN] Sin ZPLA para leer clases")
+
+            posiciones = self.bom_con_retry(zpla_usado, clases)
+            res.posiciones_bom = posiciones
+            res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
+
+            # PASO 4 — MM02: solo actualizar PN (sin diferencial, sin plano)
+            _cb(4, f"Actualizando MM02 (solo PN) — {zfer_nuevo}")
+            nuevo_pn = self._construir_nuevo_pn_formula(pn_base, formula_nueva, p_color)
+            res._log(f"  Nuevo PN={nuevo_pn}")
+            for mat in ([zfer_nuevo] + ([zfor_nuevo] if zfor_nuevo else [])):
+                if nuevo_pn and nuevo_pn != pn_base:
+                    self.mm02_actualizar_partnumber(mat, nuevo_pn)
+
+            # PASO 5 — CA02 (solo si cambio_hr=True)
+            if cambio_hr:
+                _cb(5, f"Buscando y asignando hoja de ruta (CA02) — {zfer_nuevo}")
+                try:
+                    from app import _hr_buscar_candidata
+                    hr_id, hr_desc, hr_err = _hr_buscar_candidata(zfer_base, zfer_nuevo)
+                    if hr_err:
+                        res._log(f"  [WARN] HR candidata no encontrada: {hr_err}")
+                    else:
+                        res._log(f"  HR candidata: {hr_id} ({hr_desc})")
+                        self.ca02_desasignar_hr(zfer_nuevo, res)
+                        ok_asi = self.ca02_asignar_hr(zfer_nuevo, hr_id, res)
+                        if ok_asi:
+                            res._log(f"  CA02 OK: HR={hr_id} → {zfer_nuevo}")
+                        else:
+                            res._log(f"  [WARN] CA02 asignación falló — revisar manualmente")
+                except Exception as e_hr:
+                    res._log(f"  [WARN] CA02: {e_hr}")
+
+            # Volver a pantalla inicial
+            try:
+                for _btn in ("wnd[1]/tbar[0]/btn[0]", "wnd[1]/usr/btnSPOP-OPTION1"):
+                    try:
+                        self.session.findById(_btn).press()
+                        self._esperar(T_RAPIDO)
+                    except Exception:
+                        pass
+                self._navegar("ZMME0001")
+                self._esperar(T_MEDIO)
+            except Exception as e:
+                print(f"    [WARN] Navegación final: {e}")
+
+            res.estado    = "OK"
+            res.fecha_fin = datetime.datetime.now()
+            res._log(f"=== COMPLETADO OK ({res.duracion_seg}s) ===")
+
+        except Exception as e:
+            res.estado    = "ERROR"
+            res.error     = str(e)
+            res.fecha_fin = datetime.datetime.now()
+            res._log(f"=== ERROR: {e} ===")
+
+        self._log_bd(res)
+        return res
+
     # ── CS02 — Agregar posición acero en BOM del ZFOR ────────────────────────
 
     def cs02_agregar_posicion_acero(self, zfor: str, pos_acero: str, zhal: str, res=None) -> bool:
@@ -3253,6 +3427,30 @@ def procesar_combinacion_formula_con_acero(
         zfer_base, formula_nueva, color_codigo, color_nombre,
         franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
         zhal=zhal, step_callback=step_callback,
+    )
+
+
+def procesar_combinacion_formula_mismo_acero(
+        zfer_base: str, formula_nueva: str,
+        color_codigo: str, color_nombre: str,
+        franja: str = "00", pn_base: str = "", zpla: str = "",
+        nivel: str = "", tipo_pieza: str = "",
+        cambio_hr: bool = False,
+        step_callback=None) -> "ResultadoItem":
+    """Entrada pública para flujo mismo acero (sin→sin o con→con)."""
+    auto = AutomatizadorSAP()
+    if not auto.conectar():
+        r = ResultadoItem(
+            batch_id=str(uuid.uuid4())[:8], zfer_base=zfer_base,
+            color_codigo=color_codigo, estado="ERROR",
+            error="SAP GUI no disponible.",
+            fecha_inicio=datetime.datetime.now(), fecha_fin=datetime.datetime.now(),
+        )
+        return r
+    return auto.procesar_formula_mismo_acero(
+        zfer_base, formula_nueva, color_codigo, color_nombre,
+        franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
+        cambio_hr=cambio_hr, step_callback=step_callback,
     )
 
 

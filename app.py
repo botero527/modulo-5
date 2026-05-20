@@ -2112,6 +2112,7 @@ def _migracion_bd_local():
     migraciones = [
         ("dbo.M5_Cola", "cambiar_hr", "ALTER TABLE dbo.M5_Cola ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
         ("dbo.M5_Cola", "zhal",       "ALTER TABLE dbo.M5_Cola ADD zhal NVARCHAR(20) NULL"),
+        ("dbo.M5_Cola", "acero_dir",  "ALTER TABLE dbo.M5_Cola ADD acero_dir NVARCHAR(10) NULL"),
     ]
     try:
         cn  = _get_conn_local()
@@ -2419,9 +2420,10 @@ def _cola_ejecutar_bloque(bloque_id: int):
         try:
             sap = importlib.import_module("sap_auto")
             # Usar funciones libres del módulo (no instancia — ver sap_auto.py)
-            _proc_color         = getattr(sap, "procesar_combinacion",                      None)
-            _proc_formula_sin   = getattr(sap, "procesar_combinacion_formula_sin_acero",    None)
-            _proc_formula_con   = getattr(sap, "procesar_combinacion_formula_con_acero",    None)
+            _proc_color             = getattr(sap, "procesar_combinacion",                          None)
+            _proc_formula_sin       = getattr(sap, "procesar_combinacion_formula_sin_acero",      None)
+            _proc_formula_con       = getattr(sap, "procesar_combinacion_formula_con_acero",      None)
+            _proc_formula_mismo     = getattr(sap, "procesar_combinacion_formula_mismo_acero",    None)
 
             def _tiene_diferencial_06(zfer: str) -> bool:
                 """Consulta BD SAP: retorna True si el ZFER tiene '06' en Z_BEHAVIOR_DIFFERENTIALS."""
@@ -2468,6 +2470,30 @@ def _cola_ejecutar_bloque(bloque_id: int):
                             )
                         else:
                             raise RuntimeError("No se encontró función de procesamiento de fórmula en sap_auto")
+                    elif tipo in ("FORMULA_SIN_SIN", "FORMULA_CON_CON"):
+                        print(f"[COLA] {item['zfer']} tipo={tipo} → mismo acero")
+                        if _proc_formula_mismo:
+                            res = _proc_formula_mismo(
+                                item["zfer"], item.get("formula_nueva",""),
+                                item["color"], item.get("color_nombre",""),
+                                item.get("franja","00"), item.get("pn_base",""),
+                                item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza",""),
+                                cambio_hr=item.get("cambiar_hr", True),
+                            )
+                        else:
+                            raise RuntimeError("No se encontró función procesar_combinacion_formula_mismo_acero en sap_auto")
+                    elif tipo == "FORMULA_CON_ACERO":
+                        print(f"[COLA] {item['zfer']} tipo=FORMULA_CON_ACERO → sin→con acero")
+                        if _proc_formula_con:
+                            res = _proc_formula_con(
+                                item["zfer"], item.get("formula_nueva",""),
+                                item["color"], item.get("color_nombre",""),
+                                item.get("franja","00"), item.get("pn_base",""),
+                                item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza",""),
+                                zhal=item.get("zhal","")
+                            )
+                        else:
+                            raise RuntimeError("No se encontró función de procesamiento en sap_auto")
                     elif _proc_color:
                         res = _proc_color(
                             item["zfer"], item["color"], item.get("color_nombre",""),
@@ -2484,7 +2510,7 @@ def _cola_ejecutar_bloque(bloque_id: int):
                     # Fórmula: siempre obligatorio si el SAP salió OK
                     # Color:   solo si el usuario marcó cambiar_hr=True
                     if estado_item == "OK" and zfer_nuevo:
-                        hacer_hr = (tipo == "FORMULA") or item.get("cambiar_hr", False)
+                        hacer_hr = (tipo in ("FORMULA", "FORMULA_CON_ACERO", "FORMULA_SIN_SIN", "FORMULA_CON_CON")) or item.get("cambiar_hr", False)
                         if hacer_hr:
                             print(f"[COLA] {item['zfer']} → buscando HR candidata para {zfer_nuevo}…")
                             hr_id, hr_desc, hr_err = _hr_buscar_candidata(item["zfer"], zfer_nuevo)
@@ -2698,10 +2724,25 @@ def api_cola_agregar():
             # Insertar items
             for it in items:
                 desc = f"{it.get('tipo','COLOR').upper()} · {it.get('zfer','')} · color {it.get('color','')} · {it.get('formula_nueva','')}"
-                tipo_item  = str(it.get("tipo","color")).upper()
+                tipo_raw   = str(it.get("tipo","color")).upper()
+                # Mapear tipo según acero_dir para fórmulas
+                acero_dir_it = str(it.get("acero_dir","")).lower().strip()
+                if tipo_raw == "FORMULA":
+                    if acero_dir_it == "con_sin":
+                        tipo_item = "FORMULA"
+                    elif acero_dir_it == "sin_con":
+                        tipo_item = "FORMULA_CON_ACERO"
+                    elif acero_dir_it == "sin_sin":
+                        tipo_item = "FORMULA_SIN_SIN"
+                    elif acero_dir_it == "con_con":
+                        tipo_item = "FORMULA_CON_CON"
+                    else:
+                        tipo_item = "FORMULA"  # fallback
+                else:
+                    tipo_item = tipo_raw
                 # cambiar_hr: fórmulas siempre True, colores según elección del usuario
-                cambiar_hr = True if tipo_item == "FORMULA" else bool(it.get("cambiar_hr", False))
-                zhal_val = str(it.get("zhal",""))[:20] or None if tipo_item == "FORMULA" else None
+                cambiar_hr = True if tipo_item.startswith("FORMULA") else bool(it.get("cambiar_hr", False))
+                zhal_val = str(it.get("zhal",""))[:20] or None if tipo_item.startswith("FORMULA") else None
                 cur.execute("""
                     INSERT INTO dbo.M5_Cola
                     (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,

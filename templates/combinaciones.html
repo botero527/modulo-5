@@ -909,6 +909,58 @@
 
 </div>
 
+<!-- ── Modal Wizard Configurar Cola ──────────────────────────────────────── -->
+<div id="modal-wizard-cola" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.82);
+     z-index:3000; align-items:center; justify-content:center; padding:1rem;">
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:14px;
+              width:100%; max-width:540px; font-family:inherit; box-shadow:0 8px 40px rgba(0,0,0,.7);">
+    <!-- Cabecera -->
+    <div style="padding:1.2rem 1.4rem .8rem; border-bottom:1px solid #21262d; display:flex; align-items:center; justify-content:space-between;">
+      <div>
+        <div style="color:#8b949e; font-size:.78rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; margin-bottom:.2rem;">
+          Configurar envío
+        </div>
+        <div id="wiz-titulo" style="color:#e6edf3; font-size:1rem; font-weight:700;"></div>
+      </div>
+      <!-- Dots de progreso -->
+      <div id="wiz-dots" style="display:flex; gap:.35rem; align-items:center;"></div>
+    </div>
+    <!-- Descripción del ítem -->
+    <div style="padding:.9rem 1.4rem .5rem; border-bottom:1px solid #21262d;">
+      <div id="wiz-badge-row" style="display:flex; align-items:center; gap:.5rem; margin-bottom:.45rem;"></div>
+      <div id="wiz-item-desc" style="color:#8b949e; font-size:.82rem; line-height:1.5;"></div>
+    </div>
+    <!-- Pregunta dinámica -->
+    <div id="wiz-pregunta" style="padding:1rem 1.4rem;"></div>
+    <!-- Checkbox "aplicar a siguientes" -->
+    <div style="padding:.3rem 1.4rem .9rem;">
+      <label style="display:flex; align-items:center; gap:.55rem; cursor:pointer; color:#8b949e; font-size:.82rem; user-select:none;">
+        <input type="checkbox" id="wiz-chk-aplicar"
+               style="width:15px; height:15px; accent-color:#388bfd; cursor:pointer;">
+        <span id="wiz-chk-label">Aplicar esta respuesta a los siguientes del mismo tipo</span>
+      </label>
+    </div>
+    <!-- Botones de navegación -->
+    <div style="padding:.9rem 1.4rem 1.2rem; border-top:1px solid #21262d;
+                display:flex; align-items:center; justify-content:space-between; gap:.6rem;">
+      <button id="wiz-btn-cancel" style="background:transparent; border:1px solid #30363d; color:#8b949e;
+              border-radius:7px; padding:.42rem .9rem; font-size:.82rem; cursor:pointer;">
+        Cancelar todo
+      </button>
+      <div style="display:flex; gap:.5rem;">
+        <button id="wiz-btn-prev" style="background:#21262d; border:1px solid #30363d; color:#c9d1d9;
+                border-radius:7px; padding:.42rem .9rem; font-size:.82rem; cursor:pointer; display:none;">
+          ← Anterior
+        </button>
+        <button id="wiz-btn-next" style="background:#388bfd; border:none; color:#fff;
+                border-radius:7px; padding:.42rem 1.1rem; font-size:.82rem; font-weight:600; cursor:pointer;">
+          Siguiente →
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -1198,32 +1250,14 @@ async function _enviarTodoACola() {
       ? `Bloque ${ds.bloque_num} · ${ds.hora_prog}${ds.pendientes > 0 ? ` · ${ds.pendientes} ya en cola` : ""}${ds.ya_paso ? " ⚠ hora ya pasó" : ""}`
       : "Se creará un nuevo bloque (mañana 7am)";
 
-    // Si hay fórmulas, preguntar dirección de acero (y ZHAL si es sin→con)
-    let acero_dir = null;
-    if (nF > 0) {
-      const zferFormula = cola.find(c => c.tipo === "formula")?.zfer || ZFER_BASE;
-      const respAcero = await _pedirDireccionAcero(zferFormula);
-      if (!respAcero) {
-        if (statusGlb) statusGlb.textContent = "";
-        if (btnEjec) btnEjec.disabled = false;
-        return;
-      }
-      acero_dir = respAcero.dir;
-      // Inyectar acero_dir (y zhal si aplica) en todos los ítems de fórmula
-      cola.forEach(it => {
-        if (it.tipo === "formula") {
-          it.acero_dir  = acero_dir;
-          it.cambiar_hr = true;
-          if (acero_dir === "sin_con" && respAcero.zhal) it.zhal = respAcero.zhal;
-        }
-      });
+    // Wizard por ítem (reemplaza _pedirDireccionAcero + _pedirHrColor globales)
+    const itemsConfigurados = await _wizardConfigCola(cola);
+    if (!itemsConfigurados) {
+      if (statusGlb) statusGlb.textContent = "";
+      if (btnEjec) btnEjec.disabled = false;
+      return;
     }
-
-    // Si hay colores, preguntar si requieren cambio de hoja de ruta
-    if (nC > 0) {
-      const hrColor = await _pedirHrColor();
-      cola.forEach(it => { if (it.tipo === "color") it.cambiar_hr = hrColor; });
-    }
+    // Los ítems ya vienen enriquecidos con cambiar_hr / acero_dir / zhal por ítem
 
     if (!confirm(`¿Enviar ${partes.join(" + ")} a la Cola SAP?\n${textoBloque}\n\nSe ejecutará a la hora programada del bloque.`)) {
       if (statusGlb) statusGlb.textContent = "";
@@ -1257,6 +1291,308 @@ async function _enviarTodoACola() {
 
 if (btnEjec) btnEjec.addEventListener("click", _enviarTodoACola);
 
+
+// ── Wizard de configuración por ítem ─────────────────────────────────────────
+// Retorna Promise<items[]> (enriquecidos) o null si el usuario canceló.
+function _wizardConfigCola(items) {
+  return new Promise(resolve => {
+    const modal     = document.getElementById("modal-wizard-cola");
+    const elTitulo  = document.getElementById("wiz-titulo");
+    const elDots    = document.getElementById("wiz-dots");
+    const elBadge   = document.getElementById("wiz-badge-row");
+    const elDesc    = document.getElementById("wiz-item-desc");
+    const elPreg    = document.getElementById("wiz-pregunta");
+    const chkAp     = document.getElementById("wiz-chk-aplicar");
+    const chkLbl    = document.getElementById("wiz-chk-label");
+    const btnCancel = document.getElementById("wiz-btn-cancel");
+    const btnPrev   = document.getElementById("wiz-btn-prev");
+    const btnNext   = document.getElementById("wiz-btn-next");
+
+    // Configs guardadas por índice
+    const config = new Array(items.length).fill(null).map(() => ({}));
+    let idx = 0;
+    // Cache de ZHAL buscados por zfer
+    const zhalCache = {};
+
+    function _cerrar(resultado) {
+      modal.style.display = "none";
+      btnCancel.onclick = btnPrev.onclick = btnNext.onclick = null;
+      resolve(resultado);
+    }
+
+    function _renderDots() {
+      elDots.innerHTML = items.map((_, i) => {
+        const done  = i < idx;
+        const act   = i === idx;
+        const color = done ? "#388bfd" : (act ? "#58a6ff" : "#30363d");
+        const size  = act ? "10px" : "8px";
+        return `<div style="width:${size}; height:${size}; border-radius:50%;
+                background:${color}; transition:all .2s;"></div>`;
+      }).join("");
+    }
+
+    function _renderBadge(it) {
+      const isF = it.tipo === "formula";
+      const badgeColor = isF ? "#6e40c9" : "#0e4429";
+      const badgeBorder = isF ? "#bc8cff" : "#3fb950";
+      const badgeText   = isF ? "FÓRMULA" : "COLOR";
+      const badgeTx     = isF ? "#d2a8ff" : "#56d364";
+      elBadge.innerHTML = `
+        <span style="background:${badgeColor}; border:1px solid ${badgeBorder};
+              color:${badgeTx}; border-radius:6px; padding:.12rem .45rem;
+              font-size:.72rem; font-weight:700; letter-spacing:.05em;">${badgeText}</span>
+        <span style="color:#8b949e; font-size:.8rem;">ZFER: <strong style="color:#c9d1d9;">${it.zfer}</strong></span>`;
+      if (isF) {
+        elDesc.textContent = `Fórmula nueva: ${it.formula_nueva || "—"}  ·  Color ${it.color} · ${it.color_nombre || ""}`;
+      } else {
+        elDesc.textContent = `Color ${it.color} · ${it.color_nombre || ""}  ·  Franja: ${it.franja || "00"}`;
+      }
+    }
+
+    async function _buscarZhalAuto(zferBase) {
+      if (zhalCache[zferBase] !== undefined) return zhalCache[zferBase];
+      zhalCache[zferBase] = null;
+      try {
+        const r = await fetch(`/api/buscar_zhal/${zferBase}`).then(x => x.json());
+        if (r.ok && r.zhal) zhalCache[zferBase] = r.zhal;
+      } catch(e) { /* noop */ }
+      return zhalCache[zferBase];
+    }
+
+    function _renderPreguntaColor(it, cfg) {
+      elPreg.innerHTML = `
+        <div style="color:#c9d1d9; font-size:.88rem; font-weight:600; margin-bottom:.8rem;">
+          ¿Cambiar hoja de ruta?
+        </div>
+        <div style="display:flex; gap:.7rem;">
+          <button data-val="false" class="wiz-hr-btn"
+            style="flex:1; padding:.65rem; border-radius:8px; border:2px solid ${cfg.cambiar_hr===false?'#388bfd':'#30363d'};
+                   background:${cfg.cambiar_hr===false?'#0d1f33':'#21262d'}; color:${cfg.cambiar_hr===false?'#79c0ff':'#8b949e'};
+                   font-size:.85rem; font-weight:600; cursor:pointer; transition:all .15s;">
+            No cambiar HR
+          </button>
+          <button data-val="true" class="wiz-hr-btn"
+            style="flex:1; padding:.65rem; border-radius:8px; border:2px solid ${cfg.cambiar_hr===true?'#3fb950':'#30363d'};
+                   background:${cfg.cambiar_hr===true?'#0b2a16':'#21262d'}; color:${cfg.cambiar_hr===true?'#56d364':'#8b949e'};
+                   font-size:.85rem; font-weight:600; cursor:pointer; transition:all .15s;">
+            Sí, cambiar HR
+          </button>
+        </div>`;
+      elPreg.querySelectorAll(".wiz-hr-btn").forEach(btn => {
+        btn.onclick = () => {
+          const val = btn.dataset.val === "true";
+          config[idx].cambiar_hr = val;
+          _renderPreguntaColor(it, config[idx]);
+        };
+      });
+    }
+
+    function _renderPreguntaFormula(it, cfg) {
+      const opts = [
+        { val:"sin_sin", label:"Sin → Sin", color:"#388bfd", bg:"#0d1f33", border:"#1f6feb" },
+        { val:"con_con", label:"Con → Con", color:"#56d364", bg:"#0b2a16", border:"#2ea043" },
+        { val:"sin_con", label:"Sin → Con", color:"#d2a8ff", bg:"#1e1030", border:"#6e40c9" },
+        { val:"con_sin", label:"Con → Sin", color:"#ffa657", bg:"#291b00", border:"#9e6a03" },
+      ];
+      const zhalHtml = cfg.acero_dir === "sin_con" ? `
+        <div id="wiz-zhal-section" style="margin-top:.9rem; padding:.75rem; background:#0d1117;
+             border:1px solid #30363d; border-radius:8px;">
+          <div style="color:#8b949e; font-size:.78rem; margin-bottom:.5rem; font-weight:600;">ZHAL (acero base)</div>
+          <div id="wiz-zhal-buscando" style="display:none; color:#8b949e; font-size:.8rem; align-items:center; gap:.4rem;">
+            <span style="animation:spin 1s linear infinite; display:inline-block;">⟳</span> Buscando...
+          </div>
+          <div id="wiz-zhal-encontrado" style="display:none; align-items:center; gap:.5rem;">
+            <span style="color:#56d364; font-size:.85rem; font-weight:700;" id="wiz-zhal-valor"></span>
+            <span style="color:#8b949e; font-size:.75rem;">(auto)</span>
+            <button onclick="document.getElementById('wiz-zhal-encontrado').style.display='none';
+                             document.getElementById('wiz-zhal-manual').style.display='block';"
+              style="background:transparent; border:none; color:#58a6ff; font-size:.75rem; cursor:pointer; padding:0 .3rem;">
+              Cambiar
+            </button>
+          </div>
+          <div id="wiz-zhal-manual" style="display:none;">
+            <input id="wiz-zhal-input" type="text" placeholder="Código ZHAL..."
+              style="width:100%; background:#161b22; border:1px solid #388bfd; color:#e6edf3;
+                     border-radius:6px; padding:.38rem .6rem; font-size:.85rem; box-sizing:border-box;"
+              value="${cfg.zhal || ''}">
+          </div>
+        </div>` : "";
+
+      elPreg.innerHTML = `
+        <div style="color:#c9d1d9; font-size:.88rem; font-weight:600; margin-bottom:.8rem;">
+          ¿Cómo cambia el acero?
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:.5rem;">
+          ${opts.map(o => `
+            <button data-val="${o.val}" class="wiz-ac-btn"
+              style="padding:.6rem; border-radius:8px;
+                     border:2px solid ${cfg.acero_dir===o.val ? o.border : '#30363d'};
+                     background:${cfg.acero_dir===o.val ? o.bg : '#21262d'};
+                     color:${cfg.acero_dir===o.val ? o.color : '#8b949e'};
+                     font-size:.85rem; font-weight:600; cursor:pointer; transition:all .15s;">
+              ${o.label}
+            </button>`).join("")}
+        </div>
+        ${zhalHtml}`;
+
+      // Bind botones de dirección
+      elPreg.querySelectorAll(".wiz-ac-btn").forEach(btn => {
+        btn.onclick = async () => {
+          const val = btn.dataset.val;
+          config[idx].acero_dir = val;
+          config[idx].zhal = config[idx].zhal || "";
+          _renderPreguntaFormula(it, config[idx]);
+          if (val === "sin_con") {
+            // Buscar ZHAL auto
+            const secZ = document.getElementById("wiz-zhal-section");
+            if (!secZ) return;
+            const divB = document.getElementById("wiz-zhal-buscando");
+            const divF = document.getElementById("wiz-zhal-encontrado");
+            const divM = document.getElementById("wiz-zhal-manual");
+            if (zhalCache[it.zfer] !== undefined) {
+              if (zhalCache[it.zfer]) {
+                document.getElementById("wiz-zhal-valor").textContent = zhalCache[it.zfer];
+                config[idx].zhal = zhalCache[it.zfer];
+                divF.style.display = "flex"; divM.style.display = "none"; divB.style.display = "none";
+              } else {
+                divM.style.display = "block"; divB.style.display = "none"; divF.style.display = "none";
+              }
+              return;
+            }
+            divB.style.display = "flex"; divF.style.display = "none"; divM.style.display = "none";
+            const found = await _buscarZhalAuto(it.zfer);
+            if (!document.getElementById("wiz-zhal-buscando")) return; // modal fue cerrado
+            divB.style.display = "none";
+            if (found) {
+              document.getElementById("wiz-zhal-valor").textContent = found;
+              config[idx].zhal = found;
+              divF.style.display = "flex";
+            } else {
+              divM.style.display = "block";
+            }
+          }
+        };
+      });
+      // Si ya es sin_con y hay sección zhal visible, mostrar estado correcto
+      if (cfg.acero_dir === "sin_con") {
+        const divF = document.getElementById("wiz-zhal-encontrado");
+        const divM = document.getElementById("wiz-zhal-manual");
+        if (cfg.zhal && divF) {
+          document.getElementById("wiz-zhal-valor").textContent = cfg.zhal;
+          divF.style.display = "flex";
+          if (divM) divM.style.display = "none";
+        } else if (divM) {
+          divM.style.display = "block";
+        }
+      }
+    }
+
+    function _renderItem() {
+      const it  = items[idx];
+      const cfg = config[idx];
+      const total = items.length;
+
+      elTitulo.textContent = `Ítem ${idx + 1} de ${total}`;
+      _renderDots();
+      _renderBadge(it);
+
+      btnPrev.style.display = idx > 0 ? "" : "none";
+      btnNext.textContent   = idx === total - 1 ? "✓ Listo" : "Siguiente →";
+      btnNext.style.background = idx === total - 1 ? "#2ea043" : "#388bfd";
+
+      chkAp.checked = false;
+      if (it.tipo === "color") {
+        chkLbl.textContent = "Aplicar esta respuesta a los colores siguientes";
+        _renderPreguntaColor(it, cfg);
+      } else {
+        chkLbl.textContent = "Aplicar esta respuesta a las fórmulas siguientes";
+        _renderPreguntaFormula(it, cfg);
+      }
+    }
+
+    function _validar() {
+      const it  = items[idx];
+      const cfg = config[idx];
+      if (it.tipo === "color") {
+        if (cfg.cambiar_hr === undefined || cfg.cambiar_hr === null) {
+          alert("Selecciona si deseas cambiar la hoja de ruta."); return false;
+        }
+      } else {
+        if (!cfg.acero_dir) { alert("Selecciona la dirección del acero."); return false; }
+        if (cfg.acero_dir === "sin_con") {
+          // Leer ZHAL del input manual si está visible
+          const inp = document.getElementById("wiz-zhal-input");
+          if (inp) cfg.zhal = cfg.zhal || inp.value.trim();
+          if (!cfg.zhal) { alert("Ingresa el código ZHAL para continuar."); return false; }
+        }
+      }
+      return true;
+    }
+
+    function _aplicarASiguientes() {
+      const it  = items[idx];
+      const cfg = config[idx];
+      for (let j = idx + 1; j < items.length; j++) {
+        if (items[j].tipo !== it.tipo) continue;
+        config[j] = { ...cfg };
+      }
+    }
+
+    // Botón Siguiente / Listo
+    btnNext.onclick = () => {
+      if (!_validar()) return;
+      // Leer ZHAL manual si aplica
+      if (items[idx].tipo === "formula" && config[idx].acero_dir === "sin_con") {
+        const inp = document.getElementById("wiz-zhal-input");
+        if (inp && inp.value.trim()) config[idx].zhal = inp.value.trim();
+      }
+      if (chkAp.checked) _aplicarASiguientes();
+
+      if (idx === items.length - 1) {
+        // Último ítem — enriquecer items y cerrar
+        const resultado = items.map((it, i) => {
+          const cfg = config[i];
+          if (it.tipo === "color") {
+            return { ...it, cambiar_hr: cfg.cambiar_hr === true };
+          } else {
+            return { ...it,
+              acero_dir: cfg.acero_dir || "con_sin",
+              cambiar_hr: true,
+              zhal: (cfg.acero_dir === "sin_con" ? (cfg.zhal || "") : ""),
+            };
+          }
+        });
+        _cerrar(resultado);
+        return;
+      }
+
+      // Avanzar — si "aplicar a siguientes" fue activado, saltamos los del mismo tipo ya configurados
+      idx++;
+      if (chkAp.checked) {
+        // Buscar el siguiente ítem sin configurar del tipo diferente (u otro que falte)
+        while (idx < items.length - 1 && _estaConfigurado(config[idx], items[idx])) idx++;
+      }
+      _renderItem();
+    };
+
+    btnPrev.onclick = () => {
+      idx = Math.max(0, idx - 1);
+      _renderItem();
+    };
+
+    btnCancel.onclick = () => _cerrar(null);
+
+    function _estaConfigurado(cfg, it) {
+      if (!cfg || Object.keys(cfg).length === 0) return false;
+      if (it.tipo === "color") return cfg.cambiar_hr !== undefined;
+      return !!cfg.acero_dir;
+    }
+
+    // Render inicial
+    modal.style.display = "flex";
+    _renderItem();
+  });
+}
 
 // ── Modal dirección acero ─────────────────────────────────────────────────────
 // Retorna { dir: "sin_con"|"con_sin", zhal: "600019676"|null } o null si canceló

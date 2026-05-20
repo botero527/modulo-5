@@ -36,7 +36,7 @@ def leer_postp(session, vis):
 """
 def dig_tabla(session):
   try :
-   tbl = aconter = 
+   tbl = aconter = MIERDAAAAAAAAAAAAAAAAAAAAAAAAA
 """
 def diag_tabla(session):
     print("\n── Diagnóstico tabla CS02 ──")
@@ -72,6 +72,7 @@ def cs02_agregar(session, zfor, pos_acero, zhal):
     esperar(2)
 
     # Pantalla "Imagen inicial" — llenar MATNR y Utilización=1
+
     session.findById("wnd[0]/usr/ctxtRC29N-MATNR").text = zfor
     try:
         session.findById("wnd[0]/usr/ctxtRC29N-WERKS").text = "CO01"  # Centro
