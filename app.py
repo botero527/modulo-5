@@ -2107,6 +2107,100 @@ def _get_conn_local():
     return pyodbc.connect(_DB_LOCAL_STR, autocommit=True)
 
 
+def _guardar_homologacion_formula(item: dict, res, session_user: str = "sistema") -> None:
+    """
+    Inserta en M5_HomologacionFormula + M5_HomologacionFormula_BOM
+    después de una homologación de fórmula exitosa.
+    Se llama en el worker SÓLO cuando tipo in FORMULA* y estado == OK.
+    No lanza excepción — cualquier error se imprime pero no interrumpe el flujo.
+    """
+    try:
+        zfer_nuevo  = getattr(res, "zfer_nuevo",  "") or ""
+        zfor_nuevo  = getattr(res, "zfor_nuevo",  "") or ""
+        zpla        = getattr(res, "zpla",         "") or ""
+        bom_detalle = getattr(res, "bom_detalle",  [])
+
+        # ── Atributos del ZFER nuevo desde Azure (cacheado) ────────────
+        attrs_nuevo = {}
+        if zfer_nuevo:
+            try:
+                attrs_nuevo = q_atributos(zfer_nuevo)
+            except Exception:
+                pass
+
+        vehiculo_nombre  = attrs_nuevo.get("Z_VEHICLE_MODEL", "")
+        version_vehiculo = attrs_nuevo.get("Z_AGP_VERSION",   "")
+        pieza            = attrs_nuevo.get("Z_PIECE_TYPE",     "")
+        pn_nuevo         = attrs_nuevo.get("Z_AGP_PARTNUMBER","")
+        vehiculo_codigo  = (pn_nuevo.split("_")[0] if pn_nuevo and "_" in pn_nuevo else "")
+
+        # ── Ruta y simetría del ZFER base desde M5_RutasZFER ───────────
+        ruta_3dm       = None
+        tiene_simetria = 0
+        zfer_simetrico = None
+        try:
+            with _get_conn_local() as cn:
+                row = cn.cursor().execute(
+                    "SELECT ruta, tiene_simetria, zfer_simetrico "
+                    "FROM dbo.M5_RutasZFER WHERE zfer = ?",
+                    item.get("zfer", "")
+                ).fetchone()
+                if row:
+                    ruta_3dm       = str(row[0] or "") or None
+                    tiene_simetria = 1 if row[1] else 0
+                    zfer_simetrico = str(row[2] or "") or None
+        except Exception:
+            pass
+
+        # ── INSERT principal ────────────────────────────────────────────
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("""
+                INSERT INTO dbo.M5_HomologacionFormula
+                    (zfer_base, formula_base, formula_nueva, acero_dir,
+                     color_codigo, color_nombre,
+                     zfer_nuevo, zfor_nuevo, zpla,
+                     vehiculo_nombre, version_vehiculo, vehiculo_codigo, pieza,
+                     ruta_3dm, tiene_simetria, zfer_simetrico,
+                     creado_por, estado, batch_id)
+                OUTPUT INSERTED.id
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+                item.get("zfer",         ""),
+                getattr(res, "formula",  "") or item.get("formula_nueva", ""),
+                item.get("formula_nueva",""),
+                item.get("acero_dir",    ""),
+                item.get("color",        ""),
+                item.get("color_nombre", ""),
+                zfer_nuevo  or None,
+                zfor_nuevo  or None,
+                zpla        or None,
+                vehiculo_nombre  or None,
+                version_vehiculo or None,
+                vehiculo_codigo  or None,
+                pieza            or None,
+                ruta_3dm,
+                tiene_simetria,
+                zfer_simetrico,
+                session_user,
+                "OK",
+                getattr(res, "batch_id", "") or None,
+            )
+            hom_id = cur.fetchone()[0]
+
+            # ── INSERT BOM detalle ──────────────────────────────────────
+            if bom_detalle and hom_id:
+                cur.executemany(
+                    "INSERT INTO dbo.M5_HomologacionFormula_BOM (homologacion_id, zfer_nuevo, posnr, clase_destino) VALUES (?,?,?,?)",
+                    [(hom_id, zfer_nuevo or None, b.get("posnr",""), b.get("clase_destino","") or None) for b in bom_detalle]
+                )
+
+        print(f"[HOMOLOG] Guardado id={hom_id} zfer_nuevo={zfer_nuevo} BOM={len(bom_detalle)} pos")
+
+    except Exception as e:
+        print(f"[HOMOLOG] Error guardando homologación: {e}")
+
+
 def _migracion_bd_local():
     """Aplica migraciones de columnas faltantes en la BD local (idempotente)."""
     migraciones = [
@@ -2390,7 +2484,7 @@ def _cola_archivar_y_limpiar(bloque_id: int):
         print(f"[COLA] error archivando bloque {bloque_id}: {e}")
 
 
-def _cola_ejecutar_bloque(bloque_id: int):
+def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
     """Saca los items PENDIENTE del bloque y los envía a SAP."""
     import importlib
     ok_n, err_n = 0, 0   # inicializar ANTES de cualquier try para evitar UnboundLocalError
@@ -2507,10 +2601,15 @@ def _cola_ejecutar_bloque(bloque_id: int):
                     error_msg   = getattr(res, "error",     "") or ""
 
                     # ── Cambio de Hoja de Ruta (CA02) ──────────────────────────
-                    # Fórmula: siempre obligatorio si el SAP salió OK
-                    # Color:   solo si el usuario marcó cambiar_hr=True
+                    # FORMULA_SIN_SIN y FORMULA_CON_CON ya hacen CA02 internamente en procesar_formula_mismo_acero
+                    # FORMULA y FORMULA_CON_ACERO: el worker lo hace aquí
+                    # Color: solo si el usuario marcó cambiar_hr=True
                     if estado_item == "OK" and zfer_nuevo:
-                        hacer_hr = (tipo in ("FORMULA", "FORMULA_CON_ACERO", "FORMULA_SIN_SIN", "FORMULA_CON_CON")) or item.get("cambiar_hr", False)
+                        # SIN_SIN y CON_CON ya hacen CA02 internamente — nunca repetir aquí
+                        if tipo in ("FORMULA_SIN_SIN", "FORMULA_CON_CON"):
+                            hacer_hr = False
+                        else:
+                            hacer_hr = (tipo in ("FORMULA", "FORMULA_CON_ACERO")) or item.get("cambiar_hr", False)
                         if hacer_hr:
                             print(f"[COLA] {item['zfer']} → buscando HR candidata para {zfer_nuevo}…")
                             hr_id, hr_desc, hr_err = _hr_buscar_candidata(item["zfer"], zfer_nuevo)
@@ -2543,6 +2642,10 @@ def _cola_ejecutar_bloque(bloque_id: int):
                         """, estado_item, zfer_nuevo or None, error_msg or None, item["_cola_id"])
                 except Exception as db_ex:
                     print(f"[COLA] error guardando item {item['_cola_id']}: {db_ex}")
+
+                # Registrar homologación de fórmula en tabla dedicada
+                if estado_item == "OK" and tipo in ("FORMULA", "FORMULA_CON_ACERO", "FORMULA_SIN_SIN", "FORMULA_CON_CON") and res:
+                    _guardar_homologacion_formula(item, res, session_user=ejecutado_por)
 
                 if estado_item == "OK": ok_n += 1
                 else:                  err_n += 1
@@ -2843,7 +2946,8 @@ def api_cola_ejecutar_bloque(bloque_id: int):
             return jsonify({"ok": False, "error": "El bloque no tiene ítems pendientes"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
-    threading.Thread(target=_cola_ejecutar_bloque, args=(bloque_id,), daemon=True).start()
+    usuario = _usuario_actual() or "sistema"
+    threading.Thread(target=_cola_ejecutar_bloque, args=(bloque_id, usuario), daemon=True).start()
     return jsonify({"ok": True, "mensaje": f"Bloque {bloque_id} iniciado ({n_pend} ítems)"})
 
 

@@ -66,6 +66,7 @@ class ResultadoItem:
     zfor_nuevo:     str   = ""
     zpla:           str   = ""
     posiciones_bom: list  = field(default_factory=list)
+    bom_detalle:    list  = field(default_factory=list)  # [{posnr, clase_destino}]
     estado:         str   = "PENDIENTE"   # EN_PROCESO | OK | ERROR
     error:          str   = ""
     fecha_inicio:   Optional[datetime.datetime] = None
@@ -2223,6 +2224,8 @@ class AutomatizadorSAP:
             self.session.findById(self._ID_TCODE_BOX).text = "/nca02"
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
+            # Desasignar: solo MATNR, PLNNR debe estar vacío
+            self.session.findById("wnd[0]/usr/ctxtRC271-PLNNR").text = ""
             self.session.findById("wnd[0]/usr/ctxtRC27M-MATNR").text = zfer_nuevo
             self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS").text = "CO01"
             self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS").caretPosition = 4
@@ -2305,9 +2308,10 @@ class AutomatizadorSAP:
             self.session.findById(self._ID_TCODE_BOX).text = "/nca02"
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
+            # Asignar: solo PLNNR, MATNR debe estar vacío
             self.session.findById("wnd[0]/usr/ctxtRC27M-MATNR").text = ""
-            self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS").text = "CO01"
             self.session.findById("wnd[0]/usr/ctxtRC271-PLNNR").text = str(id_hruta)
+            self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS").text = "CO01"
             self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS").caretPosition = 4
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
@@ -2600,6 +2604,7 @@ class AutomatizadorSAP:
 
             posiciones = self.bom_con_retry(zpla_usado, clases)
             res.posiciones_bom = posiciones
+            res.bom_detalle    = [{"posnr": p["pos"], "clase_destino": clases.get(p["pos"], clases.get(p["pos"].lstrip("0"), ""))} for p in posiciones]
             res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
 
             # PASO 5 — MM02 actualizar PARTNUMBER
@@ -2754,6 +2759,7 @@ class AutomatizadorSAP:
 
             posiciones = self.bom_con_retry(zpla_usado, clases)
             res.posiciones_bom = posiciones
+            res.bom_detalle    = [{"posnr": p["pos"], "clase_destino": clases.get(p["pos"], clases.get(p["pos"].lstrip("0"), ""))} for p in posiciones]
             res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
 
             # PASO 5 — MM02 extendido: PN + diferencial 06 + plano
@@ -2926,6 +2932,7 @@ class AutomatizadorSAP:
 
             posiciones = self.bom_con_retry(zpla_usado, clases)
             res.posiciones_bom = posiciones
+            res.bom_detalle    = [{"posnr": p["pos"], "clase_destino": clases.get(p["pos"], clases.get(p["pos"].lstrip("0"), ""))} for p in posiciones]
             res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
 
             # PASO 4 — MM02: solo actualizar PN (sin diferencial, sin plano)
@@ -3317,6 +3324,7 @@ class AutomatizadorSAP:
 
             posiciones = self.bom_con_retry(zpla_usado, clases)
             res.posiciones_bom = posiciones
+            res.bom_detalle    = [{"posnr": p["pos"], "clase_destino": clases.get(p["pos"], clases.get(p["pos"].lstrip("0"), ""))} for p in posiciones]
             res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
 
             # PASO 5 — MM02: PN + activar diferencial 06 + plano CON SP

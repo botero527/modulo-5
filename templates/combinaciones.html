@@ -1267,7 +1267,7 @@ async function _enviarTodoACola() {
 
     const d = await fetch("/api/cola/agregar", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: cola }),
+      body: JSON.stringify({ items: itemsConfigurados }),
     }).then(r => r.json());
 
     if (d.ok) {
@@ -1388,12 +1388,33 @@ function _wizardConfigCola(items) {
     }
 
     function _renderPreguntaFormula(it, cfg) {
-      const opts = [
+      // Detectar si el ZFER del ítem tiene acero (diferencial 06)
+      const _diffStr = (it.zfer === ZFER_BASE ? (typeof DIFFERENTIALS !== "undefined" ? DIFFERENTIALS : "") : (typeof SIM_DIFFERENTIALS !== "undefined" ? SIM_DIFFERENTIALS : "")) || "";
+      const _tieneAcero = _diffStr.split(/[,;\s]+/).map(v => v.trim()).filter(Boolean).includes("06");
+
+      // Solo mostrar las 2 opciones coherentes con el estado actual de acero
+      const allOpts = [
         { val:"sin_sin", label:"Sin → Sin", color:"#388bfd", bg:"#0d1f33", border:"#1f6feb" },
         { val:"con_con", label:"Con → Con", color:"#56d364", bg:"#0b2a16", border:"#2ea043" },
         { val:"sin_con", label:"Sin → Con", color:"#d2a8ff", bg:"#1e1030", border:"#6e40c9" },
         { val:"con_sin", label:"Con → Sin", color:"#ffa657", bg:"#291b00", border:"#9e6a03" },
       ];
+      const opts = _tieneAcero
+        ? allOpts.filter(o => o.val === "con_con" || o.val === "con_sin")
+        : allOpts.filter(o => o.val === "sin_sin" || o.val === "sin_con");
+
+      // Si la selección previa ya no es válida, limpiarla
+      if (cfg.acero_dir && !opts.find(o => o.val === cfg.acero_dir)) {
+        cfg.acero_dir = "";
+        config[idx].acero_dir = "";
+      }
+
+      const _aceroBadge = `<div style="display:inline-flex; align-items:center; gap:.35rem;
+        background:${_tieneAcero ? "#0b2a16" : "#0d1f33"}; border:1px solid ${_tieneAcero ? "#2ea043" : "#1f6feb"};
+        border-radius:12px; padding:.2rem .65rem; font-size:.75rem; font-weight:700; margin-bottom:.75rem;
+        color:${_tieneAcero ? "#56d364" : "#388bfd"};">
+        ${_tieneAcero ? "● ZFER base CON acero" : "● ZFER base SIN acero"}
+      </div>`;
       const zhalHtml = cfg.acero_dir === "sin_con" ? `
         <div id="wiz-zhal-section" style="margin-top:.9rem; padding:.75rem; background:#0d1117;
              border:1px solid #30363d; border-radius:8px;">
@@ -1419,6 +1440,7 @@ function _wizardConfigCola(items) {
         </div>` : "";
 
       elPreg.innerHTML = `
+        ${_aceroBadge}
         <div style="color:#c9d1d9; font-size:.88rem; font-weight:600; margin-bottom:.8rem;">
           ¿Cómo cambia el acero?
         </div>
@@ -2670,9 +2692,12 @@ buscarFormulasAlt();
       if (spinner) spinner.style.display = "none";
       chk.disabled = false;
       chk.checked  = false;
-      // Mostrar aviso breve
-      const chip = document.getElementById("sim-chip");
-      if (chip) { chip.innerHTML = '<span style="color:#484f58;font-size:.78rem;">Sin simétrico encontrado</span>'; }
+      // Mostrar toast informativo
+      const toast = document.createElement("div");
+      toast.textContent = "Esta pieza no tiene simétrico configurado. Puedes asignarlo en el botón de Ruta 3DM.";
+      toast.style.cssText = "position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:#21262d;border:1px solid #f0883e;color:#f0883e;padding:.6rem 1.2rem;border-radius:8px;font-size:.82rem;z-index:9999;box-shadow:0 4px 16px #0008;max-width:380px;text-align:center;";
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
     }
   };
 
