@@ -3284,7 +3284,7 @@ def api_cola_bloque_excel(bloque_id: int):
                 ws.column_dimensions[get_column_letter(ci)].width = w
 
         wb = Workbook()
-
+        
         # ── Hoja 1: RESUMEN ──────────────────────────────────────────────────
         ws_r = wb.active
         ws_r.title = "RESUMEN"

@@ -6,7 +6,7 @@
 <!-- ── Barra superior ──────────────────────────────────────────────────────── -->
 <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
   <a href="/zfer/{{ material }}" class="back-link"><i class="bi bi-arrow-left me-1"></i>Volver al ZFER</a>
-  <a href="/" class="back-link" style="color:#484f58;"><i class="bi bi-house me-1"></i>Inicio</a>
+  <a href="/" class="back-link" style="color:var(--nav-meta);"><i class="bi bi-house me-1"></i>Inicio</a>
 </div>
 
 <!-- ── Header ─────────────────────────────────────────────────────────────── -->
@@ -25,23 +25,23 @@
       <span class="tag t-pieza">{{ piece_type }} — {{ piece_nombre }}</span>
       {% endif %}
       {% if partnumber %}
-      <code style="color:#e3b341; font-size:.8rem; background:#1c1a10; border:1px solid #9e6a03; padding:.2rem .5rem; border-radius:6px;">{{ partnumber }}</code>
+      <code style="color:var(--warn-txt); font-size:.8rem; background:var(--warn-bg); border:1px solid var(--warn-bdr); padding:.2rem .5rem; border-radius:6px;">{{ partnumber }}</code>
       {% endif %}
     </div>
   </div>
 
   <!-- Stat chips -->
   <div class="d-flex gap-2 flex-wrap">
-    <div class="stat-chip" style="border-color:#2ea043;">
-      <div class="stat-num" style="color:#56d364;">{{ n_existe }}</div>
+    <div class="stat-chip" style="border-color:var(--ok-bdr);">
+      <div class="stat-num" style="color:var(--ok-txt);">{{ n_existe }}</div>
       <div class="stat-lbl">Ya existen</div>
     </div>
-    <div class="stat-chip" style="border-color:#9e6a03;">
-      <div class="stat-num" style="color:#e3b341;">{{ n_disponible }}</div>
+    <div class="stat-chip" style="border-color:var(--warn-bdr);">
+      <div class="stat-num" style="color:var(--warn-txt);">{{ n_disponible }}</div>
       <div class="stat-lbl">ZPLA disponible</div>
     </div>
-    <div class="stat-chip" style="border-color:#484f58;">
-      <div class="stat-num" style="color:#484f58;">{{ n_sin_zpla }}</div>
+    <div class="stat-chip" style="border-color:var(--nav-meta);">
+      <div class="stat-num" style="color:var(--nav-meta);">{{ n_sin_zpla }}</div>
       <div class="stat-lbl">Sin ZPLA</div>
     </div>
   </div>
@@ -51,10 +51,10 @@
 
 {% if not pn_parsed %}
 <!-- ── Sin PARTNUMBER ─────────────────────────────────────────────────────── -->
-<div style="background:#2d2416; border:1px solid #9e6a03; border-radius:12px; padding:1.2rem 1.5rem; margin-bottom:1.5rem;">
-  <i class="bi bi-exclamation-triangle-fill me-2" style="color:#e3b341;"></i>
-  <strong style="color:#e3b341;">Sin Partnumber</strong>
-  <span style="color:#8b949e; margin-left:.5rem;">
+<div style="background:var(--warn-bg); border:1px solid var(--warn-bdr); border-radius:12px; padding:1.2rem 1.5rem; margin-bottom:1.5rem;">
+  <i class="bi bi-exclamation-triangle-fill me-2" style="color:var(--warn-txt);"></i>
+  <strong style="color:var(--warn-txt);">Sin Partnumber</strong>
+  <span style="color:var(--muted); margin-left:.5rem;">
     Este ZFER no tiene Z_AGP_PARTNUMBER definido — no es posible buscar variantes por patrón de número.
     Se requiere que el ZFER tenga el atributo de clasificación Z_AGP_PARTNUMBER para activar el comparador.
   </span>
@@ -69,34 +69,34 @@
       <div class="col-auto">
         <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Patrón buscado (LIKE)</span>
         <div style="margin-top:.2rem;">
-          <code style="color:var(--accent); font-size:.88rem; background:#0d1e2e; padding:.25rem .6rem; border-radius:6px; border:1px solid #1f6feb;">
-            {{ pn_parsed.vehiculo }}_{{ pn_parsed.version }}_{{ pn_parsed.formula }}_<span style="color:#e3b341;">**</span>_{{ pn_parsed.pieza }}
+          <code style="color:var(--accent); font-size:.88rem; background:var(--info-bg); padding:.25rem .6rem; border-radius:6px; border:1px solid var(--info-bdr);">
+            {{ pn_parsed.vehiculo }}_{{ pn_parsed.version }}_{{ pn_parsed.formula }}_<span style="color:var(--warn-txt);">**</span>_{{ pn_parsed.pieza }}
           </code>
         </div>
       </div>
-      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+      <div class="col-auto" style="border-left:1px solid var(--divider); padding-left:1.5rem;">
         <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Vehículo</span>
         <div style="font-weight:700; font-size:.9rem; margin-top:.2rem;">{{ pn_parsed.vehiculo }}</div>
       </div>
-      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+      <div class="col-auto" style="border-left:1px solid var(--divider); padding-left:1.5rem;">
         <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Versión</span>
         <div style="font-weight:700; font-size:.9rem; margin-top:.2rem;">{{ pn_parsed.version }}</div>
       </div>
-      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+      <div class="col-auto" style="border-left:1px solid var(--divider); padding-left:1.5rem;">
         <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Fórmula</span>
-        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem; color:#79c0ff;">{{ pn_parsed.formula }}</div>
+        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem; color:var(--info-txt);">{{ pn_parsed.formula }}</div>
       </div>
-      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+      <div class="col-auto" style="border-left:1px solid var(--divider); padding-left:1.5rem;">
         <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Pieza</span>
         <div style="font-weight:700; font-size:.9rem; margin-top:.2rem;">{{ pn_parsed.pieza }}</div>
       </div>
       {% if differentials %}
-      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+      <div class="col-auto" style="border-left:1px solid var(--divider); padding-left:1.5rem;">
         <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Diferencial base</span>
-        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem; color:#d2a8ff;">{{ differentials }}</div>
+        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem; color:var(--pur-txt);">{{ differentials }}</div>
       </div>
       {% endif %}
-      <div class="col-auto" style="border-left:1px solid #21262d; padding-left:1.5rem;">
+      <div class="col-auto" style="border-left:1px solid var(--divider); padding-left:1.5rem;">
         <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">ZPLAs compatibles</span>
         <div style="font-weight:700; font-size:.9rem; margin-top:.2rem; color:var(--accent);">{{ zplas | length }}</div>
       </div>
@@ -109,26 +109,26 @@
 <div class="d-flex gap-3 mb-3 flex-wrap align-items-center">
   <span style="color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.8px;">Leyenda:</span>
   <span style="display:inline-flex; align-items:center; gap:.4rem; font-size:.82rem;">
-    <span style="width:10px; height:10px; border-radius:50%; background:#56d364; display:inline-block;"></span>
-    <span style="color:#56d364;">Ya existe</span> — ZFER creado y activo
+    <span style="width:10px; height:10px; border-radius:50%; background:var(--ok-txt); display:inline-block;"></span>
+    <span style="color:var(--ok-txt);">Ya existe</span> — ZFER creado y activo
   </span>
   <span style="display:inline-flex; align-items:center; gap:.4rem; font-size:.82rem;">
-    <span style="width:10px; height:10px; border-radius:50%; background:#e3b341; display:inline-block;"></span>
-    <span style="color:#e3b341;">ZPLA disponible</span> — falta crear el ZFER
+    <span style="width:10px; height:10px; border-radius:50%; background:var(--warn-txt); display:inline-block;"></span>
+    <span style="color:var(--warn-txt);">ZPLA disponible</span> — falta crear el ZFER
   </span>
   <span style="display:inline-flex; align-items:center; gap:.4rem; font-size:.82rem;">
-    <span style="width:10px; height:10px; border-radius:50%; background:#484f58; display:inline-block;"></span>
-    <span style="color:#484f58;">Sin ZPLA</span> — no se puede crear
+    <span style="width:10px; height:10px; border-radius:50%; background:var(--nav-meta); display:inline-block;"></span>
+    <span style="color:var(--nav-meta);">Sin ZPLA</span> — no se puede crear
   </span>
 </div>
 
 <!-- ── Macro: render panel de colores ───────────────────────────────────────── -->
 {% macro render_panel_colores(mx, compact=false, zfer_id='') %}
 {% set _GRUPOS = [
-  {'titulo': 'Incoloro', 'icono': 'bi-circle',          'ct': '#8b949e', 'codigos': ['00','01']},
-  {'titulo': 'Claros',   'icono': 'bi-sun',              'ct': '#e3b341', 'codigos': ['05','06','19']},
-  {'titulo': 'Medio',    'icono': 'bi-circle-half',      'ct': '#58a6ff', 'codigos': ['10','18','20','22']},
-  {'titulo': 'Dark',     'icono': 'bi-moon-stars-fill',  'ct': '#bc8cff', 'codigos': ['13','21','23']},
+  {'titulo': 'Incoloro', 'icono': 'bi-circle',          'ct': 'var(--muted)', 'codigos': ['00','01']},
+  {'titulo': 'Claros',   'icono': 'bi-sun',              'ct': 'var(--warn-txt)', 'codigos': ['05','06','19']},
+  {'titulo': 'Medio',    'icono': 'bi-circle-half',      'ct': 'var(--zfer-txt)', 'codigos': ['10','18','20','22']},
+  {'titulo': 'Dark',     'icono': 'bi-moon-stars-fill',  'ct': 'var(--blq-title)', 'codigos': ['13','21','23']},
 ] %}
 {% set mx_map = {} %}
 {% for c in mx %}{% if mx_map.update({c.color_codigo: c}) %}{% endif %}{% endfor %}
@@ -144,7 +144,7 @@
 {% for grp in _GRUPOS %}
   <div style="display:flex; flex-direction:column; gap:.5rem;">
     <div style="display:flex; align-items:center; gap:.4rem; padding:.3rem .55rem;
-                background:#0d1117; border:1px solid #21262d; border-radius:9px;
+                background:var(--bg); border:1px solid var(--divider); border-radius:9px;
                 border-bottom:2px solid {{ grp.ct }};">
       <i class="bi {{ grp.icono }}" style="color:{{ grp.ct }}; font-size:.82rem;"></i>
       <span style="font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.9px;
@@ -154,11 +154,11 @@
     {% set c = mx_map.get(cod) %}
     {% if c %}
       {% if c.estado == 'EXISTE' %}
-        {% set cbg='#0d2318' %}{% set cbr='#2ea043' %}{% set bco='#56d364' %}{% set bbg='#1c2e1c' %}{% set bbr='#2ea043' %}{% set blbl='EXISTE' %}{% set ico='bi-check-circle-fill' %}
+        {% set cbg='var(--ok-bg)' %}{% set cbr='var(--ok-bdr)' %}{% set bco='var(--ok-txt)' %}{% set bbg='var(--ok-bg)' %}{% set bbr='var(--ok-bdr)' %}{% set blbl='EXISTE' %}{% set ico='bi-check-circle-fill' %}
       {% elif c.estado == 'DISPONIBLE' %}
-        {% set cbg='#1e1a0d' %}{% set cbr='#9e6a03' %}{% set bco='#e3b341' %}{% set bbg='#2d2416' %}{% set bbr='#9e6a03' %}{% set blbl='DISPONIBLE' %}{% set ico='bi-plus-circle-fill' %}
+        {% set cbg='var(--warn-bg)' %}{% set cbr='var(--warn-bdr)' %}{% set bco='var(--warn-txt)' %}{% set bbg='var(--warn-bg)' %}{% set bbr='var(--warn-bdr)' %}{% set blbl='DISPONIBLE' %}{% set ico='bi-plus-circle-fill' %}
       {% else %}
-        {% set cbg='#0d1117' %}{% set cbr='#21262d' %}{% set bco='#484f58' %}{% set bbg='#161b22' %}{% set bbr='#30363d' %}{% set blbl='SIN ZPLA' %}{% set ico='bi-dash-circle' %}
+        {% set cbg='var(--bg)' %}{% set cbr='var(--border)' %}{% set bco='var(--nav-meta)' %}{% set bbg='var(--card-bg)' %}{% set bbr='var(--border)' %}{% set blbl='SIN ZPLA' %}{% set ico='bi-dash-circle' %}
       {% endif %}
       <div style="background:{{ cbg }}; border:1px solid {{ cbr }}; border-radius:11px;
                   padding:.75rem .85rem; position:relative; transition:border-color .15s;
@@ -181,16 +181,16 @@
             <i class="bi bi-box-arrow-up-right me-1" style="font-size:.65rem;"></i>{{ c.zfer }}
           </a>
           {% if c.zfer_pn %}
-          <div style="margin-top:.22rem;"><code style="color:#e3b341; font-size:.67rem; background:#1c1a10; padding:.08rem .28rem; border-radius:4px; border:1px solid #5a3e00;">{{ c.zfer_pn }}</code></div>
+          <div style="margin-top:.22rem;"><code style="color:var(--warn-txt); font-size:.67rem; background:var(--warn-bg); padding:.08rem .28rem; border-radius:4px; border:1px solid var(--warn-bdr);">{{ c.zfer_pn }}</code></div>
           {% endif %}
         </div>
         {% elif c.estado == 'DISPONIBLE' %}
         <div style="display:flex; align-items:center; justify-content:space-between; gap:.4rem;">
           <div style="font-size:.73rem; color:var(--muted); flex:1; min-width:0;">
-            <span style="color:#e3b341; font-weight:600;">ZPLA:</span>
+            <span style="color:var(--warn-txt); font-weight:600;">ZPLA:</span>
             {% if c.zpla_count > 1 %}
             <select class="zpla-selector"
-                    style="margin-left:.25rem; background:#1c1a10; color:#e6edf3; border:1px solid #5a3e00;
+                    style="margin-left:.25rem; background:var(--warn-bg); color:var(--text); border:1px solid var(--warn-bdr);
                            border-radius:5px; font-size:.7rem; font-weight:700; padding:.05rem .2rem;
                            max-width:110px; cursor:pointer;"
                     onchange="document.getElementById('chk-{{ zfer_id }}-{{ c.color_codigo }}').dataset.zpla=this.value">
@@ -199,7 +199,7 @@
               {% endfor %}
             </select>
             {% else %}
-            <span style="font-weight:700; color:#e6edf3; margin-left:.25rem;">{{ c.zpla }}</span>
+            <span style="font-weight:700; color:var(--text); margin-left:.25rem;">{{ c.zpla }}</span>
             {% endif %}
           </div>
           <input type="checkbox" class="col-queue-check"
@@ -208,11 +208,11 @@
                  data-color="{{ c.color_codigo }}"
                  data-color-nombre="{{ c.color_nombre }}"
                  data-zpla="{{ c.zpla }}"
-                 style="width:15px; height:15px; accent-color:#e3b341; cursor:pointer; flex-shrink:0;"
+                 style="width:15px; height:15px; accent-color:var(--warn-txt); cursor:pointer; flex-shrink:0;"
                  onchange="_colaContarSeleccionados()">
         </div>
         {% else %}
-        <div style="font-size:.7rem; color:#484f58;">Sin ZPLA</div>
+        <div style="font-size:.7rem; color:var(--nav-meta);">Sin ZPLA</div>
         {% endif %}
       </div>
     {% endif %}
@@ -228,33 +228,33 @@
 <div id="colores-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin-bottom:1rem; align-items:start;">
 
   <!-- Panel principal -->
-  <div style="background:#0d1117; border:1px solid #30363d; border-radius:14px; padding:1rem;">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.8rem; padding-bottom:.6rem; border-bottom:1px solid #21262d;">
+  <div style="background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:1rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.8rem; padding-bottom:.6rem; border-bottom:1px solid var(--divider);">
       <div>
         <span style="font-size:1.1rem; font-weight:900; color:var(--accent2);">{{ material }}</span>
         <span class="tag t-pieza" style="font-size:.7rem; margin-left:.5rem;">{{ piece_type }} — {{ piece_nombre }}</span>
       </div>
       <div style="display:flex; gap:.4rem;">
-        <span style="font-size:.7rem; background:#1c2e1c; color:#56d364; border:1px solid #2ea043; border-radius:6px; padding:.15rem .45rem;">{{ n_existe }} exist.</span>
-        <span style="font-size:.7rem; background:#2d2416; color:#e3b341; border:1px solid #9e6a03; border-radius:6px; padding:.15rem .45rem;">{{ n_disponible }} disp.</span>
+        <span style="font-size:.7rem; background:var(--ok-bg); color:var(--ok-txt); border:1px solid var(--ok-bdr); border-radius:6px; padding:.15rem .45rem;">{{ n_existe }} exist.</span>
+        <span style="font-size:.7rem; background:var(--warn-bg); color:var(--warn-txt); border:1px solid var(--warn-bdr); border-radius:6px; padding:.15rem .45rem;">{{ n_disponible }} disp.</span>
       </div>
     </div>
     {{ render_panel_colores(matrix, compact=true, zfer_id=material) }}
   </div>
 
   <!-- Panel simétrico -->
-  <div id="sim-panel-wrapper" style="background:#0d1117; border:1px solid #2d2150; border-radius:14px; padding:1rem;">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.8rem; padding-bottom:.6rem; border-bottom:1px solid #2d2150;">
+  <div id="sim-panel-wrapper" style="background:var(--bg); border:1px solid var(--chip-prox-bdr); border-radius:14px; padding:1rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.8rem; padding-bottom:.6rem; border-bottom:1px solid var(--chip-prox-bdr);">
       <div>
-        <span style="font-size:1.1rem; font-weight:900; color:#bc8cff;">{{ sim_material }}</span>
+        <span style="font-size:1.1rem; font-weight:900; color:var(--blq-title);">{{ sim_material }}</span>
         <span class="tag t-pieza" style="font-size:.7rem; margin-left:.5rem;">{{ sim.piece_type }} — {{ sim.piece_nombre }}</span>
-        <a href="/combinaciones/{{ sim_material }}" style="font-size:.68rem; color:#8b949e; margin-left:.5rem; text-decoration:none;">
+        <a href="/combinaciones/{{ sim_material }}" style="font-size:.68rem; color:var(--muted); margin-left:.5rem; text-decoration:none;">
           <i class="bi bi-box-arrow-up-right"></i> ver solo este
         </a>
       </div>
       <div style="display:flex; gap:.4rem;">
-        <span style="font-size:.7rem; background:#1c2e1c; color:#56d364; border:1px solid #2ea043; border-radius:6px; padding:.15rem .45rem;">{{ sim.n_existe }} exist.</span>
-        <span style="font-size:.7rem; background:#2d2416; color:#e3b341; border:1px solid #9e6a03; border-radius:6px; padding:.15rem .45rem;">{{ sim.n_disponible }} disp.</span>
+        <span style="font-size:.7rem; background:var(--ok-bg); color:var(--ok-txt); border:1px solid var(--ok-bdr); border-radius:6px; padding:.15rem .45rem;">{{ sim.n_existe }} exist.</span>
+        <span style="font-size:.7rem; background:var(--warn-bg); color:var(--warn-txt); border:1px solid var(--warn-bdr); border-radius:6px; padding:.15rem .45rem;">{{ sim.n_disponible }} disp.</span>
       </div>
     </div>
     {{ render_panel_colores(sim.matrix, compact=true, zfer_id=sim_material) }}
@@ -273,13 +273,13 @@
      z-index:999; background:rgba(26,16,46,.97); border:1px solid #7c3aed; border-radius:40px;
      padding:.55rem .55rem .55rem 1.2rem; align-items:center; gap:.8rem;
      box-shadow:0 4px 24px rgba(124,58,237,.5); backdrop-filter:blur(8px);">
-  <span style="font-size:.85rem; color:#e6edf3; white-space:nowrap;">
-    <i class="bi bi-bag-check-fill me-1" style="color:#bc8cff;"></i>
-    <span id="cola-sim-count" style="color:#e3b341; font-weight:800;">0</span>
-    <span id="cola-sim-label" style="color:#8b949e;"> ítem(s) seleccionado(s)</span>
+  <span style="font-size:.85rem; color:var(--text); white-space:nowrap;">
+    <i class="bi bi-bag-check-fill me-1" style="color:var(--blq-title);"></i>
+    <span id="cola-sim-count" style="color:var(--warn-txt); font-weight:800;">0</span>
+    <span id="cola-sim-label" style="color:var(--muted);"> ítem(s) seleccionado(s)</span>
   </span>
   <button onclick="_enviarTodoACola()" id="btn-enviar-cola-main"
-          style="background:linear-gradient(135deg,#7c3aed,#9333ea); color:#fff; border:none;
+          style="background:linear-gradient(135deg,var(--accent2),#9333ea); color:#fff; border:none;
                  border-radius:30px; padding:.45rem 1.3rem; font-size:.88rem; font-weight:800;
                  cursor:pointer; display:flex; align-items:center; gap:.4rem;
                  transition:opacity .15s; white-space:nowrap;"
@@ -293,7 +293,7 @@
 {% if variantes %}
 <div class="card mb-4">
   <div class="card-header">
-    <i class="bi bi-table me-2" style="color:#56d364;"></i>
+    <i class="bi bi-table me-2" style="color:var(--ok-txt);"></i>
     Detalle de variantes existentes
     <span class="tag t-neutral" style="font-size:.72rem; margin-left:.5rem;">{{ variantes | length }} ZFERs</span>
   </div>
@@ -301,7 +301,7 @@
     <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:.87rem;">
         <thead>
-          <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+          <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid var(--divider);">
             <th style="padding:.55rem 1.2rem;">ZFER</th>
             <th style="padding:.55rem .6rem;">Color</th>
             <th style="padding:.55rem .6rem;">Nombre Color</th>
@@ -316,22 +316,22 @@
             <td style="padding:.55rem 1.2rem;">
               {% if v.material == material %}
                 <span style="color:var(--accent2); font-weight:900;">{{ v.material }}</span>
-                <span class="tag" style="background:#2d1f3d; color:#d2a8ff; border:1px solid #8957e5; font-size:.65rem; margin-left:.3rem;">BASE</span>
+                <span class="tag" style="background:var(--pur-bg); color:var(--pur-txt); border:1px solid var(--pur-bdr); font-size:.65rem; margin-left:.3rem;">BASE</span>
               {% else %}
                 <a href="/zfer/{{ v.material }}" style="color:var(--accent); font-weight:700; text-decoration:none;">{{ v.material }}</a>
               {% endif %}
             </td>
             <td style="padding:.55rem .6rem;">
-              {% if v.color_raw %}<span class="tag t-color">{{ v.color_raw }}</span>{% else %}<span style="color:#484f58;">—</span>{% endif %}
+              {% if v.color_raw %}<span class="tag t-color">{{ v.color_raw }}</span>{% else %}<span style="color:var(--nav-meta);">—</span>{% endif %}
             </td>
             <td style="padding:.55rem .6rem; color:var(--text);">{{ v.color_nombre }}</td>
             <td style="padding:.55rem .6rem;">
               {% if v.franja_raw and v.franja_raw != '00' %}
               <span class="tag t-franja" style="font-size:.73rem;">{{ v.franja_raw }}</span>
-              {% else %}<span style="color:#484f58;">—</span>{% endif %}
+              {% else %}<span style="color:var(--nav-meta);">—</span>{% endif %}
             </td>
             <td style="padding:.55rem .6rem;">
-              <code style="color:#e3b341; font-size:.78rem;">{{ v.partnumber or '—' }}</code>
+              <code style="color:var(--warn-txt); font-size:.78rem;">{{ v.partnumber or '—' }}</code>
             </td>
             <td style="padding:.55rem .6rem; color:var(--muted); font-size:.8rem; max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
               {{ v.texto or '—' }}
@@ -353,7 +353,7 @@
 {% set colores_vistos = [] %}
 <div class="card">
   <div class="card-header">
-    <i class="bi bi-layers-fill me-2" style="color:#e3b341;"></i>
+    <i class="bi bi-layers-fill me-2" style="color:var(--warn-txt);"></i>
     ZPLAs compatibles — agrupados por color
     <span class="tag t-neutral" style="font-size:.72rem; margin-left:.5rem;">{{ zplas | length }} ZPLAs · {{ zplas | map(attribute='color') | unique | list | length }} colores</span>
   </div>
@@ -361,7 +361,7 @@
     <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:.87rem;">
         <thead>
-          <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+          <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid var(--divider);">
             <th style="padding:.55rem 1.2rem;">Color</th>
             <th style="padding:.55rem .6rem;">Nombre Color</th>
             <th style="padding:.55rem .6rem;">ZPLAs disponibles</th>
@@ -383,7 +383,7 @@
             <td style="padding:.65rem .6rem;">
               {% for zp in zplas_mismo_color %}
               <span style="font-size:.78rem; color:var(--muted);">{{ zp.material }}</span>
-              {% if not loop.last %}<span style="color:#30363d; margin:0 .3rem;">·</span>{% endif %}
+              {% if not loop.last %}<span style="color:var(--border); margin:0 .3rem;">·</span>{% endif %}
               {% endfor %}
               {% if zplas_mismo_color | length > 1 %}
               <span class="tag t-neutral" style="font-size:.68rem; margin-left:.3rem;">{{ zplas_mismo_color | length }}</span>
@@ -395,11 +395,11 @@
             </td>
             <td style="padding:.65rem .6rem;">
               {% if ya_existe %}
-              <span class="tag" style="background:#1c2e1c; color:#56d364; border:1px solid #2ea043; font-size:.72rem;">
+              <span class="tag" style="background:var(--ok-bg); color:var(--ok-txt); border:1px solid var(--ok-bdr); font-size:.72rem;">
                 <i class="bi bi-check-circle-fill me-1"></i>ZFER existe
               </span>
               {% else %}
-              <span class="tag" style="background:#2d2416; color:#e3b341; border:1px solid #9e6a03; font-size:.72rem;">
+              <span class="tag" style="background:var(--warn-bg); color:var(--warn-txt); border:1px solid var(--warn-bdr); font-size:.72rem;">
                 <i class="bi bi-plus-circle-fill me-1"></i>Pendiente crear
               </span>
               {% endif %}
@@ -423,7 +423,7 @@
       <div style="overflow-x:auto;">
         <table style="width:100%; border-collapse:collapse; font-size:.83rem;">
           <thead>
-            <tr style="color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+            <tr style="color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid var(--divider);">
               <th style="padding:.5rem 1.2rem;">ZPLA</th>
               <th style="padding:.5rem .6rem;">Color</th>
               <th style="padding:.5rem .6rem;">Nombre Color</th>
@@ -441,7 +441,7 @@
             <td style="padding:.5rem .6rem;">
               {% if z.shade_band and z.shade_band != '00' %}
               <span class="tag t-franja" style="font-size:.7rem;">{{ z.shade_band }}</span>
-              {% else %}<span style="color:#484f58;">—</span>{% endif %}
+              {% else %}<span style="color:var(--nav-meta);">—</span>{% endif %}
             </td>
             <td style="padding:.5rem .6rem; color:var(--muted); font-size:.8rem;">{{ z.level or '—' }}</td>
             <td style="padding:.5rem .6rem; color:var(--muted); font-size:.78rem; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
@@ -462,13 +462,13 @@
 <div class="card mt-4" id="sap-panel">
   <div class="card-header d-flex align-items-center justify-content-between">
     <span><i class="bi bi-robot me-2" style="color:var(--accent);"></i>Automatización SAP</span>
-    <span style="font-size:.75rem; color:var(--muted);">Solo colores con estado <strong style="color:#e3b341;">DISPONIBLE</strong></span>
+    <span style="font-size:.75rem; color:var(--muted);">Solo colores con estado <strong style="color:var(--warn-txt);">DISPONIBLE</strong></span>
   </div>
   <div class="card-body">
     <div style="overflow-x:auto; margin-bottom:1rem;">
       <table style="width:100%; border-collapse:collapse; font-size:.87rem;" id="sap-table">
         <thead>
-          <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+          <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid var(--divider);">
             <th style="padding:.45rem .7rem; width:36px;"></th>
             <th style="padding:.45rem .7rem;">Color</th>
             <th style="padding:.45rem .7rem;">Nombre</th>
@@ -494,13 +494,13 @@
           <td style="padding:.45rem .7rem; color:var(--muted); font-size:.82rem; font-weight:600;">{{ c.zpla }}</td>
           <td style="padding:.45rem .7rem;" class="td-bloqueo-{{ c.color_codigo }}">
             <button class="btn-bloquear" data-color="{{ c.color_codigo }}" data-color-nombre="{{ c.color_nombre }}"
-                    style="background:#2d1f1f; border:1px solid #f85149; color:#ffa198; border-radius:8px; padding:.2rem .6rem; font-size:.75rem; cursor:pointer;"
-                    onmouseover="this.style.background='#4a1f1f'" onmouseout="this.style.background='#2d1f1f'">
+                    style="background:var(--err-bg); border:1px solid var(--err-bdr); color:var(--err-txt); border-radius:8px; padding:.2rem .6rem; font-size:.75rem; cursor:pointer;"
+                    onmouseover="this.style.background='var(--btn-red-hov)'"  onmouseout="this.style.background='var(--btn-red-bg)'" >
               <i class="bi bi-lock me-1"></i>Bloquear
             </button>
           </td>
           <td style="padding:.45rem .7rem;" class="td-sap-{{ c.color_codigo }}">
-            <span style="color:#484f58; font-size:.78rem;">—</span>
+            <span style="color:var(--nav-meta); font-size:.78rem;">—</span>
           </td>
         </tr>
         {% endif %}
@@ -520,7 +520,7 @@
         <i class="bi bi-check-all me-1"></i>Seleccionar todo
       </button>
       <button id="btn-ejecutar-sap"
-              style="background:linear-gradient(135deg,#7c3aed,#9333ea); color:#fff; font-weight:800; border:none;
+              style="background:linear-gradient(135deg,var(--accent2),#9333ea); color:#fff; font-weight:800; border:none;
                      border-radius:10px; padding:.55rem 1.6rem; font-size:.92rem; cursor:pointer; transition:.15s;
                      display:flex; align-items:center; gap:.5rem; box-shadow:0 2px 14px rgba(124,58,237,.45);"
               onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
@@ -539,19 +539,19 @@
 <!-- ── Modal Reporte SAP ─────────────────────────────────────────────────────── -->
 <div id="modal-reporte" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.75);
      z-index:9999; align-items:flex-start; justify-content:center; overflow-y:auto; padding:2rem 1rem;">
-  <div style="background:#0d1117; border:1px solid #30363d; border-radius:18px;
+  <div style="background:var(--bg); border:1px solid var(--border); border-radius:18px;
                width:100%; max-width:960px; margin:auto; padding:2rem 2.2rem; position:relative;">
 
     <!-- Header -->
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem;">
       <div>
-        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:#8b949e;">AGP Glass · Colombia CO01</div>
-        <h3 style="margin:.2rem 0 0; font-size:1.3rem; font-weight:800; color:#e6edf3;">
-          <span style="color:#58a6ff;">&#9632;</span> Reporte de Automatización SAP
+        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted);">AGP Glass · Colombia CO01</div>
+        <h3 style="margin:.2rem 0 0; font-size:1.3rem; font-weight:800; color:var(--text);">
+          <span style="color:var(--zfer-txt);">&#9632;</span> Reporte de Automatización SAP
         </h3>
       </div>
       <button onclick="document.getElementById('modal-reporte').style.display='none'"
-              style="background:transparent; border:1px solid #30363d; color:#8b949e; border-radius:8px;
+              style="background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:8px;
                      padding:.3rem .8rem; cursor:pointer; font-size:.85rem;">✕ Cerrar</button>
     </div>
 
@@ -566,38 +566,38 @@
     <!-- Tabs Tipo -->
     <div id="rep-tabs" style="display:flex; gap:.4rem; margin-bottom:.8rem;">
       <button class="rep-tab active" data-tab="todos"
-              style="background:#21262d; border:1px solid #30363d; color:#e6edf3; border-radius:8px;
+              style="background:var(--tag-neutral-bg); border:1px solid var(--border); color:var(--text); border-radius:8px;
                      padding:.3rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;">
         Todos
       </button>
       <button class="rep-tab" data-tab="color"
-              style="background:transparent; border:1px solid #30363d; color:#79c0ff; border-radius:8px;
+              style="background:transparent; border:1px solid var(--border); color:var(--info-txt); border-radius:8px;
                      padding:.3rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;">
         <i class="bi bi-palette me-1"></i>Color
-        <span id="rep-tab-cnt-color" style="background:#0d1e2e; border-radius:20px; padding:.05rem .4rem; font-size:.72rem; margin-left:.3rem;"></span>
+        <span id="rep-tab-cnt-color" style="background:var(--info-bg); border-radius:20px; padding:.05rem .4rem; font-size:.72rem; margin-left:.3rem;"></span>
       </button>
       <button class="rep-tab" data-tab="formula"
-              style="background:transparent; border:1px solid #30363d; color:#bc8cff; border-radius:8px;
+              style="background:transparent; border:1px solid var(--border); color:var(--blq-title); border-radius:8px;
                      padding:.3rem .9rem; font-size:.8rem; font-weight:700; cursor:pointer;">
         <i class="bi bi-flask me-1"></i>Fórmula
-        <span id="rep-tab-cnt-formula" style="background:#1e1030; border-radius:20px; padding:.05rem .4rem; font-size:.72rem; margin-left:.3rem;"></span>
+        <span id="rep-tab-cnt-formula" style="background:var(--pur-bg); border-radius:20px; padding:.05rem .4rem; font-size:.72rem; margin-left:.3rem;"></span>
       </button>
     </div>
 
     <!-- Tabla detalle -->
-    <div style="overflow-x:auto; border-radius:10px; border:1px solid #21262d;">
+    <div style="overflow-x:auto; border-radius:10px; border:1px solid var(--divider);">
       <table style="width:100%; border-collapse:collapse; font-size:.83rem;">
         <thead>
-          <tr style="background:#161b22;">
-            <th style="padding:.55rem .8rem; color:#8b949e; text-align:left; white-space:nowrap;">#</th>
-            <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;">Tipo</th>
-            <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;">Color</th>
-            <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;">Nombre</th>
-            <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;" id="rep-th-formula" style="display:none;">Fórmula</th>
-            <th style="padding:.55rem .8rem; color:#8b949e; text-align:center;">Estado</th>
-            <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;">ZFER Nuevo</th>
-            <th style="padding:.55rem .8rem; color:#8b949e; text-align:left;">ZFOR / Error</th>
-            <th style="padding:.55rem .8rem; color:#8b949e; text-align:center;">Tiempo</th>
+          <tr style="background:var(--card-bg);">
+            <th style="padding:.55rem .8rem; color:var(--muted); text-align:left; white-space:nowrap;">#</th>
+            <th style="padding:.55rem .8rem; color:var(--muted); text-align:left;">Tipo</th>
+            <th style="padding:.55rem .8rem; color:var(--muted); text-align:left;">Color</th>
+            <th style="padding:.55rem .8rem; color:var(--muted); text-align:left;">Nombre</th>
+            <th style="padding:.55rem .8rem; color:var(--muted); text-align:left;" id="rep-th-formula" style="display:none;">Fórmula</th>
+            <th style="padding:.55rem .8rem; color:var(--muted); text-align:center;">Estado</th>
+            <th style="padding:.55rem .8rem; color:var(--muted); text-align:left;">ZFER Nuevo</th>
+            <th style="padding:.55rem .8rem; color:var(--muted); text-align:left;">ZFOR / Error</th>
+            <th style="padding:.55rem .8rem; color:var(--muted); text-align:center;">Tiempo</th>
           </tr>
         </thead>
         <tbody id="rep-tbody"></tbody>
@@ -607,19 +607,19 @@
     <!-- Sección errores -->
     <div id="rep-errores-sec" style="display:none; margin-top:1.5rem;">
       <div style="font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;
-                  color:#ffa198; margin-bottom:.6rem;">&#9888; Errores detallados</div>
+                  color:var(--err-txt); margin-bottom:.6rem;">&#9888; Errores detallados</div>
       <div id="rep-errores"></div>
     </div>
 
     <!-- Botón descarga -->
     <div style="margin-top:1.8rem; display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
       <a id="btn-dl-excel" href="#"
-         style="background:#1f6feb; color:#fff; font-weight:700; border:none; border-radius:10px;
+         style="background:var(--info-bdr); color:#fff; font-weight:700; border:none; border-radius:10px;
                 padding:.55rem 1.4rem; font-size:.88rem; text-decoration:none; display:inline-flex;
                 align-items:center; gap:.4rem;">
         &#8659; Descargar Excel
       </a>
-      <span style="font-size:.78rem; color:#484f58;" id="rep-excel-hint">4 hojas: Resumen · Detalle · Errores · Log completo</span>
+      <span style="font-size:.78rem; color:var(--nav-meta);" id="rep-excel-hint">4 hojas: Resumen · Detalle · Errores · Log completo</span>
     </div>
   </div>
 </div>
@@ -627,34 +627,34 @@
 <!-- ── Modal Duplicados ──────────────────────────────────────────────────────── -->
 <div id="modal-duplicados" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.78);
      z-index:10000; align-items:center; justify-content:center; padding:1rem;">
-  <div style="background:#0d1117; border:1px solid #9e6a03; border-radius:18px;
+  <div style="background:var(--bg); border:1px solid var(--warn-bdr); border-radius:18px;
                width:100%; max-width:560px; padding:1.8rem 2rem;">
     <div style="display:flex; align-items:center; gap:.7rem; margin-bottom:1.2rem;">
-      <i class="bi bi-exclamation-triangle-fill" style="color:#e3b341; font-size:1.4rem;"></i>
+      <i class="bi bi-exclamation-triangle-fill" style="color:var(--warn-txt); font-size:1.4rem;"></i>
       <div>
-        <div style="font-weight:800; font-size:1.1rem; color:#e6edf3;">Items ya existentes en SAP</div>
-        <div style="font-size:.78rem; color:#8b949e; margin-top:.15rem;">
-          <span id="dup-n-duplic" style="color:#e3b341; font-weight:700;"></span> item(s) ya tienen un ZFER activo.
-          <span id="dup-n-nuevos" style="color:#56d364; font-weight:700;"></span> son nuevos.
+        <div style="font-weight:800; font-size:1.1rem; color:var(--text);">Items ya existentes en SAP</div>
+        <div style="font-size:.78rem; color:var(--muted); margin-top:.15rem;">
+          <span id="dup-n-duplic" style="color:var(--warn-txt); font-weight:700;"></span> item(s) ya tienen un ZFER activo.
+          <span id="dup-n-nuevos" style="color:var(--ok-txt); font-weight:700;"></span> son nuevos.
         </div>
       </div>
     </div>
     <div id="dup-lista" style="max-height:260px; overflow-y:auto; margin-bottom:1.4rem;
-         border:1px solid #21262d; border-radius:10px; padding:.6rem .9rem;"></div>
+         border:1px solid var(--divider); border-radius:10px; padding:.6rem .9rem;"></div>
     <div style="display:flex; gap:.7rem; flex-wrap:wrap; justify-content:flex-end;">
       <button id="dup-btn-cancelar"
-              style="background:transparent; border:1px solid #30363d; color:#8b949e;
+              style="background:transparent; border:1px solid var(--border); color:var(--muted);
                      border-radius:8px; padding:.45rem 1rem; font-size:.85rem; cursor:pointer;">
         Cancelar
       </button>
       <button id="dup-btn-solo-nuevos"
-              style="background:#1a3a2a; border:1px solid #2ea043; color:#56d364;
+              style="background:var(--ok-bg); border:1px solid var(--ok-bdr); color:var(--ok-txt);
                      border-radius:8px; padding:.45rem 1.1rem; font-size:.85rem;
                      font-weight:700; cursor:pointer;">
         <i class="bi bi-skip-forward-fill me-1"></i>Ejecutar solo los nuevos
       </button>
       <button id="dup-btn-todos"
-              style="background:#2d2416; border:1px solid #9e6a03; color:#e3b341;
+              style="background:var(--warn-bg); border:1px solid var(--warn-bdr); color:var(--warn-txt);
                      border-radius:8px; padding:.45rem 1.1rem; font-size:.85rem;
                      font-weight:700; cursor:pointer;">
         <i class="bi bi-play-fill me-1"></i>Ejecutar todos de todos modos
@@ -665,8 +665,8 @@
 
 <!-- ── Modal Bloquear ────────────────────────────────────────────────────────── -->
 <div id="modal-bloqueo" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:9999; align-items:center; justify-content:center;">
-  <div style="background:#161b22; border:1px solid #30363d; border-radius:16px; padding:1.8rem; max-width:440px; width:90%;">
-    <h5 style="margin:0 0 1rem; font-weight:800;">Bloquear color <span id="modal-color-lbl" style="color:#ffa198;"></span></h5>
+  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:1.8rem; max-width:440px; width:90%;">
+    <h5 style="margin:0 0 1rem; font-weight:800;">Bloquear color <span id="modal-color-lbl" style="color:var(--err-txt);"></span></h5>
     <label style="font-size:.82rem; color:var(--muted);">Motivo del bloqueo</label>
     <textarea id="modal-motivo" rows="3" style="width:100%; margin-top:.4rem; margin-bottom:1rem;
               background:var(--card-bg); border:1px solid var(--border); color:var(--text);
@@ -678,7 +678,7 @@
         Cancelar
       </button>
       <button id="modal-confirm"
-              style="background:#f85149; color:#fff; font-weight:700; border:none; border-radius:8px; padding:.4rem 1.1rem; cursor:pointer;">
+              style="background:var(--err-bdr); color:#fff; font-weight:700; border:none; border-radius:8px; padding:.4rem 1.1rem; cursor:pointer;">
         <i class="bi bi-lock-fill me-1"></i>Bloquear
       </button>
     </div>
@@ -688,37 +688,37 @@
 <!-- ── Modal dirección acero ─────────────────────────────────────────────────-->
 <div id="modal-acero-dir" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.78);
      z-index:9999; align-items:center; justify-content:center;">
-  <div style="background:#161b22; border:1px solid #30363d; border-radius:16px;
+  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:16px;
               padding:1.8rem; max-width:420px; width:92%;">
     <h5 style="margin:0 0 .4rem; font-weight:800; font-size:1rem;">
-      <i class="bi bi-layers-half me-2" style="color:#7c3aed;"></i>Dirección del cambio de fórmula
+      <i class="bi bi-layers-half me-2" style="color:var(--accent2);"></i>Dirección del cambio de fórmula
     </h5>
     <p style="font-size:.82rem; color:var(--muted); margin-bottom:1.2rem;">
       Selecciona el flujo que debe ejecutar SAP para las fórmulas seleccionadas.
     </p>
     <div style="display:flex; flex-direction:column; gap:.6rem; margin-bottom:1.4rem;">
       <label style="display:flex; align-items:center; gap:.8rem; cursor:pointer;
-                    background:#0d1117; border:2px solid #30363d; border-radius:10px; padding:.8rem 1rem;
+                    background:var(--bg); border:2px solid var(--border); border-radius:10px; padding:.8rem 1rem;
                     transition:border-color .15s;" id="lbl-con-sin">
-        <input type="radio" name="acero_dir_radio" value="con_sin" style="accent-color:#00c2ff; width:16px; height:16px;">
+        <input type="radio" name="acero_dir_radio" value="con_sin" style="accent-color:var(--accent); width:16px; height:16px;">
         <div>
           <div style="font-weight:700; font-size:.88rem;">
-            <span style="color:#56d364;">Con acero</span>
-            <i class="bi bi-arrow-right mx-1" style="color:#8b949e;"></i>
-            <span style="color:#ffa198;">Sin acero</span>
+            <span style="color:var(--ok-txt);">Con acero</span>
+            <i class="bi bi-arrow-right mx-1" style="color:var(--muted);"></i>
+            <span style="color:var(--err-txt);">Sin acero</span>
           </div>
           <div style="font-size:.73rem; color:var(--muted); margin-top:.15rem;">El ZFER base ya tiene diferencial de acero (06)</div>
         </div>
       </label>
       <label style="display:flex; align-items:center; gap:.8rem; cursor:pointer;
-                    background:#0d1117; border:2px solid #30363d; border-radius:10px; padding:.8rem 1rem;
+                    background:var(--bg); border:2px solid var(--border); border-radius:10px; padding:.8rem 1rem;
                     transition:border-color .15s;" id="lbl-sin-con">
-        <input type="radio" name="acero_dir_radio" value="sin_con" style="accent-color:#7c3aed; width:16px; height:16px;">
+        <input type="radio" name="acero_dir_radio" value="sin_con" style="accent-color:var(--accent2); width:16px; height:16px;">
         <div>
           <div style="font-weight:700; font-size:.88rem;">
-            <span style="color:#ffa198;">Sin acero</span>
-            <i class="bi bi-arrow-right mx-1" style="color:#8b949e;"></i>
-            <span style="color:#56d364;">Con acero</span>
+            <span style="color:var(--err-txt);">Sin acero</span>
+            <i class="bi bi-arrow-right mx-1" style="color:var(--muted);"></i>
+            <span style="color:var(--ok-txt);">Con acero</span>
           </div>
           <div style="font-size:.73rem; color:var(--muted); margin-top:.15rem;">El ZFER base NO tiene diferencial de acero (06)</div>
         </div>
@@ -727,29 +727,29 @@
 
     <!-- Sección ZHAL — solo visible cuando se elige sin→con -->
     <div id="zhal-section" style="display:none; margin-bottom:1.2rem;">
-      <div style="border-top:1px solid #30363d; padding-top:.9rem; margin-top:.2rem;">
-        <div style="font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; color:#8b949e; margin-bottom:.5rem;">
-          <i class="bi bi-box-seam me-1" style="color:#7c3aed;"></i>Código ZHAL (posición acero 0116)
+      <div style="border-top:1px solid var(--border); padding-top:.9rem; margin-top:.2rem;">
+        <div style="font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin-bottom:.5rem;">
+          <i class="bi bi-box-seam me-1" style="color:var(--accent2);"></i>Código ZHAL (posición acero 0116)
         </div>
         <!-- Estado: buscando -->
-        <div id="zhal-buscando" style="display:none; font-size:.82rem; color:#8b949e;">
+        <div id="zhal-buscando" style="display:none; font-size:.82rem; color:var(--muted);">
           <span class="spinner-border spinner-border-sm me-1"></span>Buscando en BD…
         </div>
         <!-- Estado: encontrado -->
         <div id="zhal-encontrado" style="display:none; align-items:center; gap:.6rem;
-             background:#0d2918; border:1px solid #238636; border-radius:8px; padding:.55rem .8rem;">
-          <i class="bi bi-check-circle-fill" style="color:#56d364; font-size:.95rem;"></i>
-          <span style="font-size:.82rem; color:#8b949e;">ZHAL encontrado:</span>
-          <span id="zhal-valor" style="font-weight:700; font-size:.88rem; color:#56d364; font-family:monospace;"></span>
+             background:var(--ok-bg); border:1px solid var(--ok-bdr); border-radius:8px; padding:.55rem .8rem;">
+          <i class="bi bi-check-circle-fill" style="color:var(--ok-txt); font-size:.95rem;"></i>
+          <span style="font-size:.82rem; color:var(--muted);">ZHAL encontrado:</span>
+          <span id="zhal-valor" style="font-weight:700; font-size:.88rem; color:var(--ok-txt); font-family:monospace;"></span>
         </div>
         <!-- Estado: no encontrado → ingreso manual -->
         <div id="zhal-manual" style="display:none;">
-          <div style="font-size:.78rem; color:#f0883e; margin-bottom:.4rem;">
+          <div style="font-size:.78rem; color:var(--warn-txt); margin-bottom:.4rem;">
             <i class="bi bi-exclamation-triangle-fill me-1"></i>No se encontró en BD — ingresa el código manualmente
           </div>
           <input id="zhal-input" type="text" placeholder="Ej: 600019676"
-                 style="width:100%; background:#0d1117; border:1px solid #f0883e; border-radius:6px;
-                        color:#e6edf3; padding:.4rem .7rem; font-size:.88rem; font-family:monospace;
+                 style="width:100%; background:var(--bg); border:1px solid var(--warn-bdr); border-radius:6px;
+                        color:var(--text); padding:.4rem .7rem; font-size:.88rem; font-family:monospace;
                         outline:none;">
         </div>
       </div>
@@ -757,7 +757,7 @@
 
     <div style="display:flex; gap:.6rem; justify-content:flex-end;">
       <button id="acero-dir-cancel"
-              style="background:#21262d; border:1px solid #30363d; color:#e6edf3;
+              style="background:var(--tag-neutral-bg); border:1px solid var(--border); color:var(--text);
                      border-radius:8px; padding:.4rem 1.1rem; cursor:pointer; font-size:.85rem;">
         Cancelar
       </button>
@@ -773,26 +773,26 @@
 <!-- ── Modal cambio de hoja de ruta (colores) ────────────────────────────── -->
 <div id="modal-hr-color" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.78);
      z-index:9999; align-items:center; justify-content:center;">
-  <div style="background:#161b22; border:1px solid #30363d; border-radius:16px;
+  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:16px;
               padding:1.6rem 2rem; max-width:420px; width:92%; box-shadow:0 8px 40px #000a;">
-    <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:#8b949e; margin-bottom:.5rem;">
-      <i class="bi bi-signpost-split me-1" style="color:#58a6ff;"></i>Hoja de Ruta — Cambio de Color
+    <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:.5rem;">
+      <i class="bi bi-signpost-split me-1" style="color:var(--zfer-txt);"></i>Hoja de Ruta — Cambio de Color
     </div>
-    <div style="font-size:1rem; font-weight:700; color:#e6edf3; margin-bottom:1.1rem;">
+    <div style="font-size:1rem; font-weight:700; color:var(--text); margin-bottom:1.1rem;">
       ¿Los colores seleccionados requieren cambio de hoja de ruta?
     </div>
-    <div style="font-size:.82rem; color:#8b949e; margin-bottom:1.2rem;">
-      Si marcas <b style="color:#56d364;">Sí</b>, después de homologar cada color se buscará
+    <div style="font-size:.82rem; color:var(--muted); margin-bottom:1.2rem;">
+      Si marcas <b style="color:var(--ok-txt);">Sí</b>, después de homologar cada color se buscará
       la hoja de ruta candidata y se asignará automáticamente en CA02.
     </div>
     <div style="display:flex; justify-content:flex-end; gap:.7rem;">
       <button id="hr-color-no"
-              style="background:transparent; border:1px solid #30363d; color:#8b949e;
+              style="background:transparent; border:1px solid var(--border); color:var(--muted);
                      border-radius:8px; padding:.4rem 1.2rem; cursor:pointer; font-size:.85rem;">
         <i class="bi bi-x me-1"></i>No, solo homologar
       </button>
       <button id="hr-color-si"
-              style="background:#1a7f37; color:#fff; font-weight:700; border:none;
+              style="background:var(--ok-bg); color:#fff; font-weight:700; border:none;
                      border-radius:8px; padding:.4rem 1.2rem; cursor:pointer; font-size:.85rem;">
         <i class="bi bi-check-lg me-1"></i>Sí, cambiar HR
       </button>
@@ -806,11 +806,11 @@
 <div style="margin-top:2.5rem;" id="sec-formula-alt">
 
   <!-- Encabezado + filtros -->
-  <div class="card mb-3" style="border-color:#2d2150;">
+  <div class="card mb-3" style="border-color:var(--chip-prox-bdr);">
     <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2"
-         style="border-bottom:1px solid #2d2150;">
+         style="border-bottom:1px solid var(--chip-prox-bdr);">
       <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">
-        <i class="bi bi-arrow-left-right" style="color:#bc8cff;"></i>
+        <i class="bi bi-arrow-left-right" style="color:var(--blq-title);"></i>
         <span style="font-weight:800;">Cambio de Fórmula</span>
         <span style="color:var(--muted); font-size:.8rem;">
           Fórmula base: <strong style="color:var(--accent);">{{ formula_code }}</strong>
@@ -823,36 +823,36 @@
         <!-- URL row -->
         <div style="display:flex; align-items:center; gap:.4rem; min-width:0;">
           <div style="display:flex; align-items:center; gap:.35rem; min-width:0;
-                      background:#0d1117; border:1px solid #2d2150; border-radius:8px;
-                      padding:.25rem .5rem .25rem .7rem; font-size:.75rem; color:#8b949e; max-width:340px;">
-            <i class="bi bi-link-45deg" style="color:#e3b341; flex-shrink:0; font-size:.85rem;"></i>
+                      background:var(--bg); border:1px solid var(--chip-prox-bdr); border-radius:8px;
+                      padding:.25rem .5rem .25rem .7rem; font-size:.75rem; color:var(--muted); max-width:340px;">
+            <i class="bi bi-link-45deg" style="color:var(--warn-txt); flex-shrink:0; font-size:.85rem;"></i>
             <span id="ruta-texto" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
                   flex:1; min-width:0;" title="">Cargando…</span>
             <button onclick="_rutaEditar()" title="Editar URL"
-                    style="background:none; border:none; color:#58a6ff; cursor:pointer;
+                    style="background:none; border:none; color:var(--zfer-txt); cursor:pointer;
                            padding:0 .15rem; font-size:.8rem; flex-shrink:0; line-height:1;">
               <i class="bi bi-pencil-square"></i>
             </button>
           </div>
           <button id="ruta-btn-abrir" onclick="_rutaAbrir()" title="Abrir URL"
-                  style="display:none; background:#0d1117; border:1px solid #2d2150; border-radius:8px;
-                         color:#56d364; padding:.25rem .55rem; font-size:.75rem; cursor:pointer;
+                  style="display:none; background:var(--bg); border:1px solid var(--chip-prox-bdr); border-radius:8px;
+                         color:var(--ok-txt); padding:.25rem .55rem; font-size:.75rem; cursor:pointer;
                          white-space:nowrap; flex-shrink:0;">
             <i class="bi bi-box-arrow-up-right me-1"></i>Abrir
           </button>
         </div>
         <!-- Simetría row -->
         <div style="display:flex; align-items:center; gap:.5rem; font-size:.75rem;">
-          <label style="display:flex; align-items:center; gap:.35rem; cursor:pointer; color:#8b949e; user-select:none;">
-            <input type="checkbox" id="sim-check" style="accent-color:#bc8cff; cursor:pointer;"
+          <label style="display:flex; align-items:center; gap:.35rem; cursor:pointer; color:var(--muted); user-select:none;">
+            <input type="checkbox" id="sim-check" style="accent-color:var(--blq-title); cursor:pointer;"
                    onchange="_simetriaToggle()"
                    {% if sim_material %}checked{% endif %}>
-            <i class="bi bi-symmetry-horizontal" style="color:#bc8cff;"></i>
+            <i class="bi bi-symmetry-horizontal" style="color:var(--blq-title);"></i>
             <span>Simetría</span>
           </label>
           {% if sim_material %}
-          <a href="/zfer/{{ sim_material }}" style="font-size:.72rem; background:#1a102e; border:1px solid #6e40c9;
-             border-radius:6px; padding:.15rem .5rem; color:#bc8cff; text-decoration:none;
+          <a href="/zfer/{{ sim_material }}" style="font-size:.72rem; background:var(--chip-prox-bg); border:1px solid var(--pur-bdr);
+             border-radius:6px; padding:.15rem .5rem; color:var(--blq-title); text-decoration:none;
              display:inline-flex; align-items:center; gap:.3rem;">
             <i class="bi bi-symmetry-horizontal"></i>{{ sim_material }}
           </a>
@@ -871,7 +871,7 @@
           </label>
           <input id="flt-nivel" type="text" value="{{ nivel }}"
                  placeholder="ej: 03"
-                 style="background:#0d1117; border:1px solid #30363d; color:var(--text); border-radius:8px;
+                 style="background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px;
                         padding:.45rem .75rem; font-size:.88rem; width:100px;"
                  autocomplete="off" maxlength="10">
         </div>
@@ -883,21 +883,21 @@
           </label>
           <input id="flt-sub" type="text" value="{{ subproducto }}"
                  placeholder="ej: X57, B1"
-                 style="background:#0d1117; border:1px solid #30363d; color:var(--text); border-radius:8px;
+                 style="background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px;
                         padding:.45rem .75rem; font-size:.88rem; width:140px;"
                  autocomplete="off" maxlength="20">
         </div>
 
         <!-- Botón buscar -->
         <button id="btn-buscar-formulas"
-                style="background:#6e40c9; color:#fff; border:none; border-radius:8px;
+                style="background:var(--pur-bdr); color:#fff; border:none; border-radius:8px;
                        padding:.45rem 1.2rem; font-size:.85rem; font-weight:700; cursor:pointer;
                        display:flex; align-items:center; gap:.4rem; height:36px;">
           <i class="bi bi-search"></i>Buscar fórmulas
         </button>
 
         <!-- Info vacíos -->
-        <span style="font-size:.78rem; color:#484f58; align-self:center;">
+        <span style="font-size:.78rem; color:var(--nav-meta); align-self:center;">
           Deja vacío para no filtrar por ese campo
         </span>
       </div>
@@ -912,47 +912,47 @@
 <!-- ── Modal Wizard Configurar Cola ──────────────────────────────────────── -->
 <div id="modal-wizard-cola" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.82);
      z-index:3000; align-items:center; justify-content:center; padding:1rem;">
-  <div style="background:#161b22; border:1px solid #30363d; border-radius:14px;
+  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:14px;
               width:100%; max-width:540px; font-family:inherit; box-shadow:0 8px 40px rgba(0,0,0,.7);">
     <!-- Cabecera -->
-    <div style="padding:1.2rem 1.4rem .8rem; border-bottom:1px solid #21262d; display:flex; align-items:center; justify-content:space-between;">
+    <div style="padding:1.2rem 1.4rem .8rem; border-bottom:1px solid var(--divider); display:flex; align-items:center; justify-content:space-between;">
       <div>
-        <div style="color:#8b949e; font-size:.78rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; margin-bottom:.2rem;">
+        <div style="color:var(--muted); font-size:.78rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; margin-bottom:.2rem;">
           Configurar envío
         </div>
-        <div id="wiz-titulo" style="color:#e6edf3; font-size:1rem; font-weight:700;"></div>
+        <div id="wiz-titulo" style="color:var(--text); font-size:1rem; font-weight:700;"></div>
       </div>
       <!-- Dots de progreso -->
       <div id="wiz-dots" style="display:flex; gap:.35rem; align-items:center;"></div>
     </div>
     <!-- Descripción del ítem -->
-    <div style="padding:.9rem 1.4rem .5rem; border-bottom:1px solid #21262d;">
+    <div style="padding:.9rem 1.4rem .5rem; border-bottom:1px solid var(--divider);">
       <div id="wiz-badge-row" style="display:flex; align-items:center; gap:.5rem; margin-bottom:.45rem;"></div>
-      <div id="wiz-item-desc" style="color:#8b949e; font-size:.82rem; line-height:1.5;"></div>
+      <div id="wiz-item-desc" style="color:var(--muted); font-size:.82rem; line-height:1.5;"></div>
     </div>
     <!-- Pregunta dinámica -->
     <div id="wiz-pregunta" style="padding:1rem 1.4rem;"></div>
     <!-- Checkbox "aplicar a siguientes" -->
     <div style="padding:.3rem 1.4rem .9rem;">
-      <label style="display:flex; align-items:center; gap:.55rem; cursor:pointer; color:#8b949e; font-size:.82rem; user-select:none;">
+      <label style="display:flex; align-items:center; gap:.55rem; cursor:pointer; color:var(--muted); font-size:.82rem; user-select:none;">
         <input type="checkbox" id="wiz-chk-aplicar"
-               style="width:15px; height:15px; accent-color:#388bfd; cursor:pointer;">
+               style="width:15px; height:15px; accent-color:var(--info-bdr); cursor:pointer;">
         <span id="wiz-chk-label">Aplicar esta respuesta a los siguientes del mismo tipo</span>
       </label>
     </div>
     <!-- Botones de navegación -->
-    <div style="padding:.9rem 1.4rem 1.2rem; border-top:1px solid #21262d;
+    <div style="padding:.9rem 1.4rem 1.2rem; border-top:1px solid var(--divider);
                 display:flex; align-items:center; justify-content:space-between; gap:.6rem;">
-      <button id="wiz-btn-cancel" style="background:transparent; border:1px solid #30363d; color:#8b949e;
+      <button id="wiz-btn-cancel" style="background:transparent; border:1px solid var(--border); color:var(--muted);
               border-radius:7px; padding:.42rem .9rem; font-size:.82rem; cursor:pointer;">
         Cancelar todo
       </button>
       <div style="display:flex; gap:.5rem;">
-        <button id="wiz-btn-prev" style="background:#21262d; border:1px solid #30363d; color:#c9d1d9;
+        <button id="wiz-btn-prev" style="background:var(--tag-neutral-bg); border:1px solid var(--border); color:var(--text);
                 border-radius:7px; padding:.42rem .9rem; font-size:.82rem; cursor:pointer; display:none;">
           ← Anterior
         </button>
-        <button id="wiz-btn-next" style="background:#388bfd; border:none; color:#fff;
+        <button id="wiz-btn-next" style="background:var(--info-bdr); border:none; color:#fff;
                 border-radius:7px; padding:.42rem 1.1rem; font-size:.82rem; font-weight:600; cursor:pointer;">
           Siguiente →
         </button>
@@ -976,20 +976,20 @@
   width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center;
   justify-content:center; font-size:.62rem; font-weight:800; flex-shrink:0;
 }
-.sap-step-dot.done  { background:#1a3a2a; border:2px solid #2ea043; color:#56d364; }
-.sap-step-dot.active{ background:#0d1e2e; border:2px solid #58a6ff; color:#58a6ff; }
-.sap-step-dot.wait  { background:#161b22; border:2px solid #30363d; color:#484f58; }
-.sap-paso-desc { font-size:.72rem; color:#79c0ff; font-weight:600; line-height:1.3; }
+.sap-step-dot.done  { background:var(--ok-bg); border:2px solid var(--ok-bdr); color:var(--ok-txt); }
+.sap-step-dot.active{ background:var(--info-bg); border:2px solid var(--zfer-txt); color:var(--zfer-txt); }
+.sap-step-dot.wait  { background:var(--card-bg); border:2px solid var(--border); color:var(--nav-meta); }
+.sap-paso-desc { font-size:.72rem; color:var(--info-txt); font-weight:600; line-height:1.3; }
 
 /* ── Error amigable ── */
 .sap-error-card {
-  background:#1c1016; border:1px solid #5a1f1f; border-radius:8px;
+  background:var(--pur-bg); border:1px solid var(--err-bdr); border-radius:8px;
   padding:.5rem .7rem; margin-top:.25rem;
 }
-.sap-error-title { font-size:.75rem; font-weight:700; color:#ffa198; display:flex; align-items:center; gap:.35rem; }
-.sap-error-msg   { font-size:.72rem; color:#c87067; margin-top:.2rem; line-height:1.4; }
+.sap-error-title { font-size:.75rem; font-weight:700; color:var(--err-txt); display:flex; align-items:center; gap:.35rem; }
+.sap-error-msg   { font-size:.72rem; color:var(--err-txt); margin-top:.2rem; line-height:1.4; }
 .sap-error-toggle{
-  font-size:.68rem; color:#484f58; background:transparent; border:none; cursor:pointer;
+  font-size:.68rem; color:var(--nav-meta); background:transparent; border:none; cursor:pointer;
   padding:0; margin-top:.3rem; text-decoration:underline;
 }
 </style>
@@ -1066,7 +1066,7 @@ function _renderStepper(pasoActual, descActual) {
   return `
     <div class="sap-stepper">
       <div class="sap-stepper-dots">${dots}
-        <span style="font-size:.68rem; color:#484f58; margin-left:.2rem;">${pasoActual}/5</span>
+        <span style="font-size:.68rem; color:var(--nav-meta); margin-left:.2rem;">${pasoActual}/5</span>
       </div>
       <div class="sap-paso-desc">${desc}</div>
     </div>`;
@@ -1074,7 +1074,7 @@ function _renderStepper(pasoActual, descActual) {
 
 // ── Render de celda de cola ───────────────────────────────────────────────────
 function _renderEnCola() {
-  return '<span style="color:#484f58; font-size:.77rem;"><i class="bi bi-clock me-1"></i>En cola…</span>';
+  return '<span style="color:var(--nav-meta); font-size:.77rem;"><i class="bi bi-clock me-1"></i>En cola…</span>';
 }
 
 // ── Render de error amigable en tabla ─────────────────────────────────────────
@@ -1083,8 +1083,8 @@ function _renderErrorCelda(item, idx) {
   const logId    = `err-log-${idx}`;
   return `
     <div style="display:flex; align-items:center; gap:.4rem;">
-      <i class="bi bi-x-circle-fill" style="color:#f85149; font-size:1rem; flex-shrink:0;"></i>
-      <span style="font-size:.78rem; color:#ffa198; font-weight:700;">Error</span>
+      <i class="bi bi-x-circle-fill" style="color:var(--err-bdr); font-size:1rem; flex-shrink:0;"></i>
+      <span style="font-size:.78rem; color:var(--err-txt); font-weight:700;">Error</span>
     </div>
     <div class="sap-error-card">
       <div class="sap-error-msg">${amigable}</div>
@@ -1092,8 +1092,8 @@ function _renderErrorCelda(item, idx) {
               onclick="var e=document.getElementById('${logId}');e.style.display=e.style.display==='none'?'block':'none'">
         Ver detalle técnico
       </button>
-      <pre id="${logId}" style="display:none; margin:.3rem 0 0; background:#0d1117; border-radius:6px;
-           padding:.5rem; font-size:.65rem; color:#6e7681; max-height:150px; overflow-y:auto;
+      <pre id="${logId}" style="display:none; margin:.3rem 0 0; background:var(--bg); border-radius:6px;
+           padding:.5rem; font-size:.65rem; color:var(--muted); max-height:150px; overflow-y:auto;
            white-space:pre-wrap;">${(item.log||[]).join("\n")||"(sin log)"}</pre>
     </div>`;
 }
@@ -1102,15 +1102,15 @@ function _renderErrorCelda(item, idx) {
 function _renderOkCelda(item) {
   return `
     <div style="display:flex; align-items:center; gap:.4rem; margin-bottom:.2rem;">
-      <i class="bi bi-check-circle-fill" style="color:#2ea043; font-size:1rem;"></i>
-      <span style="font-size:.78rem; color:#56d364; font-weight:700;">Completado</span>
+      <i class="bi bi-check-circle-fill" style="color:var(--ok-bdr); font-size:1rem;"></i>
+      <span style="font-size:.78rem; color:var(--ok-txt); font-weight:700;">Completado</span>
     </div>
     ${item.zfer_nuevo ? `<a href="/zfer/${item.zfer_nuevo}"
         style="color:var(--accent); font-size:.8rem; font-weight:700; text-decoration:none;
                display:inline-flex; align-items:center; gap:.25rem;">
         <i class="bi bi-box-arrow-up-right" style="font-size:.7rem;"></i>${item.zfer_nuevo}
       </a>` : ""}
-    ${item.zfor_nuevo ? `<div style="font-size:.7rem; color:#484f58; margin-top:.1rem;">ZFOR: ${item.zfor_nuevo}</div>` : ""}`;
+    ${item.zfor_nuevo ? `<div style="font-size:.7rem; color:var(--nav-meta); margin-top:.1rem;">ZFOR: ${item.zfor_nuevo}</div>` : ""}`;
 }
 
 // ── Bloqueos ──────────────────────────────────────────────────────────────────
@@ -1140,7 +1140,7 @@ document.getElementById("modal-confirm").addEventListener("click", async () => {
   const data = await resp.json();
   if (data.ok) {
     const td = document.querySelector(`.td-bloqueo-${_modalColor}`);
-    if (td) td.innerHTML = `<span class="tag" style="background:#2d1f1f;color:#ffa198;border:1px solid #f85149;font-size:.73rem;"><i class="bi bi-lock-fill me-1"></i>Bloqueado</span>`;
+    if (td) td.innerHTML = `<span class="tag" style="background:var(--err-bg);color:var(--err-txt);border:1px solid var(--err-bdr);font-size:.73rem;"><i class="bi bi-lock-fill me-1"></i>Bloqueado</span>`;
     const cb = document.querySelector(`.sap-check[value="${_modalColor}"]`);
     if (cb) { cb.checked=false; cb.disabled=true; }
   } else {
@@ -1272,7 +1272,7 @@ async function _enviarTodoACola() {
 
     if (d.ok) {
       if (statusGlb) statusGlb.innerHTML =
-        `<span style="color:#56d364; font-weight:700;">
+        `<span style="color:var(--ok-txt); font-weight:700;">
           <i class="bi bi-check-circle-fill me-1"></i>${cola.length} ítem(s) → Bloque ${d.bloque_num} · ${d.hora_prog}
         </span>`;
       // Desmarcar todos
@@ -1324,7 +1324,7 @@ function _wizardConfigCola(items) {
       elDots.innerHTML = items.map((_, i) => {
         const done  = i < idx;
         const act   = i === idx;
-        const color = done ? "#388bfd" : (act ? "#58a6ff" : "#30363d");
+        const color = done ? "var(--info-bdr)" : (act ? "var(--zfer-txt)" : "var(--border)");
         const size  = act ? "10px" : "8px";
         return `<div style="width:${size}; height:${size}; border-radius:50%;
                 background:${color}; transition:all .2s;"></div>`;
@@ -1333,15 +1333,15 @@ function _wizardConfigCola(items) {
 
     function _renderBadge(it) {
       const isF = it.tipo === "formula";
-      const badgeColor = isF ? "#6e40c9" : "#0e4429";
-      const badgeBorder = isF ? "#bc8cff" : "#3fb950";
+      const badgeColor = isF ? "var(--pur-bdr)" : "var(--ok-bg)";
+      const badgeBorder = isF ? "var(--blq-title)" : "var(--ok-bdr)";
       const badgeText   = isF ? "FÓRMULA" : "COLOR";
-      const badgeTx     = isF ? "#d2a8ff" : "#56d364";
+      const badgeTx     = isF ? "var(--pur-txt)" : "var(--ok-txt)";
       elBadge.innerHTML = `
         <span style="background:${badgeColor}; border:1px solid ${badgeBorder};
               color:${badgeTx}; border-radius:6px; padding:.12rem .45rem;
               font-size:.72rem; font-weight:700; letter-spacing:.05em;">${badgeText}</span>
-        <span style="color:#8b949e; font-size:.8rem;">ZFER: <strong style="color:#c9d1d9;">${it.zfer}</strong></span>`;
+        <span style="color:var(--muted); font-size:.8rem;">ZFER: <strong style="color:var(--text);">${it.zfer}</strong></span>`;
       if (isF) {
         elDesc.textContent = `Fórmula nueva: ${it.formula_nueva || "—"}  ·  Color ${it.color} · ${it.color_nombre || ""}`;
       } else {
@@ -1361,19 +1361,19 @@ function _wizardConfigCola(items) {
 
     function _renderPreguntaColor(it, cfg) {
       elPreg.innerHTML = `
-        <div style="color:#c9d1d9; font-size:.88rem; font-weight:600; margin-bottom:.8rem;">
+        <div style="color:var(--text); font-size:.88rem; font-weight:600; margin-bottom:.8rem;">
           ¿Cambiar hoja de ruta?
         </div>
         <div style="display:flex; gap:.7rem;">
           <button data-val="false" class="wiz-hr-btn"
-            style="flex:1; padding:.65rem; border-radius:8px; border:2px solid ${cfg.cambiar_hr===false?'#388bfd':'#30363d'};
-                   background:${cfg.cambiar_hr===false?'#0d1f33':'#21262d'}; color:${cfg.cambiar_hr===false?'#79c0ff':'#8b949e'};
+            style="flex:1; padding:.65rem; border-radius:8px; border:2px solid ${cfg.cambiar_hr===false?'var(--info-bdr)':'var(--border)'};
+                   background:${cfg.cambiar_hr===false?'var(--info-bg)':'var(--tag-neutral-bg)'}; color:${cfg.cambiar_hr===false?'var(--info-txt)':'var(--muted)'};
                    font-size:.85rem; font-weight:600; cursor:pointer; transition:all .15s;">
             No cambiar HR
           </button>
           <button data-val="true" class="wiz-hr-btn"
-            style="flex:1; padding:.65rem; border-radius:8px; border:2px solid ${cfg.cambiar_hr===true?'#3fb950':'#30363d'};
-                   background:${cfg.cambiar_hr===true?'#0b2a16':'#21262d'}; color:${cfg.cambiar_hr===true?'#56d364':'#8b949e'};
+            style="flex:1; padding:.65rem; border-radius:8px; border:2px solid ${cfg.cambiar_hr===true?'var(--ok-bdr)':'var(--border)'};
+                   background:${cfg.cambiar_hr===true?'var(--ok-bg)':'var(--tag-neutral-bg)'}; color:${cfg.cambiar_hr===true?'var(--ok-txt)':'var(--muted)'};
                    font-size:.85rem; font-weight:600; cursor:pointer; transition:all .15s;">
             Sí, cambiar HR
           </button>
@@ -1394,10 +1394,10 @@ function _wizardConfigCola(items) {
 
       // Solo mostrar las 2 opciones coherentes con el estado actual de acero
       const allOpts = [
-        { val:"sin_sin", label:"Sin → Sin", color:"#388bfd", bg:"#0d1f33", border:"#1f6feb" },
-        { val:"con_con", label:"Con → Con", color:"#56d364", bg:"#0b2a16", border:"#2ea043" },
-        { val:"sin_con", label:"Sin → Con", color:"#d2a8ff", bg:"#1e1030", border:"#6e40c9" },
-        { val:"con_sin", label:"Con → Sin", color:"#ffa657", bg:"#291b00", border:"#9e6a03" },
+        { val:"sin_sin", label:"Sin → Sin", color:"var(--info-bdr)", bg:"var(--info-bg)", border:"var(--info-bdr)" },
+        { val:"con_con", label:"Con → Con", color:"var(--ok-txt)", bg:"var(--ok-bg)", border:"var(--ok-bdr)" },
+        { val:"sin_con", label:"Sin → Con", color:"var(--pur-txt)", bg:"var(--pur-bg)", border:"var(--pur-bdr)" },
+        { val:"con_sin", label:"Con → Sin", color:"var(--warn-txt)", bg:"var(--warn-bg)", border:"var(--warn-bdr)" },
       ];
       const opts = _tieneAcero
         ? allOpts.filter(o => o.val === "con_con" || o.val === "con_sin")
@@ -1410,30 +1410,30 @@ function _wizardConfigCola(items) {
       }
 
       const _aceroBadge = `<div style="display:inline-flex; align-items:center; gap:.35rem;
-        background:${_tieneAcero ? "#0b2a16" : "#0d1f33"}; border:1px solid ${_tieneAcero ? "#2ea043" : "#1f6feb"};
+        background:${_tieneAcero ? "var(--ok-bg)" : "var(--info-bg)"}; border:1px solid ${_tieneAcero ? "var(--ok-bdr)" : "var(--info-bdr)"};
         border-radius:12px; padding:.2rem .65rem; font-size:.75rem; font-weight:700; margin-bottom:.75rem;
-        color:${_tieneAcero ? "#56d364" : "#388bfd"};">
+        color:${_tieneAcero ? "var(--ok-txt)" : "var(--info-bdr)"};">
         ${_tieneAcero ? "● ZFER base CON acero" : "● ZFER base SIN acero"}
       </div>`;
       const zhalHtml = cfg.acero_dir === "sin_con" ? `
-        <div id="wiz-zhal-section" style="margin-top:.9rem; padding:.75rem; background:#0d1117;
-             border:1px solid #30363d; border-radius:8px;">
-          <div style="color:#8b949e; font-size:.78rem; margin-bottom:.5rem; font-weight:600;">ZHAL (acero base)</div>
-          <div id="wiz-zhal-buscando" style="display:none; color:#8b949e; font-size:.8rem; align-items:center; gap:.4rem;">
+        <div id="wiz-zhal-section" style="margin-top:.9rem; padding:.75rem; background:var(--bg);
+             border:1px solid var(--border); border-radius:8px;">
+          <div style="color:var(--muted); font-size:.78rem; margin-bottom:.5rem; font-weight:600;">ZHAL (acero base)</div>
+          <div id="wiz-zhal-buscando" style="display:none; color:var(--muted); font-size:.8rem; align-items:center; gap:.4rem;">
             <span style="animation:spin 1s linear infinite; display:inline-block;">⟳</span> Buscando...
           </div>
           <div id="wiz-zhal-encontrado" style="display:none; align-items:center; gap:.5rem;">
-            <span style="color:#56d364; font-size:.85rem; font-weight:700;" id="wiz-zhal-valor"></span>
-            <span style="color:#8b949e; font-size:.75rem;">(auto)</span>
+            <span style="color:var(--ok-txt); font-size:.85rem; font-weight:700;" id="wiz-zhal-valor"></span>
+            <span style="color:var(--muted); font-size:.75rem;">(auto)</span>
             <button onclick="document.getElementById('wiz-zhal-encontrado').style.display='none';
                              document.getElementById('wiz-zhal-manual').style.display='block';"
-              style="background:transparent; border:none; color:#58a6ff; font-size:.75rem; cursor:pointer; padding:0 .3rem;">
+              style="background:transparent; border:none; color:var(--zfer-txt); font-size:.75rem; cursor:pointer; padding:0 .3rem;">
               Cambiar
             </button>
           </div>
           <div id="wiz-zhal-manual" style="display:none;">
             <input id="wiz-zhal-input" type="text" placeholder="Código ZHAL..."
-              style="width:100%; background:#161b22; border:1px solid #388bfd; color:#e6edf3;
+              style="width:100%; background:var(--card-bg); border:1px solid var(--info-bdr); color:var(--text);
                      border-radius:6px; padding:.38rem .6rem; font-size:.85rem; box-sizing:border-box;"
               value="${cfg.zhal || ''}">
           </div>
@@ -1441,16 +1441,16 @@ function _wizardConfigCola(items) {
 
       elPreg.innerHTML = `
         ${_aceroBadge}
-        <div style="color:#c9d1d9; font-size:.88rem; font-weight:600; margin-bottom:.8rem;">
+        <div style="color:var(--text); font-size:.88rem; font-weight:600; margin-bottom:.8rem;">
           ¿Cómo cambia el acero?
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:.5rem;">
           ${opts.map(o => `
             <button data-val="${o.val}" class="wiz-ac-btn"
               style="padding:.6rem; border-radius:8px;
-                     border:2px solid ${cfg.acero_dir===o.val ? o.border : '#30363d'};
-                     background:${cfg.acero_dir===o.val ? o.bg : '#21262d'};
-                     color:${cfg.acero_dir===o.val ? o.color : '#8b949e'};
+                     border:2px solid ${cfg.acero_dir===o.val ? o.border : 'var(--border)'};
+                     background:${cfg.acero_dir===o.val ? o.bg : 'var(--tag-neutral-bg)'};
+                     color:${cfg.acero_dir===o.val ? o.color : 'var(--muted)'};
                      font-size:.85rem; font-weight:600; cursor:pointer; transition:all .15s;">
               ${o.label}
             </button>`).join("")}
@@ -1520,7 +1520,7 @@ function _wizardConfigCola(items) {
 
       btnPrev.style.display = idx > 0 ? "" : "none";
       btnNext.textContent   = idx === total - 1 ? "✓ Listo" : "Siguiente →";
-      btnNext.style.background = idx === total - 1 ? "#2ea043" : "#388bfd";
+      btnNext.style.background = idx === total - 1 ? "var(--ok-bdr)" : "var(--info-bdr)";
 
       chkAp.checked = false;
       if (it.tipo === "color") {
@@ -1631,7 +1631,7 @@ function _pedirDireccionAcero(zferBase) {
     // Reset
     document.querySelectorAll("input[name='acero_dir_radio']").forEach(r => r.checked = false);
     ["lbl-con-sin","lbl-sin-con"].forEach(id => {
-      document.getElementById(id).style.borderColor = "#30363d";
+      document.getElementById(id).style.borderColor = "var(--border)";
     });
     secZhal.style.display = "none";
     divBusc.style.display = divFound.style.display = "none";
@@ -1665,8 +1665,8 @@ function _pedirDireccionAcero(zferBase) {
     // Resaltar opción y mostrar sección ZHAL solo para sin→con
     document.querySelectorAll("input[name='acero_dir_radio']").forEach(r => {
       r.onchange = () => {
-        document.getElementById("lbl-con-sin").style.borderColor = r.value === "con_sin" ? "#00c2ff" : "#30363d";
-        document.getElementById("lbl-sin-con").style.borderColor = r.value === "sin_con" ? "#7c3aed" : "#30363d";
+        document.getElementById("lbl-con-sin").style.borderColor = r.value === "con_sin" ? "#00c2ff" : "var(--border)";
+        document.getElementById("lbl-sin-con").style.borderColor = r.value === "sin_con" ? "#7c3aed" : "var(--border)";
         if (r.value === "sin_con") {
           _buscarZhal();
         } else {
@@ -1718,15 +1718,15 @@ function _mostrarAviso_duplicados(duplicados, totalCola) {
     const nNuevos = totalCola - duplicados.length;
 
     lista.innerHTML = duplicados.map(d => `
-      <div style="display:flex; align-items:center; gap:.6rem; padding:.4rem 0; border-bottom:1px solid #21262d;">
-        <span style="background:#1e1030; border:1px solid #6e40c9; color:#bc8cff; border-radius:6px;
+      <div style="display:flex; align-items:center; gap:.6rem; padding:.4rem 0; border-bottom:1px solid var(--divider);">
+        <span style="background:var(--pur-bg); border:1px solid var(--pur-bdr); color:var(--blq-title); border-radius:6px;
                      padding:.1rem .4rem; font-size:.72rem; font-weight:700; white-space:nowrap;">
           ${d.tipo==="formula" ? "🧪 "+d.formula_nueva : "🎨 "+d.color}
         </span>
-        <span style="color:#e6edf3; font-size:.82rem;">${d.color_nombre||""}</span>
-        <span style="color:#484f58; font-size:.75rem; margin-left:auto;">→</span>
+        <span style="color:var(--text); font-size:.82rem;">${d.color_nombre||""}</span>
+        <span style="color:var(--nav-meta); font-size:.75rem; margin-left:auto;">→</span>
         <a href="/zfer/${d.zfer_existente}" target="_blank"
-           style="color:#58a6ff; font-size:.8rem; font-weight:700; text-decoration:none;">
+           style="color:var(--zfer-txt); font-size:.8rem; font-weight:700; text-decoration:none;">
           ${d.zfer_existente}
         </a>
       </div>`).join("");
@@ -1780,8 +1780,8 @@ function _pollBatch(batchId, colorChecks, formulaChecks) {
             if (fIdx) {
               const st = document.getElementById(`status-fc-${fIdx}`);
               if (st) st.innerHTML = item.estado === "OK"
-                ? `<span style="color:#56d364;"><i class="bi bi-check-circle-fill me-1"></i>OK — ZFER ${item.zfer_nuevo||""}</span>`
-                : `<span style="color:#ffa198;"><i class="bi bi-x-circle-fill me-1"></i>${item.error||"Error"}</span>`;
+                ? `<span style="color:var(--ok-txt);"><i class="bi bi-check-circle-fill me-1"></i>OK — ZFER ${item.zfer_nuevo||""}</span>`
+                : `<span style="color:var(--err-txt);"><i class="bi bi-x-circle-fill me-1"></i>${item.error||"Error"}</span>`;
             }
           }
         }
@@ -1811,7 +1811,7 @@ function _pollBatch(batchId, colorChecks, formulaChecks) {
       // Status global
       const total = data.total || (colorChecks.length + formulaChecks.length);
       statusGlb.innerHTML = `<i class="bi bi-arrow-repeat paso-spinner me-1"
-        style="color:#79c0ff;"></i> Procesando ${data.procesados||0} de ${total}…`;
+        style="color:var(--info-txt);"></i> Procesando ${data.procesados||0} de ${total}…`;
 
       if (data.estado === "COMPLETADO") {
         _done = true;
@@ -1820,12 +1820,12 @@ function _pollBatch(batchId, colorChecks, formulaChecks) {
         btnEjec.disabled = false;
         _actualizarContadorCola();
         statusGlb.innerHTML = `
-          <span style="color:#56d364; font-weight:700;">
+          <span style="color:var(--ok-txt); font-weight:700;">
             <i class="bi bi-check-circle-fill me-1"></i>Completado — ${ok} exitoso${ok!==1?"s":""}
           </span>
-          ${err ? `<span style="color:#ffa198; margin-left:.6rem;">· ${err} con error${err!==1?"es":""}</span>` : ""}
+          ${err ? `<span style="color:var(--err-txt); margin-left:.6rem;">· ${err} con error${err!==1?"es":""}</span>` : ""}
           <button onclick="document.getElementById('modal-reporte').style.display='flex'"
-                  style="background:#1f6feb; color:#fff; border:none; border-radius:8px;
+                  style="background:var(--info-bdr); color:#fff; border:none; border-radius:8px;
                          padding:.3rem .9rem; font-size:.8rem; cursor:pointer; margin-left:.8rem;
                          font-weight:700; display:inline-flex; align-items:center; gap:.35rem;">
             <i class="bi bi-file-earmark-bar-graph"></i> Ver reporte
@@ -1860,19 +1860,19 @@ function _mostrarReporte(data, batchId) {
     ["Fin",         (data.fecha_fin||"—").replace("T"," ")],
     ["Duración",    `${Math.round(tSeg/60*10)/10} min`],
   ].map(([k,v]) => `
-    <div style="background:#161b22; border:1px solid #21262d; border-radius:10px; padding:.7rem .9rem;">
-      <div style="font-size:.67rem; color:#8b949e; text-transform:uppercase; letter-spacing:.7px;">${k}</div>
-      <div style="font-size:.85rem; font-weight:700; color:#e6edf3; margin-top:.15rem; word-break:break-all;">${v||"—"}</div>
+    <div style="background:var(--card-bg); border:1px solid var(--divider); border-radius:10px; padding:.7rem .9rem;">
+      <div style="font-size:.67rem; color:var(--muted); text-transform:uppercase; letter-spacing:.7px;">${k}</div>
+      <div style="font-size:.85rem; font-weight:700; color:var(--text); margin-top:.15rem; word-break:break-all;">${v||"—"}</div>
     </div>`).join("");
 
   // KPIs
   document.getElementById("rep-kpis").innerHTML = [
-    ["Total procesados", items.length, "#e6edf3", "#161b22", "bi-layers"],
-    ["Exitosos",         nOk,          "#56d364", "#1a3a2a", "bi-check-circle-fill"],
-    ["Con errores",      nErr,         "#ffa198", "#3a1a1a", "bi-x-circle-fill"],
-    ["Tiempo total",     `${Math.round(tSeg/60*10)/10} min`, "#e3b341", "#2a2010", "bi-stopwatch"],
+    ["Total procesados", items.length, "var(--text)", "var(--card-bg)", "bi-layers"],
+    ["Exitosos",         nOk,          "var(--ok-txt)", "var(--ok-bg)", "bi-check-circle-fill"],
+    ["Con errores",      nErr,         "var(--err-txt)", "var(--err-bg)", "bi-x-circle-fill"],
+    ["Tiempo total",     `${Math.round(tSeg/60*10)/10} min`, "var(--warn-txt)", "var(--warn-bg)", "bi-stopwatch"],
   ].map(([l,v,c,bg,ic]) => `
-    <div style="background:${bg}; border:1px solid #21262d; border-radius:12px; padding:1rem 1.1rem; text-align:center;">
+    <div style="background:${bg}; border:1px solid var(--divider); border-radius:12px; padding:1rem 1.1rem; text-align:center;">
       <div style="font-size:.68rem; color:${c}; opacity:.75; text-transform:uppercase; letter-spacing:.8px; margin-bottom:.3rem;">
         <i class="bi ${ic} me-1"></i>${l}
       </div>
@@ -1896,50 +1896,50 @@ function _mostrarReporte(data, batchId) {
       const ok     = it.estado === "OK";
       const tipo   = it.tipo || "color";
       const bg     = ok ? "rgba(26,58,42,.6)" : "rgba(58,26,26,.6)";
-      const bdClr  = ok ? "#2ea043" : "#5a1f1f";
+      const bdClr  = ok ? "var(--ok-bdr)" : "var(--err-bg)";
       const logId  = `rlog-${idx}-${tipo}`;
       const errAmigable = !ok ? _traducirError(it.error) : "";
       const tipoBadge = tipo === "formula"
-        ? `<span style="background:#1e1030; border:1px solid #6e40c9; color:#bc8cff; border-radius:6px; padding:.1rem .45rem; font-size:.72rem; font-weight:700; white-space:nowrap;">
+        ? `<span style="background:var(--pur-bg); border:1px solid var(--pur-bdr); color:var(--blq-title); border-radius:6px; padding:.1rem .45rem; font-size:.72rem; font-weight:700; white-space:nowrap;">
              <i class="bi bi-flask me-1"></i>Fórmula</span>`
-        : `<span style="background:#0d1e2e; border:1px solid #1f6feb; color:#79c0ff; border-radius:6px; padding:.1rem .45rem; font-size:.72rem; font-weight:700; white-space:nowrap;">
+        : `<span style="background:var(--info-bg); border:1px solid var(--info-bdr); color:var(--info-txt); border-radius:6px; padding:.1rem .45rem; font-size:.72rem; font-weight:700; white-space:nowrap;">
              <i class="bi bi-palette me-1"></i>Color</span>`;
       const formulaCell = nFormula > 0
-        ? `<td style="padding:.6rem .8rem; background:${bg}; color:#bc8cff; font-size:.8rem; font-weight:700;">
+        ? `<td style="padding:.6rem .8rem; background:${bg}; color:var(--blq-title); font-size:.8rem; font-weight:700;">
              ${tipo === "formula" ? (it.formula_nueva||"—") : "—"}</td>`
         : "";
       return `
-      <tr class="rep-row-${tipo}" style="border-bottom:1px solid #21262d;">
-        <td style="padding:.6rem .8rem; color:#8b949e; text-align:center; background:${bg}; border-left:3px solid ${bdClr};">${idx+1}</td>
+      <tr class="rep-row-${tipo}" style="border-bottom:1px solid var(--divider);">
+        <td style="padding:.6rem .8rem; color:var(--muted); text-align:center; background:${bg}; border-left:3px solid ${bdClr};">${idx+1}</td>
         <td style="padding:.6rem .8rem; background:${bg};">${tipoBadge}</td>
         <td style="padding:.6rem .8rem; background:${bg};">
-          <span style="background:#21262d; border-radius:6px; padding:.15rem .5rem; font-weight:700; font-size:.82rem;">${it.color}</span>
+          <span style="background:var(--tag-neutral-bg); border-radius:6px; padding:.15rem .5rem; font-weight:700; font-size:.82rem;">${it.color}</span>
         </td>
-        <td style="padding:.6rem .8rem; color:#e6edf3; background:${bg}; font-weight:600;">${it.color_nombre||""}</td>
+        <td style="padding:.6rem .8rem; color:var(--text); background:${bg}; font-weight:600;">${it.color_nombre||""}</td>
         ${formulaCell}
         <td style="padding:.6rem .8rem; background:${bg};">
           ${ok
-            ? `<span style="display:inline-flex; align-items:center; gap:.35rem; background:#1a3a2a; border:1px solid #2ea043; border-radius:20px; padding:.2rem .65rem; font-size:.75rem; font-weight:700; color:#56d364;">
+            ? `<span style="display:inline-flex; align-items:center; gap:.35rem; background:var(--ok-bg); border:1px solid var(--ok-bdr); border-radius:20px; padding:.2rem .65rem; font-size:.75rem; font-weight:700; color:var(--ok-txt);">
                  <i class="bi bi-check-circle-fill"></i>Exitoso</span>`
-            : `<span style="display:inline-flex; align-items:center; gap:.35rem; background:#3a1a1a; border:1px solid #f85149; border-radius:20px; padding:.2rem .65rem; font-size:.75rem; font-weight:700; color:#ffa198;">
+            : `<span style="display:inline-flex; align-items:center; gap:.35rem; background:var(--err-bg); border:1px solid var(--err-bdr); border-radius:20px; padding:.2rem .65rem; font-size:.75rem; font-weight:700; color:var(--err-txt);">
                  <i class="bi bi-x-circle-fill"></i>Error</span>`}
         </td>
         <td style="padding:.6rem .8rem; background:${bg};">
           ${it.zfer_nuevo
-            ? `<a href="/zfer/${it.zfer_nuevo}" style="color:#58a6ff; font-weight:700; font-size:.82rem; text-decoration:none;">${it.zfer_nuevo}</a>`
-            : '<span style="color:#484f58;">—</span>'}
+            ? `<a href="/zfer/${it.zfer_nuevo}" style="color:var(--zfer-txt); font-weight:700; font-size:.82rem; text-decoration:none;">${it.zfer_nuevo}</a>`
+            : '<span style="color:var(--nav-meta);">—</span>'}
         </td>
         <td style="padding:.6rem .8rem; background:${bg};">
           ${ok
-            ? `<div style="color:#484f58; font-size:.75rem;">${it.zfor_nuevo||"—"}</div>`
-            : `<div style="font-size:.72rem; color:#c87067; max-width:200px; line-height:1.35;">${errAmigable}</div>
+            ? `<div style="color:var(--nav-meta); font-size:.75rem;">${it.zfor_nuevo||"—"}</div>`
+            : `<div style="font-size:.72rem; color:var(--err-txt); max-width:200px; line-height:1.35;">${errAmigable}</div>
                <button onclick="document.getElementById('${logId}').style.display=document.getElementById('${logId}').style.display==='none'?'block':'none'"
-                 style="font-size:.65rem; color:#484f58; background:transparent; border:none; cursor:pointer; padding:0; text-decoration:underline; margin-top:.2rem;">
+                 style="font-size:.65rem; color:var(--nav-meta); background:transparent; border:none; cursor:pointer; padding:0; text-decoration:underline; margin-top:.2rem;">
                  Ver detalle técnico
                </button>
-               <pre id="${logId}" style="display:none; margin:.3rem 0 0; background:#0d1117; border-radius:6px; padding:.5rem; font-size:.63rem; color:#6e7681; max-height:120px; overflow-y:auto; white-space:pre-wrap;">${(it.log||[]).join("\n")}</pre>`}
+               <pre id="${logId}" style="display:none; margin:.3rem 0 0; background:var(--bg); border-radius:6px; padding:.5rem; font-size:.63rem; color:var(--muted); max-height:120px; overflow-y:auto; white-space:pre-wrap;">${(it.log||[]).join("\n")}</pre>`}
         </td>
-        <td style="padding:.6rem .8rem; text-align:center; color:#8b949e; font-size:.78rem; background:${bg};">${it.duracion_seg||0}s</td>
+        <td style="padding:.6rem .8rem; text-align:center; color:var(--muted); font-size:.78rem; background:${bg};">${it.duracion_seg||0}s</td>
       </tr>`;
     }).join("");
   }
@@ -1956,7 +1956,7 @@ function _mostrarReporte(data, batchId) {
         b.style.background = "transparent";
         b.style.fontWeight = "600";
       });
-      btn.style.background = "#21262d";
+      btn.style.background = "var(--tag-neutral-bg)";
       btn.style.fontWeight = "800";
       const tab = btn.dataset.tab;
       const filtered = tab === "todos" ? items
@@ -1976,22 +1976,22 @@ function _mostrarReporte(data, batchId) {
         ? `Fórmula ${it.formula_nueva||""} — ${it.color} ${it.color_nombre}`
         : `Color ${it.color} — ${it.color_nombre}`;
       return `
-      <div style="background:#1c1016; border:1px solid #5a1f1f; border-radius:12px;
+      <div style="background:var(--pur-bg); border:1px solid var(--err-bdr); border-radius:12px;
                   padding:1.1rem 1.3rem; margin-bottom:.8rem;">
         <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.6rem;">
-          <i class="bi bi-exclamation-triangle-fill" style="color:#f85149; font-size:1.1rem;"></i>
-          <span style="font-weight:800; color:#ffa198; font-size:.9rem;">${titulo}</span>
+          <i class="bi bi-exclamation-triangle-fill" style="color:var(--err-bdr); font-size:1.1rem;"></i>
+          <span style="font-weight:800; color:var(--err-txt); font-size:.9rem;">${titulo}</span>
         </div>
-        <div style="background:#2a1010; border-radius:8px; padding:.7rem 1rem; margin-bottom:.7rem;">
-          <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:.6px; color:#f85149; margin-bottom:.3rem;">Qué pasó</div>
-          <div style="font-size:.85rem; color:#ffa198; line-height:1.5;">${_traducirError(it.error)}</div>
+        <div style="background:var(--err-bg); border-radius:8px; padding:.7rem 1rem; margin-bottom:.7rem;">
+          <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:.6px; color:var(--err-bdr); margin-bottom:.3rem;">Qué pasó</div>
+          <div style="font-size:.85rem; color:var(--err-txt); line-height:1.5;">${_traducirError(it.error)}</div>
         </div>
         <details>
-          <summary style="cursor:pointer; color:#484f58; font-size:.75rem; user-select:none;">
+          <summary style="cursor:pointer; color:var(--nav-meta); font-size:.75rem; user-select:none;">
             Detalle técnico (para soporte)
           </summary>
-          <pre style="margin:.5rem 0 0; background:#0d1117; border-radius:8px; padding:.7rem;
-               font-size:.68rem; color:#6e7681; max-height:220px; overflow-y:auto;
+          <pre style="margin:.5rem 0 0; background:var(--bg); border-radius:8px; padding:.7rem;
+               font-size:.68rem; color:var(--muted); max-height:220px; overflow-y:auto;
                white-space:pre-wrap;">${(it.log||[]).join("\n")||"(sin log)"}</pre>
         </details>
       </div>`;
@@ -2022,7 +2022,7 @@ function _renderFormulaCards(formulas, opts = {}) {
   if (!cont) return;
 
   if (!formulas.length) {
-    cont.innerHTML = `<div style="text-align:center; padding:2rem 0; color:#484f58;">
+    cont.innerHTML = `<div style="text-align:center; padding:2rem 0; color:var(--nav-meta);">
       <i class="bi bi-search" style="font-size:2rem; display:block; margin-bottom:.5rem;"></i>
       Sin fórmulas alternativas para los filtros indicados
     </div>`;
@@ -2037,15 +2037,15 @@ function _renderFormulaCards(formulas, opts = {}) {
     const idx = i + 1;
     // Badge dirección: si el ZFER base tiene 06 → cambia a SIN acero; si no → cambia a CON acero
     const _dirBadge = _tieneAcero
-      ? `<span style="background:#1c2e1c;border:1px solid #2ea043;color:#56d364;border-radius:20px;font-size:.68rem;font-weight:700;padding:.1rem .5rem;white-space:nowrap;">
+      ? `<span style="background:var(--ok-bg);border:1px solid var(--ok-bdr);color:var(--ok-txt);border-radius:20px;font-size:.68rem;font-weight:700;padding:.1rem .5rem;white-space:nowrap;">
            <i class="bi bi-arrow-right me-1"></i>Sin acero
          </span>`
-      : `<span style="background:#1e1030;border:1px solid #8957e5;color:#d2a8ff;border-radius:20px;font-size:.68rem;font-weight:700;padding:.1rem .5rem;white-space:nowrap;">
+      : `<span style="background:var(--pur-bg);border:1px solid var(--pur-bdr);color:var(--pur-txt);border-radius:20px;font-size:.68rem;font-weight:700;padding:.1rem .5rem;white-space:nowrap;">
            <i class="bi bi-arrow-right me-1"></i>Con acero
          </span>`;
     const filas = fa.colores.map(c => `
       <tr id="${p}fc-row-${idx}-${c.color}"
-          style="border-bottom:1px solid #161b22;"
+          style="border-bottom:1px solid var(--attr-row-border);"
           onmouseover="this.style.background='rgba(188,140,255,.06)'"
           onmouseout="this.style.background=''">
         <td style="padding:.5rem .8rem; text-align:center;">
@@ -2055,48 +2055,48 @@ function _renderFormulaCards(formulas, opts = {}) {
                  data-zpla="${c.zpla}"
                  data-zfer="${_ZFER}" data-franja="${_FRJ}"
                  data-pn-base="${_PN}" data-nivel="${_NIV}"
-                 style="width:15px; height:15px; accent-color:#bc8cff; cursor:pointer;">
+                 style="width:15px; height:15px; accent-color:var(--blq-title); cursor:pointer;">
         </td>
         <td style="padding:.5rem .8rem;"><span class="tag t-color">${c.color}</span></td>
         <td style="padding:.5rem .8rem; font-weight:600;">${c.color_nombre}</td>
         <td style="padding:.5rem .8rem; color:var(--muted); font-size:.82rem; font-weight:600;">
           ${(c.zpla_count > 1)
-            ? `<select style="background:#1c1a10;color:#e6edf3;border:1px solid #5a3e00;border-radius:5px;font-size:.75rem;font-weight:700;padding:.05rem .2rem;cursor:pointer;"
+            ? `<select style="background:var(--warn-bg);color:var(--text);border:1px solid var(--warn-bdr);border-radius:5px;font-size:.75rem;font-weight:700;padding:.05rem .2rem;cursor:pointer;"
                        onchange="this.closest('tr').querySelector('.${p}chk-fc').dataset.zpla=this.value">
                  ${c.zpla_list.map(zm=>`<option value="${zm}">${zm}</option>`).join('')}
                </select>`
             : c.zpla
           }
         </td>
-        <td style="padding:.5rem .8rem; color:#484f58; font-size:.78rem;">${c.differentials || '—'}</td>
+        <td style="padding:.5rem .8rem; color:var(--nav-meta); font-size:.78rem;">${c.differentials || '—'}</td>
         <td id="${p}fc-estado-${idx}-${c.color}" style="padding:.5rem .8rem;">
-          <span style="color:#484f58; font-size:.72rem;">
+          <span style="color:var(--nav-meta); font-size:.72rem;">
             <i class="bi bi-arrow-repeat paso-spinner"></i>
           </span>
         </td>
       </tr>`).join("");
 
     return `
-    <div class="card mb-3" style="border-color:#2d2150;">
+    <div class="card mb-3" style="border-color:var(--chip-prox-bdr);">
       <div class="card-header" style="cursor:pointer; user-select:none; display:flex; align-items:center; gap:.7rem;"
            onclick="_toggleFC(${idx},'${p}')">
-        <i class="bi bi-flask" style="color:#bc8cff;"></i>
-        <span style="font-weight:800; font-size:1rem; color:#bc8cff;">${fa.formula}</span>
-        <span class="tag" style="background:#1e1030; border:1px solid #6e40c9; color:#bc8cff; font-size:.72rem;">
+        <i class="bi bi-flask" style="color:var(--blq-title);"></i>
+        <span style="font-weight:800; font-size:1rem; color:var(--blq-title);">${fa.formula}</span>
+        <span class="tag" style="background:var(--pur-bg); border:1px solid var(--pur-bdr); color:var(--blq-title); font-size:.72rem;">
           ${fa.colores.length} color(es)
         </span>
         ${_dirBadge}
-        <span id="${p}fc-resumen-${idx}" style="font-size:.72rem; color:#484f58; margin-left:.3rem;"></span>
+        <span id="${p}fc-resumen-${idx}" style="font-size:.72rem; color:var(--nav-meta); margin-left:.3rem;"></span>
         <i class="bi bi-chevron-down ms-auto" id="${p}fc-chv-${idx}" style="color:var(--muted); transition:transform .2s;"></i>
       </div>
       <div id="${p}fc-body-${idx}" style="display:none;">
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse; font-size:.85rem;">
             <thead>
-              <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+              <tr style="color:var(--muted); font-size:.71rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid var(--divider);">
                 <th style="padding:.5rem .8rem; width:40px;">
                   <input type="checkbox" id="${p}chk-fc-all-${idx}" title="Seleccionar todos"
-                         style="width:15px; height:15px; accent-color:#bc8cff; cursor:pointer;"
+                         style="width:15px; height:15px; accent-color:var(--blq-title); cursor:pointer;"
                          onchange="_fcSelAll(${idx}, this.checked, '${p}')">
                 </th>
                 <th style="padding:.5rem .8rem;">Color</th>
@@ -2109,11 +2109,11 @@ function _renderFormulaCards(formulas, opts = {}) {
             <tbody>${filas}</tbody>
           </table>
         </div>
-        <div style="padding:.6rem 1rem; border-top:1px solid #21262d; display:flex; align-items:center; gap:.8rem; flex-wrap:wrap;">
+        <div style="padding:.6rem 1rem; border-top:1px solid var(--divider); display:flex; align-items:center; gap:.8rem; flex-wrap:wrap;">
           <span style="font-size:.8rem; color:var(--muted);">
-            <span id="${p}cnt-fc-${idx}">0</span> seleccionado(s) — usa el botón <b style="color:#bc8cff;">Enviar a Cola SAP</b> arriba para enviar
+            <span id="${p}cnt-fc-${idx}">0</span> seleccionado(s) — usa el botón <b style="color:var(--blq-title);">Enviar a Cola SAP</b> arriba para enviar
           </span>
-          <span id="${p}status-fc-${idx}" style="font-size:.78rem; color:#bc8cff;"></span>
+          <span id="${p}status-fc-${idx}" style="font-size:.78rem; color:var(--blq-title);"></span>
         </div>
       </div>
     </div>`;
@@ -2168,12 +2168,12 @@ async function _verificarDuplicadosFormulas(formulas, p = "", zfer_base = ZFER_B
         contadores[fidx].existe++;
         if (el) el.innerHTML = `
           <span style="display:inline-flex; align-items:center; gap:.3rem;
-                background:#1c1e10; border:1px solid #9e6a03; border-radius:6px;
-                padding:.15rem .5rem; font-size:.72rem; font-weight:700; color:#e3b341; white-space:nowrap;">
+                background:var(--ok-bg); border:1px solid var(--warn-bdr); border-radius:6px;
+                padding:.15rem .5rem; font-size:.72rem; font-weight:700; color:var(--warn-txt); white-space:nowrap;">
             <i class="bi bi-check2-circle"></i>Ya existe
           </span>
           <a href="/zfer/${res.zfer_existente}" target="_blank"
-             style="display:block; color:#58a6ff; font-size:.7rem; font-weight:700;
+             style="display:block; color:var(--zfer-txt); font-size:.7rem; font-weight:700;
                     text-decoration:none; margin-top:.15rem;">
             ${res.zfer_existente}
           </a>`;
@@ -2184,8 +2184,8 @@ async function _verificarDuplicadosFormulas(formulas, p = "", zfer_base = ZFER_B
         contadores[fidx].disponible++;
         if (el) el.innerHTML = `
           <span style="display:inline-flex; align-items:center; gap:.3rem;
-                background:#1a3a2a; border:1px solid #2ea043; border-radius:6px;
-                padding:.15rem .5rem; font-size:.72rem; font-weight:700; color:#56d364; white-space:nowrap;">
+                background:var(--ok-bg); border:1px solid var(--ok-bdr); border-radius:6px;
+                padding:.15rem .5rem; font-size:.72rem; font-weight:700; color:var(--ok-txt); white-space:nowrap;">
             <i class="bi bi-plus-circle"></i>Disponible
           </span>`;
       }
@@ -2197,8 +2197,8 @@ async function _verificarDuplicadosFormulas(formulas, p = "", zfer_base = ZFER_B
       if (el.querySelector(".paso-spinner")) {
         el.innerHTML = `
           <span style="display:inline-flex; align-items:center; gap:.3rem;
-                background:#1a3a2a; border:1px solid #2ea043; border-radius:6px;
-                padding:.15rem .5rem; font-size:.72rem; font-weight:700; color:#56d364; white-space:nowrap;">
+                background:var(--ok-bg); border:1px solid var(--ok-bdr); border-radius:6px;
+                padding:.15rem .5rem; font-size:.72rem; font-weight:700; color:var(--ok-txt); white-space:nowrap;">
             <i class="bi bi-plus-circle"></i>Disponible
           </span>`;
         const parts = el.id.replace(p, "").split("-"); // {p}fc-estado-{fidx}-...
@@ -2214,15 +2214,15 @@ async function _verificarDuplicadosFormulas(formulas, p = "", zfer_base = ZFER_B
       const resEl = document.getElementById(`${p}fc-resumen-${fidx}`);
       if (!resEl) return;
       const parts = [];
-      if (cnt.disponible > 0) parts.push(`<span style="color:#56d364;">${cnt.disponible} disponible${cnt.disponible!==1?"s":""}</span>`);
-      if (cnt.existe    > 0) parts.push(`<span style="color:#e3b341;">${cnt.existe} ya existe${cnt.existe!==1?"n":""}</span>`);
+      if (cnt.disponible > 0) parts.push(`<span style="color:var(--ok-txt);">${cnt.disponible} disponible${cnt.disponible!==1?"s":""}</span>`);
+      if (cnt.existe    > 0) parts.push(`<span style="color:var(--warn-txt);">${cnt.existe} ya existe${cnt.existe!==1?"n":""}</span>`);
       resEl.innerHTML = parts.join(" · ");
       _fcActualizarCnt(parseInt(fidx), p);
     });
   } catch(e) {
     document.querySelectorAll(p ? `[id^='${p}fc-estado-']` : `[id^='fc-estado-']`).forEach(el => {
       if (el.querySelector(".paso-spinner"))
-        el.innerHTML = `<span style="color:#484f58; font-size:.72rem;">—</span>`;
+        el.innerHTML = `<span style="color:var(--nav-meta); font-size:.72rem;">—</span>`;
     });
     console.warn("verificar duplicados fórmulas:", e);
   }
@@ -2323,27 +2323,27 @@ function _renderColoresDisponiblesInline(dCol, zferSim) {
 
   const chips = dCol.colores.map(c => `
     <label style="display:inline-flex; align-items:center; gap:.35rem; cursor:pointer;
-                  background:#1e1a0d; border:1px solid #9e6a03; border-radius:8px;
-                  padding:.3rem .65rem; font-size:.78rem; color:#e3b341; margin:.2rem;"
+                  background:var(--warn-bg); border:1px solid var(--warn-bdr); border-radius:8px;
+                  padding:.3rem .65rem; font-size:.78rem; color:var(--warn-txt); margin:.2rem;"
            title="ZPLA: ${c.zpla}">
       <input type="checkbox" class="col-queue-check"
              data-zfer="${zferSim}"
              data-color="${c.color_codigo}"
              data-color-nombre="${c.color_nombre}"
              data-zpla="${c.zpla}"
-             style="accent-color:#e3b341; width:13px; height:13px; cursor:pointer;"
+             style="accent-color:var(--warn-txt); width:13px; height:13px; cursor:pointer;"
              onchange="_colaContarSeleccionados()">
-      <span style="background:#2d2416; color:#e3b341; border:1px solid #9e6a03;
+      <span style="background:var(--warn-bg); color:var(--warn-txt); border:1px solid var(--warn-bdr);
                    border-radius:20px; font-size:.7rem; font-weight:700;
                    padding:.1rem .4rem;">${c.color_codigo}</span>
       ${c.color_nombre}
     </label>`).join("");
 
   return `
-    <div style="background:#0d1117; border:1px solid #9e6a03; border-radius:10px;
+    <div style="background:var(--bg); border:1px solid var(--warn-bdr); border-radius:10px;
                 padding:.65rem .9rem; margin-bottom:.75rem;">
       <div style="font-size:.68rem; text-transform:uppercase; letter-spacing:1px;
-                  color:#9e6a03; font-weight:700; margin-bottom:.45rem;">
+                  color:var(--warn-bdr); font-weight:700; margin-bottom:.45rem;">
         <i class="bi bi-plus-circle-fill me-1"></i>Colores disponibles — Enviar a Cola
       </div>
       <div style="display:flex; flex-wrap:wrap; gap:.1rem;">${chips}</div>
@@ -2359,7 +2359,7 @@ async function buscarFormulasAlt() {
   if (!cont) return;
 
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Buscando…'; }
-  cont.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#484f58;">
+  cont.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--nav-meta);">
     <i class="bi bi-arrow-repeat" style="font-size:1.5rem; display:block; margin-bottom:.4rem;"></i>Consultando…</div>`;
 
   const mkParams = (piece_type, formula_base) => new URLSearchParams({piece_type, formula_base, nivel, subproducto: sub}).toString();
@@ -2381,7 +2381,7 @@ async function buscarFormulasAlt() {
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; align-items:start;">
           <div>
             <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.7rem;
-                        padding:.4rem .7rem; background:#0d1117; border:1px solid #30363d;
+                        padding:.4rem .7rem; background:var(--bg); border:1px solid var(--border);
                         border-radius:10px; border-left:3px solid var(--accent2);">
               <i class="bi bi-arrow-left-right" style="color:var(--accent2);"></i>
               <span style="font-weight:800; color:var(--accent2); font-size:.85rem;">${ZFER_BASE}</span>
@@ -2391,10 +2391,10 @@ async function buscarFormulasAlt() {
           </div>
           <div>
             <div style="display:flex; align-items:center; gap:.5rem; margin-bottom:.7rem;
-                        padding:.4rem .7rem; background:#0d1117; border:1px solid #2d2150;
-                        border-radius:10px; border-left:3px solid #bc8cff;">
-              <i class="bi bi-symmetry-horizontal" style="color:#bc8cff;"></i>
-              <span style="font-weight:800; color:#bc8cff; font-size:.85rem;">${SIM_MATERIAL}</span>
+                        padding:.4rem .7rem; background:var(--bg); border:1px solid var(--chip-prox-bdr);
+                        border-radius:10px; border-left:3px solid var(--blq-title);">
+              <i class="bi bi-symmetry-horizontal" style="color:var(--blq-title);"></i>
+              <span style="font-weight:800; color:var(--blq-title); font-size:.85rem;">${SIM_MATERIAL}</span>
               <span style="color:var(--muted); font-size:.75rem;">· ${SIM_FORMULA} · Pieza ${SIM_PIECE_TYPE}</span>
             </div>
             ${coloresSimHTML}
@@ -2402,10 +2402,10 @@ async function buscarFormulasAlt() {
           </div>
         </div>`;
 
-      if (d1.error) document.getElementById("fc-main-cont").innerHTML = `<div style="color:#ffa198; padding:1rem;">Error: ${d1.error}</div>`;
+      if (d1.error) document.getElementById("fc-main-cont").innerHTML = `<div style="color:var(--err-txt); padding:1rem;">Error: ${d1.error}</div>`;
       else _renderFormulaCards(d1, { p: "", containerEl: document.getElementById("fc-main-cont") });
 
-      if (d2.error) document.getElementById("fc-sim-cont").innerHTML = `<div style="color:#ffa198; padding:1rem;">Error: ${d2.error}</div>`;
+      if (d2.error) document.getElementById("fc-sim-cont").innerHTML = `<div style="color:var(--err-txt); padding:1rem;">Error: ${d2.error}</div>`;
       else _renderFormulaCards(d2, { p: "s", zfer: SIM_MATERIAL, franja: SIM_FRANJA, pn_base: SIM_PN_BASE, nivel: SIM_NIVEL, piece_type: SIM_PIECE_TYPE, containerEl: document.getElementById("fc-sim-cont") });
 
     } else {
@@ -2416,7 +2416,7 @@ async function buscarFormulasAlt() {
       _renderFormulaCards(data);
     }
   } catch(e) {
-    if (cont) cont.innerHTML = `<div style="color:#ffa198; padding:1rem;">Error: ${e.message}</div>`;
+    if (cont) cont.innerHTML = `<div style="color:var(--err-txt); padding:1rem;">Error: ${e.message}</div>`;
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-search"></i> Buscar fórmulas'; }
   }
@@ -2538,40 +2538,40 @@ buscarFormulasAlt();
 <!-- ── Modal editar URL + Simetría ──────────────────────────────────────── -->
 <div id="modal-ruta" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.65);
      z-index:9000; align-items:center; justify-content:center;">
-  <div style="background:#161b22; border:1px solid #30363d; border-radius:14px;
+  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:14px;
               padding:1.5rem 1.8rem; max-width:560px; width:90%; box-shadow:0 8px 40px rgba(0,0,0,.6);">
-    <div style="font-size:1rem; font-weight:800; color:#e6edf3; margin-bottom:.8rem;">
-      <i class="bi bi-link-45deg me-2" style="color:#e3b341;"></i>URL y Simetría — {{ material }}
+    <div style="font-size:1rem; font-weight:800; color:var(--text); margin-bottom:.8rem;">
+      <i class="bi bi-link-45deg me-2" style="color:var(--warn-txt);"></i>URL y Simetría — {{ material }}
     </div>
 
     <!-- URL -->
-    <div style="font-size:.73rem; color:#8b949e; margin-bottom:.35rem; text-transform:uppercase;
+    <div style="font-size:.73rem; color:var(--muted); margin-bottom:.35rem; text-transform:uppercase;
                 letter-spacing:.6px;">URL</div>
     <div style="display:flex; gap:.4rem; margin-bottom:.6rem;">
       <input id="ruta-input" type="text" placeholder="https://… ó \\servidor\carpeta"
-             style="flex:1; background:#0d1117; border:1px solid #30363d; border-radius:8px;
-                    color:#e6edf3; padding:.5rem .8rem; font-size:.8rem; font-family:monospace;">
+             style="flex:1; background:var(--bg); border:1px solid var(--border); border-radius:8px;
+                    color:var(--text); padding:.5rem .8rem; font-size:.8rem; font-family:monospace;">
     </div>
     <input id="ruta-desc-input" type="text" placeholder="Descripción opcional (ej: Planos técnicos AUDI Q4)"
-           style="width:100%; background:#0d1117; border:1px solid #30363d; border-radius:8px;
-                  color:#e6edf3; padding:.45rem .8rem; font-size:.76rem; margin-bottom:1rem;
+           style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px;
+                  color:var(--text); padding:.45rem .8rem; font-size:.76rem; margin-bottom:1rem;
                   box-sizing:border-box;">
 
     <!-- Simetría -->
-    <div style="background:#0d1117; border:1px solid #2d2150; border-radius:8px;
+    <div style="background:var(--bg); border:1px solid var(--chip-prox-bdr); border-radius:8px;
                 padding:.75rem 1rem; margin-bottom:.9rem;">
-      <div style="font-size:.73rem; color:#8b949e; text-transform:uppercase;
+      <div style="font-size:.73rem; color:var(--muted); text-transform:uppercase;
                   letter-spacing:.6px; margin-bottom:.5rem;">
-        <i class="bi bi-symmetry-horizontal me-1" style="color:#bc8cff;"></i>Simetría
+        <i class="bi bi-symmetry-horizontal me-1" style="color:var(--blq-title);"></i>Simetría
       </div>
-      <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.82rem; color:#e6edf3;">
-        <input type="checkbox" id="sim-modal-check" style="accent-color:#bc8cff; width:14px; height:14px;">
+      <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.82rem; color:var(--text);">
+        <input type="checkbox" id="sim-modal-check" style="accent-color:var(--blq-title); width:14px; height:14px;">
         Esta pieza tiene simetría (par izquierdo/derecho)
       </label>
       <div id="sim-modal-encontrado" style="display:none; margin-top:.6rem; font-size:.78rem;
-           color:#bc8cff; background:#1a102e; border-radius:6px; padding:.4rem .7rem;"></div>
+           color:var(--blq-title); background:var(--chip-prox-bg); border-radius:6px; padding:.4rem .7rem;"></div>
       <button id="sim-modal-buscar" onclick="_simModalBuscar()"
-              style="margin-top:.5rem; background:#2d2150; color:#bc8cff; border:1px solid #6e40c9;
+              style="margin-top:.5rem; background:var(--chip-prox-bg); color:var(--blq-title); border:1px solid var(--pur-bdr);
                      border-radius:7px; padding:.3rem .75rem; font-size:.75rem; cursor:pointer;
                      display:flex; align-items:center; gap:.35rem;">
         <i class="bi bi-search"></i>Buscar pieza simétrica
@@ -2580,10 +2580,10 @@ buscarFormulasAlt();
 
     <div style="display:flex; gap:.6rem; justify-content:flex-end;">
       <button onclick="document.getElementById('modal-ruta').style.display='none'"
-              style="background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:8px;
+              style="background:var(--tag-neutral-bg); color:var(--muted); border:1px solid var(--border); border-radius:8px;
                      padding:.38rem 1rem; font-size:.8rem; cursor:pointer;">Cancelar</button>
       <button onclick="_rutaGuardar()"
-              style="background:#9e6a03; color:#fff; border:none; border-radius:8px;
+              style="background:var(--warn-bdr); color:#fff; border:none; border-radius:8px;
                      padding:.38rem 1.1rem; font-size:.8rem; font-weight:700; cursor:pointer;">
         <i class="bi bi-floppy me-1"></i>Guardar</button>
     </div>
@@ -2615,11 +2615,11 @@ buscarFormulasAlt();
     if (d.ruta) {
       texto.textContent = d.ruta;
       texto.title = d.descripcion ? `${d.ruta}\n${d.descripcion}` : d.ruta;
-      texto.style.color = "#e6edf3";
+      texto.style.color = "var(--text)";
       if (btnAbrir) btnAbrir.style.display = "flex";
     } else {
       texto.textContent = "Sin URL — clic en ✏";
-      texto.style.color = "#484f58";
+      texto.style.color = "var(--nav-meta)";
       if (btnAbrir) btnAbrir.style.display = "none";
     }
   };
@@ -2630,7 +2630,7 @@ buscarFormulasAlt();
     if (!chk || !chip) return;
     chk.checked = _simActual.tiene_simetria;
     if (_simActual.tiene_simetria && _simActual.zfer_simetrico) {
-      chip.innerHTML = `<i class="bi bi-symmetry-horizontal"></i>&nbsp;<a href="/zfer/${_simActual.zfer_simetrico}" style="color:#bc8cff; font-weight:700;">${_simActual.zfer_simetrico}</a>`;
+      chip.innerHTML = `<i class="bi bi-symmetry-horizontal"></i>&nbsp;<a href="/zfer/${_simActual.zfer_simetrico}" style="color:var(--blq-title); font-weight:700;">${_simActual.zfer_simetrico}</a>`;
       chip.style.display = "inline-flex";
     } else {
       chip.style.display = "none";
@@ -2695,7 +2695,7 @@ buscarFormulasAlt();
       // Mostrar toast informativo
       const toast = document.createElement("div");
       toast.textContent = "Esta pieza no tiene simétrico configurado. Puedes asignarlo en el botón de Ruta 3DM.";
-      toast.style.cssText = "position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:#21262d;border:1px solid #f0883e;color:#f0883e;padding:.6rem 1.2rem;border-radius:8px;font-size:.82rem;z-index:9999;box-shadow:0 4px 16px #0008;max-width:380px;text-align:center;";
+      toast.style.cssText = "position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--tag-neutral-bg);border:1px solid var(--warn-bdr);color:var(--warn-txt);padding:.6rem 1.2rem;border-radius:8px;font-size:.82rem;z-index:9999;box-shadow:0 4px 16px #0008;max-width:380px;text-align:center;";
       document.body.appendChild(toast);
       setTimeout(() => toast.remove(), 4000);
     }
@@ -2727,14 +2727,14 @@ buscarFormulasAlt();
       const d = await r.json();
       if (d.encontrados && d.encontrados.length > 0) {
         const z = d.encontrados[0];
-        me.innerHTML = `Pieza simétrica encontrada: <strong style="color:#bc8cff;">${z.zfer}</strong> — ${z.desc || ''}`;
+        me.innerHTML = `Pieza simétrica encontrada: <strong style="color:var(--blq-title);">${z.zfer}</strong> — ${z.desc || ''}`;
         me.style.display = "block";
         document.getElementById("sim-modal-check").checked = true;
         // Store temporarily
         btn._found = { zfer: z.zfer, pieza_contraria: z.pieza_contraria || "" };
       } else {
         me.innerHTML = "No se encontró pieza simétrica en la base de datos.";
-        me.style.color = "#8b949e";
+        me.style.color = "var(--muted)";
         me.style.display = "block";
         btn._found = null;
       }
@@ -2757,8 +2757,8 @@ buscarFormulasAlt();
     const ruta = document.getElementById("ruta-input").value.trim();
     const desc = document.getElementById("ruta-desc-input").value.trim();
     const msg  = document.getElementById("ruta-modal-msg");
-    if (!ruta) { msg.style.color="#ffa198"; msg.textContent="La URL no puede estar vacía."; return; }
-    msg.style.color="#8b949e"; msg.textContent="Guardando…";
+    if (!ruta) { msg.style.color="var(--err-txt)"; msg.textContent="La URL no puede estar vacía."; return; }
+    msg.style.color="var(--muted)"; msg.textContent="Guardando…";
 
     const mc = document.getElementById("sim-modal-check");
     const tiene_simetria = mc ? mc.checked : _simActual.tiene_simetria;
@@ -2778,13 +2778,13 @@ buscarFormulasAlt();
         _simActual  = { tiene_simetria, zfer_simetrico, pieza_contraria };
         _rutaRenderizar({ ruta, descripcion: desc });
         _simetriaRenderizar();
-        msg.style.color="#56d364"; msg.textContent="✓ Guardado";
+        msg.style.color="var(--ok-txt)"; msg.textContent="✓ Guardado";
         setTimeout(() => document.getElementById("modal-ruta").style.display="none", 800);
       } else {
-        msg.style.color="#ffa198"; msg.textContent = d.error || "Error al guardar";
+        msg.style.color="var(--err-txt)"; msg.textContent = d.error || "Error al guardar";
       }
     } catch(e) {
-      msg.style.color="#ffa198"; msg.textContent = "Error de red: " + e.message;
+      msg.style.color="var(--err-txt)"; msg.textContent = "Error de red: " + e.message;
     }
   };
 })();

@@ -3,59 +3,66 @@
 
 {% block content %}
 <style>
-  .bloque-card { background:var(--card-bg); border:1px solid var(--border); border-radius:14px; margin-bottom:1.5rem; overflow:hidden; }
+  .bloque-card { background:var(--card-bg); border:1px solid var(--border); border-radius:14px; margin-bottom:1.5rem; overflow:hidden; transition:background .2s,border-color .2s; }
   .bloque-header { padding:.85rem 1.4rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.6rem; border-bottom:1px solid var(--border); }
-  .bloque-badge-pend { background:#1c2340; color:#79c0ff; border:1px solid #1f6feb; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
-  .bloque-badge-ok   { background:#1c2e1c; color:#56d364; border:1px solid #2ea043; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
-  .bloque-badge-err  { background:#2d1f1f; color:#ffa198; border:1px solid #f85149; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
-  .bloque-badge-eje  { background:#2d2416; color:#e3b341; border:1px solid #9e6a03; border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
+  .bloque-badge-pend { background:var(--info-bg); color:var(--info-txt); border:1px solid var(--info-bdr); border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
+  .bloque-badge-ok   { background:var(--ok-bg);   color:var(--ok-txt);   border:1px solid var(--ok-bdr);   border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
+  .bloque-badge-err  { background:var(--err-bg);  color:var(--err-txt);  border:1px solid var(--err-bdr);  border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
+  .bloque-badge-eje  { background:var(--warn-bg); color:var(--warn-txt); border:1px solid var(--warn-bdr); border-radius:20px; font-size:.75rem; font-weight:700; padding:.2rem .7rem; }
 
-  .item-row { display:flex; align-items:center; gap:.7rem; padding:.55rem 1.4rem; border-bottom:1px solid #1c2128; font-size:.85rem; flex-wrap:wrap; }
+  .item-row { display:flex; align-items:center; gap:.7rem; padding:.55rem 1.4rem; border-bottom:1px solid var(--attr-row-border); font-size:.85rem; flex-wrap:wrap; }
   .item-row:last-child { border-bottom:none; }
   .item-zfer  { font-weight:700; color:var(--accent); min-width:100px; font-size:.82rem; }
-  .item-tipo  { background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:20px; font-size:.7rem; font-weight:600; padding:.1rem .5rem; white-space:nowrap; }
-  .item-color { background:#1c2340; color:#79c0ff; border:1px solid #1f6feb; border-radius:20px; font-size:.7rem; font-weight:600; padding:.1rem .5rem; white-space:nowrap; }
-  .item-estado-pend { color:#8b949e; font-size:.72rem; }
-  .item-estado-ok   { color:#56d364; font-size:.72rem; }
-  .item-estado-err  { color:#ffa198; font-size:.72rem; }
+  .item-tipo  { background:var(--tag-neutral-bg); color:var(--tag-neutral-txt); border:1px solid var(--tag-neutral-bdr); border-radius:20px; font-size:.7rem; font-weight:600; padding:.1rem .5rem; white-space:nowrap; }
+  .item-color { background:var(--info-bg); color:var(--info-txt); border:1px solid var(--info-bdr); border-radius:20px; font-size:.7rem; font-weight:600; padding:.1rem .5rem; white-space:nowrap; }
+  .item-estado-pend { color:var(--muted); font-size:.72rem; }
+  .item-estado-ok   { color:var(--ok-txt); font-size:.72rem; }
+  .item-estado-err  { color:var(--err-txt); font-size:.72rem; }
 
-  .hora-input { background:#21262d; border:1px solid #30363d; color:var(--text); border-radius:7px; padding:.25rem .6rem; font-size:.82rem; width:145px; outline:none; }
+  .hora-input { background:var(--input-bg); border:1px solid var(--input-bdr); color:var(--text); border-radius:7px; padding:.25rem .6rem; font-size:.82rem; width:145px; outline:none; transition:background .2s,border-color .15s; }
   .hora-input:focus { border-color:var(--accent); }
 
-  .btn-sm-purple { background:#2d1f3d; border:1px solid #8957e5; color:#d2a8ff; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; transition:background .15s; white-space:nowrap; }
-  .btn-sm-purple:hover { background:#3d2557; }
-  .btn-sm-go  { background:#1c2e1c; border:1px solid #2ea043; color:#56d364; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; white-space:nowrap; }
-  .btn-sm-go:hover { background:#243624; }
-  .btn-sm-red { background:#2d1f1f; border:1px solid #f85149; color:#ffa198; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; white-space:nowrap; }
-  .btn-sm-red:hover { background:#3d2626; }
-  .btn-sm-gray { background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; white-space:nowrap; }
-  .btn-sm-gray:hover { background:#2d333b; }
+  .btn-sm-purple { background:var(--btn-pur-bg); border:1px solid var(--btn-pur-bdr); color:var(--btn-pur-txt); border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; transition:background .15s; white-space:nowrap; }
+  .btn-sm-purple:hover { background:var(--btn-pur-hov); }
+  .btn-sm-go  { background:var(--btn-go-bg);  border:1px solid var(--btn-go-bdr);  color:var(--btn-go-txt);  border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; white-space:nowrap; transition:background .15s; }
+  .btn-sm-go:hover { background:var(--btn-go-hov); }
+  .btn-sm-red { background:var(--btn-red-bg); border:1px solid var(--btn-red-bdr); color:var(--btn-red-txt); border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; white-space:nowrap; transition:background .15s; }
+  .btn-sm-red:hover { background:var(--btn-red-hov); }
+  .btn-sm-gray { background:var(--btn-neu-bg); border:1px solid var(--btn-neu-bdr); color:var(--btn-neu-txt); border-radius:7px; padding:.3rem .8rem; font-size:.78rem; cursor:pointer; white-space:nowrap; transition:background .15s; }
+  .btn-sm-gray:hover { background:var(--btn-neu-hov); }
 
-  .timer-toggle { display:inline-flex; align-items:center; gap:.4rem; cursor:pointer; font-size:.78rem; }
+  .timer-toggle { display:inline-flex; align-items:center; gap:.4rem; cursor:pointer; font-size:.78rem; color:var(--text); }
   .timer-dot  { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
-  .timer-on   { background:#56d364; box-shadow:0 0 6px #56d364; }
-  .timer-off  { background:#484f58; }
+  .timer-on   { background:var(--timer-on); box-shadow:0 0 6px var(--timer-on); }
+  .timer-off  { background:var(--timer-off); }
 
   .paso-spinner { display:inline-block; border:2px solid rgba(0,194,255,.25); border-top-color:var(--accent); border-radius:50%; animation:_spin .75s linear infinite; }
   @keyframes _spin { to { transform:rotate(360deg); } }
 
-  .empty-state { text-align:center; padding:4rem 2rem; color:#484f58; }
+  .empty-state { text-align:center; padding:4rem 2rem; color:var(--muted); }
   .empty-state i { font-size:3rem; display:block; margin-bottom:.75rem; }
 
+  /* Tabs */
+  .cola-tab { border-radius:8px; padding:.35rem 1rem; font-size:.83rem; font-weight:600; cursor:pointer; transition:background .15s,color .15s,border-color .15s; border-width:1px; border-style:solid; }
+  .cola-tab.active { background:var(--tab-act-bg); color:var(--tab-act-txt); border-color:var(--tab-act-bdr); font-weight:700; }
+  .cola-tab.active-hist { background:var(--tab-his-bg); color:var(--tab-his-txt); border-color:var(--tab-his-bdr); font-weight:700; }
+  .cola-tab.inactive { background:var(--tab-ina-bg); color:var(--tab-ina-txt); border-color:var(--tab-ina-bdr); }
+
   /* Modal reporte */
-  .rep-kpi { background:#161b22; border:1px solid #21262d; border-radius:12px; padding:.9rem 1.1rem; text-align:center; }
+  .rep-kpi { background:var(--rep-kpi-bg); border:1px solid var(--rep-kpi-bdr); border-radius:12px; padding:.9rem 1.1rem; text-align:center; }
   .rep-kpi-num { font-size:1.9rem; font-weight:900; line-height:1.1; }
-  .rep-kpi-lbl { font-size:.72rem; color:#8b949e; text-transform:uppercase; letter-spacing:.6px; margin-top:.2rem; }
-  .rep-tab-btn { background:transparent; border:1px solid #30363d; color:#8b949e; border-radius:8px; padding:.3rem .9rem; font-size:.8rem; font-weight:600; cursor:pointer; transition:.12s; }
-  .rep-tab-btn.active { background:#21262d; color:#e6edf3; border-color:#8957e5; font-weight:800; }
-  .rep-row { display:grid; grid-template-columns:28px 90px 140px 1fr 80px 70px 90px 110px 1fr; gap:.5rem; align-items:center; padding:.6rem .9rem; border-bottom:1px solid #1c2128; font-size:.82rem; }
+  .rep-kpi-lbl { font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; margin-top:.2rem; }
+  .rep-tab-btn { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:8px; padding:.3rem .9rem; font-size:.8rem; font-weight:600; cursor:pointer; transition:.12s; }
+  .rep-tab-btn.active { background:var(--rep-active-bg); color:var(--rep-active-txt); border-color:var(--rep-active-bdr); font-weight:800; }
+  .rep-row { display:grid; grid-template-columns:28px 90px 140px 1fr 80px 70px 90px 110px 1fr; gap:.5rem; align-items:center; padding:.6rem .9rem; border-bottom:1px solid var(--attr-row-border); font-size:.82rem; }
   .rep-row:last-child { border-bottom:none; }
-  .rep-thead { background:#161b22; border-radius:10px 10px 0 0; }
-  .rep-thead .rep-row { color:#8b949e; font-size:.7rem; text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
-  .tipo-color { background:#0d1e2e; color:#79c0ff; border:1px solid #1f6feb; border-radius:20px; font-size:.68rem; font-weight:700; padding:.1rem .5rem; white-space:nowrap; }
-  .tipo-formula { background:#1e1030; color:#d2a8ff; border:1px solid #8957e5; border-radius:20px; font-size:.68rem; font-weight:700; padding:.1rem .5rem; white-space:nowrap; }
-  .rep-tag-ok  { background:#0d2818; color:#56d364; border:1px solid #2ea043; border-radius:20px; font-size:.72rem; font-weight:700; padding:.1rem .5rem; }
-  .rep-tag-err { background:#2d0e0e; color:#ffa198; border:1px solid #f85149; border-radius:20px; font-size:.72rem; font-weight:700; padding:.1rem .5rem; }
+  .rep-thead { background:var(--rep-thead-bg); border-radius:10px 10px 0 0; }
+  .rep-thead .rep-row { color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+  .tipo-color   { background:var(--info-bg); color:var(--info-txt); border:1px solid var(--info-bdr); border-radius:20px; font-size:.68rem; font-weight:700; padding:.1rem .5rem; white-space:nowrap; }
+  .tipo-formula { background:var(--pur-bg);  color:var(--pur-txt);  border:1px solid var(--pur-bdr);  border-radius:20px; font-size:.68rem; font-weight:700; padding:.1rem .5rem; white-space:nowrap; }
+  .rep-tag-ok   { background:var(--ok-bg);  color:var(--ok-txt);  border:1px solid var(--ok-bdr);  border-radius:20px; font-size:.72rem; font-weight:700; padding:.1rem .5rem; }
+  .rep-tag-err  { background:var(--err-bg); color:var(--err-txt); border:1px solid var(--err-bdr); border-radius:20px; font-size:.72rem; font-weight:700; padding:.1rem .5rem; }
+  .rep-tag-adv  { background:var(--warn-bg);color:var(--warn-txt);border:1px solid var(--warn-bdr);border-radius:20px;font-size:.72rem;font-weight:700;padding:.1rem .5rem; }
 </style>
 
 <!-- ── Header ──────────────────────────────────────────────────────────── -->
@@ -69,25 +76,21 @@
       Homologaciones programadas · se ejecutan automáticamente a la hora del bloque
     </div>
   </div>
-  <div id="prox-bloque-chip" style="background:#1a102e; border:1px solid #2d2150; border-radius:10px;
-       padding:.45rem 1rem; font-size:.82rem; color:#8b949e; display:flex; align-items:center; gap:.5rem;">
+  <div id="prox-bloque-chip" style="background:var(--chip-prox-bg); border:1px solid var(--chip-prox-bdr); border-radius:10px;
+       padding:.45rem 1rem; font-size:.82rem; color:var(--muted); display:flex; align-items:center; gap:.5rem; transition:background .2s,border-color .2s;">
     <span class="paso-spinner" style="width:10px;height:10px;border-width:2px;"></span> Cargando…
   </div>
-  <button onclick="_colaRefrescar()" style="background:#21262d; border:1px solid #30363d; color:var(--muted); border-radius:8px; padding:.4rem .85rem; font-size:.82rem; cursor:pointer;" title="Refrescar">
+  <button onclick="_colaRefrescar()" style="background:var(--btn-neu-bg); border:1px solid var(--btn-neu-bdr); color:var(--muted); border-radius:8px; padding:.4rem .85rem; font-size:.82rem; cursor:pointer; transition:background .15s;" title="Refrescar">
     <i class="bi bi-arrow-clockwise"></i>
   </button>
 </div>
 
 <!-- ── Tabs ──────────────────────────────────────────────────────────────── -->
-<div style="display:flex; gap:.4rem; margin-bottom:1.2rem; border-bottom:1px solid #21262d; padding-bottom:.6rem;">
-  <button id="tab-cola" onclick="_tabSwitch('cola')"
-          style="background:#1c2340; color:#79c0ff; border:1px solid #1f6feb; border-radius:8px;
-                 padding:.35rem 1rem; font-size:.83rem; font-weight:700; cursor:pointer;">
+<div style="display:flex; gap:.4rem; margin-bottom:1.2rem; border-bottom:1px solid var(--divider); padding-bottom:.6rem;">
+  <button id="tab-cola" onclick="_tabSwitch('cola')" class="cola-tab active">
     <i class="bi bi-clock-history me-1"></i>Cola pendiente
   </button>
-  <button id="tab-hist" onclick="_tabSwitch('hist')"
-          style="background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:8px;
-                 padding:.35rem 1rem; font-size:.83rem; font-weight:600; cursor:pointer;">
+  <button id="tab-hist" onclick="_tabSwitch('hist')" class="cola-tab inactive">
     <i class="bi bi-journal-check me-1"></i>Historial de ejecuciones
   </button>
 </div>
@@ -129,13 +132,13 @@ async function _cargarProxBloque() {
       const timer = d.timer_activo
         ? `<span class="timer-dot timer-on" title="Timer activo"></span>`
         : `<span class="timer-dot timer-off" title="Timer apagado"></span>`;
-      const yaPaso = d.ya_paso ? `<span style="color:#e3b341;font-size:.72rem;"> (hora pasada)</span>` : '';
-      chip.innerHTML = `${timer} <b style="color:#bc8cff;">Bloque ${d.bloque_num}</b>&nbsp;·&nbsp;${d.hora_prog}${yaPaso}&nbsp;·&nbsp;<span style="color:#79c0ff;">${d.total_pendientes||0} pendientes</span>`;
+      const yaPaso = d.ya_paso ? `<span style="color:var(--warn-txt);font-size:.72rem;"> (hora pasada)</span>` : '';
+      chip.innerHTML = `${timer} <b style="color:var(--blq-title);">Bloque ${d.bloque_num}</b>&nbsp;·&nbsp;${d.hora_prog}${yaPaso}&nbsp;·&nbsp;<span style="color:var(--info-txt);">${d.total_pendientes||0} pendientes</span>`;
     } else {
-      chip.innerHTML = `<i class="bi bi-inbox" style="color:#484f58;"></i> <span style="color:#484f58;">Sin bloques pendientes</span>`;
+      chip.innerHTML = `<i class="bi bi-inbox" style="color:var(--muted);"></i> <span style="color:var(--muted);">Sin bloques pendientes</span>`;
     }
   } catch(e) {
-    document.getElementById('prox-bloque-chip').innerHTML = '<span style="color:#f85149;">Error</span>';
+    document.getElementById('prox-bloque-chip').innerHTML = '<span style="color:var(--err-txt);">Error</span>';
   }
 }
 
@@ -147,7 +150,7 @@ async function _cargarBloques() {
       cont.innerHTML = `<div class="empty-state">
         <i class="bi bi-inbox"></i>
         <div style="font-size:1rem;">No hay bloques en cola</div>
-        <div style="font-size:.82rem; margin-top:.4rem; color:#484f58;">Agrega colores o fórmulas desde Combinaciones</div>
+        <div style="font-size:.82rem; margin-top:.4rem; color:var(--muted);">Agrega colores o fórmulas desde Combinaciones</div>
       </div>`;
       return;
     }
@@ -163,7 +166,7 @@ async function _cargarBloques() {
 
       const itemsHtml  = (b.items||[]).map(it => _itemRow(it)).join('');
       const itemsEmpty = (!b.items || b.items.length === 0)
-        ? `<div style="padding:1rem 1.4rem; color:#484f58; font-size:.85rem;">Sin ítems en este bloque</div>` : '';
+        ? `<div style="padding:1rem 1.4rem; color:var(--muted); font-size:.85rem;">Sin ítems en este bloque</div>` : '';
 
       let accionesHtml = '';
       if (b.estado === 'PENDIENTE') {
@@ -172,14 +175,14 @@ async function _cargarBloques() {
             <input type="datetime-local" class="hora-input" id="hora-inp-${b.id}"
                    value="${_toDatetimeLocal(b.hora_prog)}"
                    onchange="_cambiarHora(${b.id}, this.value)">
-            <span style="font-size:.72rem; color:#484f58;">hora prog.</span>
+            <span style="font-size:.72rem; color:var(--muted);">hora prog.</span>
             <button class="btn-sm-go"  onclick="_ejecutarBloque(${b.id})"><i class="bi bi-play-fill me-1"></i>Ejecutar ahora</button>
             <button class="btn-sm-red" onclick="_borrarBloque(${b.id})"><i class="bi bi-trash3 me-1"></i>Borrar</button>
           </div>`;
       } else if (b.estado === 'COMPLETADO') {
         const okBadge  = b.ok_count    ? `<span class="bloque-badge-ok" style="font-size:.72rem;">✓ ${b.ok_count} OK</span>` : '';
         const errBadge = b.error_count ? `<span class="bloque-badge-err" style="font-size:.72rem;">✗ ${b.error_count} errores</span>` : '';
-        const ejTime   = b.ejecutado_el ? `<span style="font-size:.76rem;color:#484f58;">Ejecutado: ${new Date(b.ejecutado_el).toLocaleString('es-CO')}</span>` : '';
+        const ejTime   = b.ejecutado_el ? `<span style="font-size:.76rem;color:var(--muted);">Ejecutado: ${new Date(b.ejecutado_el).toLocaleString('es-CO')}</span>` : '';
         accionesHtml = `
           <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">
             ${ejTime} ${okBadge} ${errBadge}
@@ -190,7 +193,7 @@ async function _cargarBloques() {
       } else { /* EJECUTANDO */
         accionesHtml = `
           <div style="display:flex; align-items:center; gap:.6rem;">
-            <span style="font-size:.78rem; color:#e3b341; display:flex; align-items:center; gap:.4rem;">
+            <span style="font-size:.78rem; color:var(--warn-txt); display:flex; align-items:center; gap:.4rem;">
               <span class="paso-spinner" style="width:12px;height:12px;border-width:2px;"></span> Ejecutando…
             </span>
             <button class="btn-sm-red" onclick="_resetearBloque(${b.id})"><i class="bi bi-arrow-counterclockwise me-1"></i>Resetear</button>
@@ -201,12 +204,12 @@ async function _cargarBloques() {
       <div class="bloque-card" id="bloque-card-${b.id}">
         <div class="bloque-header">
           <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;">
-            <span style="font-size:1rem; font-weight:800; color:#bc8cff;">
+            <span style="font-size:1rem; font-weight:800; color:var(--blq-title);">
               <i class="bi bi-layers-fill me-1"></i>Bloque ${b.bloque_num}
             </span>
             ${estadoBadge} ${timerLabel}
             <span style="font-size:.8rem; color:var(--muted);"><i class="bi bi-clock me-1"></i>${hora}</span>
-            <span style="font-size:.78rem; color:#79c0ff; background:#1c2340; border:1px solid #1f6feb; border-radius:20px; padding:.1rem .55rem;">${b.total_items||0} ítems</span>
+            <span style="font-size:.78rem; color:var(--info-txt); background:var(--info-bg); border:1px solid var(--info-bdr); border-radius:20px; padding:.1rem .55rem;">${b.total_items||0} ítems</span>
           </div>
           <div>${accionesHtml}</div>
         </div>
@@ -215,7 +218,7 @@ async function _cargarBloques() {
     }
     cont.innerHTML = html;
   } catch(e) {
-    cont.innerHTML = `<div style="color:#ffa198; padding:1rem;">Error cargando bloques: ${e.message}</div>`;
+    cont.innerHTML = `<div style="color:var(--err-txt); padding:1rem;">Error cargando bloques: ${e.message}</div>`;
   }
 }
 
@@ -223,13 +226,13 @@ function _itemRow(it) {
   const tipoLabel = it.tipo === 'color' ? 'Color' : 'Fórmula';
   const detalle = it.tipo === 'color'
     ? `<span class="item-color">${it.color_nombre||it.color||'—'}</span>`
-    : `<span class="item-tipo" style="background:#1c2e1c;color:#56d364;border-color:#2ea043;">${it.formula_nueva||'—'}</span>`;
+    : `<span class="tag t-color">${it.formula_nueva||'—'}</span>`;
   const esAdv = it.estado === 'OK' && (it.error_msg||'').startsWith('[ADV]');
   const estadoHtml = it.estado === 'ERROR'
     ? `<span class="item-estado-err" title="${it.error_msg||''}"><i class="bi bi-x-circle-fill me-1"></i>${(it.error_msg||'Error').substring(0,60)}${(it.error_msg||'').length>60?'…':''}</span>`
     : esAdv
-    ? `<span style="background:#2e2200;color:#e3b341;border:1px solid #b5820a;border-radius:10px;padding:.15rem .5rem;font-size:.72rem;font-weight:700;">⚠ ADV ${it.zfer_nuevo ? '→ '+it.zfer_nuevo : ''}</span>
-       <div style="font-size:.68rem;color:#e3b341;margin-top:.15rem;" title="${it.error_msg||''}">${(it.error_msg||'').substring(5,80)}${(it.error_msg||'').length>80?'…':''}</div>`
+    ? `<span style="background:var(--warn-bg);color:var(--warn-txt);border:1px solid var(--warn-bdr);border-radius:10px;padding:.15rem .5rem;font-size:.72rem;font-weight:700;">⚠ ADV ${it.zfer_nuevo ? '→ '+it.zfer_nuevo : ''}</span>
+       <div style="font-size:.68rem;color:var(--warn-txt);margin-top:.15rem;" title="${it.error_msg||''}">${(it.error_msg||'').substring(5,80)}${(it.error_msg||'').length>80?'…':''}</div>`
     : it.estado === 'OK'
     ? `<span class="item-estado-ok"><i class="bi bi-check-circle-fill me-1"></i>OK ${it.zfer_nuevo ? '→ '+it.zfer_nuevo : ''}</span>`
     : `<span class="item-estado-pend"><i class="bi bi-hourglass me-1"></i>Pendiente</span>`;
@@ -237,7 +240,7 @@ function _itemRow(it) {
     <span class="item-zfer">${it.zfer_base}</span>
     <span class="item-tipo">${tipoLabel}</span>
     ${detalle}
-    ${it.zpla ? `<span style="font-size:.72rem;color:#484f58;">ZPLA: ${it.zpla}</span>` : ''}
+    ${it.zpla ? `<span style="font-size:.72rem;color:var(--muted);">ZPLA: ${it.zpla}</span>` : ''}
     <span style="flex:1;"></span>
     ${estadoHtml}
   </div>`;
@@ -317,11 +320,11 @@ function _tabSwitch(tab) {
   document.getElementById('tab-pane-hist').style.display = isCola ? 'none' : '';
   const bC = document.getElementById('tab-cola'), bH = document.getElementById('tab-hist');
   if (isCola) {
-    bC.style.cssText += ';background:#1c2340;color:#79c0ff;border-color:#1f6feb;';
-    bH.style.cssText += ';background:#21262d;color:#8b949e;border-color:#30363d;';
+    bC.className = 'cola-tab active';
+    bH.className = 'cola-tab inactive';
   } else {
-    bH.style.cssText += ';background:#1c2e1c;color:#56d364;border-color:#2ea043;';
-    bC.style.cssText += ';background:#21262d;color:#8b949e;border-color:#30363d;';
+    bH.className = 'cola-tab active-hist';
+    bC.className = 'cola-tab inactive';
     _cargarHistorial();
   }
 }
@@ -353,7 +356,7 @@ async function _cargarHistorial() {
           : `<span class="bloque-badge-err" style="font-size:.7rem;">ERROR</span>`;
         const det = r.tipo==='COLOR'
           ? `<span class="item-color">${r.color_nombre||r.color||'—'}</span>`
-          : `<span class="item-tipo" style="background:#1c2e1c;color:#56d364;border-color:#2ea043;">${r.formula_nueva||'—'}</span>`;
+          : `<span class="tag t-color">${r.formula_nueva||'—'}</span>`;
         return `<div class="item-row">
           <span class="item-zfer">${r.zfer_base}</span>
           <span class="item-tipo">${r.tipo}</span>
@@ -361,17 +364,17 @@ async function _cargarHistorial() {
           ${r.zfer_nuevo?`<span style="color:var(--accent);font-size:.72rem;font-weight:700;">→ ${r.zfer_nuevo}</span>`:''}
           <span style="flex:1;"></span>
           ${badge}
-          ${r.error_msg?`<span style="color:#ffa198;font-size:.7rem;" title="${r.error_msg}">${r.error_msg.substring(0,50)}…</span>`:''}
-          <span style="color:#484f58;font-size:.7rem;">${r.ejecutado_el}</span>
+          ${r.error_msg?`<span style="color:var(--err-txt);font-size:.7rem;" title="${r.error_msg}">${r.error_msg.substring(0,50)}…</span>`:''}
+          <span style="color:var(--muted);font-size:.7rem;">${r.ejecutado_el}</span>
         </div>`;
       }).join('');
       html += `<div class="bloque-card" style="margin-bottom:1rem;">
         <div class="bloque-header">
           <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">
-            <span style="font-weight:800;color:#bc8cff;"><i class="bi bi-layers-fill me-1"></i>Bloque #${bid}</span>
+            <span style="font-weight:800;color:var(--blq-title);"><i class="bi bi-layers-fill me-1"></i>Bloque #${bid}</span>
             ${okN?`<span class="bloque-badge-ok" style="font-size:.72rem;">✓ ${okN} OK</span>`:''}
             ${errN?`<span class="bloque-badge-err" style="font-size:.72rem;">✗ ${errN} errores</span>`:''}
-            <span style="font-size:.75rem;color:#484f58;">${fecha}</span>
+            <span style="font-size:.75rem;color:var(--muted);">${fecha}</span>
           </div>
           <a href="${_COLA_URL}/bloque/${bid}/reporte/excel" class="btn-sm-go" style="text-decoration:none;display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;">
             <i class="bi bi-file-earmark-excel"></i>Excel
@@ -386,11 +389,11 @@ async function _cargarHistorial() {
       <div style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:1.2rem;">
         <span class="bloque-badge-ok" style="font-size:.82rem;padding:.3rem .85rem;">✓ ${totalOk} exitosas</span>
         ${totalErr?`<span class="bloque-badge-err" style="font-size:.82rem;padding:.3rem .85rem;">✗ ${totalErr} con error</span>`:''}
-        <span style="color:#484f58;font-size:.78rem;">Últimas ${d.log.length} ejecuciones · ${Object.keys(bloques).length} bloques</span>
+        <span style="color:var(--muted);font-size:.78rem;">Últimas ${d.log.length} ejecuciones · ${Object.keys(bloques).length} bloques</span>
       </div>
       ${html}`;
   } catch(e) {
-    cont.innerHTML = `<div style="color:#ffa198;padding:1rem;">Error: ${e.message}</div>`;
+    cont.innerHTML = `<div style="color:var(--err-txt);padding:1rem;">Error: ${e.message}</div>`;
   }
 }
 
@@ -401,13 +404,13 @@ async function _verReporteBloque(bloqueId) {
   const titulo = document.getElementById('rep-titulo');
   const excelBtn = document.getElementById('rep-excel-btn');
   modal.style.display = 'flex';
-  cuerpo.innerHTML = `<div style="text-align:center;padding:3rem;color:#484f58;">
+  cuerpo.innerHTML = `<div style="text-align:center;padding:3rem;color:var(--muted);">
     <span class="paso-spinner" style="width:28px;height:28px;border-width:3px;display:inline-block;"></span>
     <div style="margin-top:.9rem;">Cargando reporte…</div></div>`;
 
   try {
     const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/reporte`).then(r=>r.json());
-    if (!d.ok) { cuerpo.innerHTML=`<div style="color:#ffa198;padding:1.5rem;">Error: ${d.error}</div>`; return; }
+    if (!d.ok) { cuerpo.innerHTML=`<div style="color:var(--err-txt);padding:1.5rem;">Error: ${d.error}</div>`; return; }
 
     const items   = d.items||[];
     const okN     = d.ok_count||0, errN = d.error_count||0, total = items.length;
@@ -423,42 +426,42 @@ async function _verReporteBloque(bloqueId) {
 
     // ── renderTabla ──────────────────────────────────────────────────────────
     const renderTabla = (lista) => {
-      if (!lista.length) return `<div style="padding:2rem;text-align:center;color:#484f58;">Sin ítems en esta categoría</div>`;
+      if (!lista.length) return `<div style="padding:2rem;text-align:center;color:var(--muted);">Sin ítems en esta categoría</div>`;
       return lista.map((it,i) => {
         const esAdv = it.estado==='OK' && (it.error_msg||'').startsWith('[ADV]');
-        const bg = it.estado==='ERROR' ? 'rgba(248,81,73,.06)' : esAdv ? 'rgba(227,179,65,.05)' : it.estado==='OK' ? 'rgba(56,211,100,.05)' : '';
+        const bg = it.estado==='ERROR' ? 'var(--row-bg-err)' : esAdv ? 'var(--row-bg-warn)' : it.estado==='OK' ? 'var(--row-bg-ok)' : '';
         const tipoBadge = it.tipo==='COLOR'
           ? `<span class="tipo-color"><i class="bi bi-palette me-1"></i>Color</span>`
           : `<span class="tipo-formula"><i class="bi bi-flask me-1"></i>Fórmula</span>`;
         const detalle = it.tipo==='COLOR'
-          ? `<div style="font-size:.78rem;color:#79c0ff;">${it.color_nombre||it.color||'—'}</div>
-             <div style="font-size:.68rem;color:#484f58;">Franja: ${it.franja||'00'}</div>`
-          : `<div style="font-size:.78rem;color:#d2a8ff;">${it.formula_nueva||'—'}</div>
-             <div style="font-size:.68rem;color:#484f58;">${it.color_nombre||it.color||''}</div>`;
+          ? `<div style="font-size:.78rem;color:var(--info-txt);">${it.color_nombre||it.color||'—'}</div>
+             <div style="font-size:.68rem;color:var(--muted);">Franja: ${it.franja||'00'}</div>`
+          : `<div style="font-size:.78rem;color:var(--pur-txt);">${it.formula_nueva||'—'}</div>
+             <div style="font-size:.68rem;color:var(--muted);">${it.color_nombre||it.color||''}</div>`;
         const estadoBadge = it.estado==='ERROR'
           ? `<span class="rep-tag-err"><i class="bi bi-x-circle-fill me-1"></i>ERROR</span>`
           : esAdv
-          ? `<span style="background:#2e2200;color:#e3b341;border:1px solid #b5820a;border-radius:10px;padding:.15rem .5rem;font-size:.72rem;font-weight:700;">⚠ ADV</span>`
+          ? `<span style="background:var(--warn-bg);color:var(--warn-txt);border:1px solid var(--warn-bdr);border-radius:10px;padding:.15rem .5rem;font-size:.72rem;font-weight:700;">⚠ ADV</span>`
           : it.estado==='OK'
           ? `<span class="rep-tag-ok"><i class="bi bi-check-circle-fill me-1"></i>OK</span>`
-          : `<span style="color:#8b949e;font-size:.72rem;">—</span>`;
+          : `<span style="color:var(--muted);font-size:.72rem;">—</span>`;
         const advMsg = esAdv ? (it.error_msg||'').substring(5).trim() : '';
         const errShort = esAdv
           ? (advMsg.length>60 ? advMsg.substring(0,60)+'…' : advMsg||'—')
           : it.error_msg ? (it.error_msg.length>60 ? it.error_msg.substring(0,60)+'…' : it.error_msg) : '—';
         return `<div class="rep-row" style="background:${bg};">
-          <span style="color:#484f58;font-size:.7rem;">${i+1}</span>
-          <span style="font-weight:700;color:#58a6ff;font-size:.8rem;">${it.zfer_base}</span>
+          <span style="color:var(--muted);font-size:.7rem;">${i+1}</span>
+          <span style="font-weight:700;color:var(--zfer-txt);font-size:.8rem;">${it.zfer_base}</span>
           <div>${detalle}</div>
           <div>
-            <div style="font-size:.78rem;color:#e6edf3;">${it.tipo_pieza||'—'}</div>
-            <div style="font-size:.68rem;color:#484f58;">ZPLA: ${it.zpla||'—'}</div>
+            <div style="font-size:.78rem;color:var(--text);">${it.tipo_pieza||'—'}</div>
+            <div style="font-size:.68rem;color:var(--muted);">ZPLA: ${it.zpla||'—'}</div>
           </div>
           ${tipoBadge}
-          <span style="font-size:.7rem;color:#484f58;">${it.ejecutado_el||'—'}</span>
+          <span style="font-size:.7rem;color:var(--muted);">${it.ejecutado_el||'—'}</span>
           ${estadoBadge}
-          <span style="font-weight:700;color:#58a6ff;font-size:.82rem;">${it.zfer_nuevo||'—'}</span>
-          <span style="font-size:.7rem;color:#ffa198;word-break:break-word;" title="${(it.error_msg||'').replace(/"/g,"'")}">${errShort}</span>
+          <span style="font-weight:700;color:var(--zfer-txt);font-size:.82rem;">${it.zfer_nuevo||'—'}</span>
+          <span style="font-size:.7rem;color:var(--err-txt);word-break:break-word;" title="${(it.error_msg||'').replace(/"/g,"'")}">${errShort}</span>
         </div>`;
       }).join('');
     };
@@ -466,39 +469,39 @@ async function _verReporteBloque(bloqueId) {
     // ── Render en cuerpo ─────────────────────────────────────────────────────
     cuerpo.innerHTML = `
       <!-- Meta bloque -->
-      <div style="display:flex;gap:1.2rem;flex-wrap:wrap;margin-bottom:1.2rem;font-size:.78rem;color:#8b949e;">
-        ${bloque.hora_prog ? `<span><i class="bi bi-clock me-1"></i>Programado: <b style="color:#e6edf3;">${bloque.hora_prog}</b></span>` : ''}
-        ${bloque.ejecutado_el ? `<span><i class="bi bi-check2-circle me-1"></i>Ejecutado: <b style="color:#e6edf3;">${bloque.ejecutado_el}</b></span>` : ''}
-        <span><i class="bi bi-bar-chart me-1"></i>Tasa de éxito: <b style="color:${tasa===100?'#56d364':tasa>50?'#e3b341':'#ffa198'};">${tasa}%</b></span>
+      <div style="display:flex;gap:1.2rem;flex-wrap:wrap;margin-bottom:1.2rem;font-size:.78rem;color:var(--muted);">
+        ${bloque.hora_prog ? `<span><i class="bi bi-clock me-1"></i>Programado: <b style="color:var(--text);">${bloque.hora_prog}</b></span>` : ''}
+        ${bloque.ejecutado_el ? `<span><i class="bi bi-check2-circle me-1"></i>Ejecutado: <b style="color:var(--text);">${bloque.ejecutado_el}</b></span>` : ''}
+        <span><i class="bi bi-bar-chart me-1"></i>Tasa de éxito: <b style="color:${tasa===100?'var(--ok-txt)':tasa>50?'var(--warn-txt)':'var(--err-txt)'};">${tasa}%</b></span>
       </div>
 
       <!-- KPIs -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.7rem;margin-bottom:1.4rem;">
-        <div class="rep-kpi"><div class="rep-kpi-num" style="color:#e6edf3;">${total}</div><div class="rep-kpi-lbl">Total</div></div>
-        <div class="rep-kpi"><div class="rep-kpi-num" style="color:#56d364;">${okN}</div><div class="rep-kpi-lbl">Exitosos</div></div>
-        <div class="rep-kpi"><div class="rep-kpi-num" style="color:#ffa198;">${errN}</div><div class="rep-kpi-lbl">Errores</div></div>
-        <div class="rep-kpi"><div class="rep-kpi-num" style="color:#79c0ff;">${colores.length}</div><div class="rep-kpi-lbl">Colores</div></div>
-        <div class="rep-kpi"><div class="rep-kpi-num" style="color:#d2a8ff;">${formulas.length}</div><div class="rep-kpi-lbl">Fórmulas</div></div>
+        <div class="rep-kpi"><div class="rep-kpi-num" style="color:var(--text);">${total}</div><div class="rep-kpi-lbl">Total</div></div>
+        <div class="rep-kpi"><div class="rep-kpi-num" style="color:var(--ok-txt);">${okN}</div><div class="rep-kpi-lbl">Exitosos</div></div>
+        <div class="rep-kpi"><div class="rep-kpi-num" style="color:var(--err-txt);">${errN}</div><div class="rep-kpi-lbl">Errores</div></div>
+        <div class="rep-kpi"><div class="rep-kpi-num" style="color:var(--info-txt);">${colores.length}</div><div class="rep-kpi-lbl">Colores</div></div>
+        <div class="rep-kpi"><div class="rep-kpi-num" style="color:var(--pur-txt);">${formulas.length}</div><div class="rep-kpi-lbl">Fórmulas</div></div>
       </div>
 
       <!-- Tabs -->
       <div style="display:flex;gap:.4rem;margin-bottom:.8rem;flex-wrap:wrap;" id="rep-tabs-${bloqueId}">
         <button class="rep-tab-btn active" data-tab="todos"   onclick="_repTab_${bloqueId}('todos')">
-          <i class="bi bi-list-ul me-1"></i>Todos <span style="background:#21262d;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;">${total}</span>
+          <i class="bi bi-list-ul me-1"></i>Todos <span style="background:var(--tag-neutral-bg);border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;">${total}</span>
         </button>
         <button class="rep-tab-btn" data-tab="color" onclick="_repTab_${bloqueId}('color')">
-          <i class="bi bi-palette me-1"></i>Color <span style="background:#0d1e2e;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;color:#79c0ff;">${colores.length}</span>
+          <i class="bi bi-palette me-1"></i>Color <span style="background:var(--info-bg);border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;color:var(--info-txt);">${colores.length}</span>
         </button>
         <button class="rep-tab-btn" data-tab="formula" onclick="_repTab_${bloqueId}('formula')">
-          <i class="bi bi-flask me-1"></i>Fórmula <span style="background:#1e1030;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;color:#d2a8ff;">${formulas.length}</span>
+          <i class="bi bi-flask me-1"></i>Fórmula <span style="background:var(--pur-bg);border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;color:var(--pur-txt);">${formulas.length}</span>
         </button>
-        ${errN ? `<button class="rep-tab-btn" data-tab="error" onclick="_repTab_${bloqueId}('error')" style="border-color:#f85149;">
-          <i class="bi bi-x-circle me-1"></i>Errores <span style="background:#2d1f1f;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;color:#ffa198;">${errN}</span>
+        ${errN ? `<button class="rep-tab-btn" data-tab="error" onclick="_repTab_${bloqueId}('error')" style="border-color:var(--err-bdr);">
+          <i class="bi bi-x-circle me-1"></i>Errores <span style="background:var(--err-bg);border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.2rem;color:var(--err-txt);">${errN}</span>
         </button>` : ''}
       </div>
 
       <!-- Tabla -->
-      <div style="border:1px solid #21262d;border-radius:12px;overflow:hidden;margin-bottom:1.4rem;">
+      <div style="border:1px solid var(--divider);border-radius:12px;overflow:hidden;margin-bottom:1.4rem;">
         <div class="rep-thead">
           <div class="rep-row">
             <span>#</span><span>ZFER Base</span><span>Detalle</span><span>Pieza / ZPLA</span>
@@ -511,22 +514,22 @@ async function _verReporteBloque(bloqueId) {
       <!-- Errores detallados -->
       ${errN ? `
       <div id="rep-errores-det">
-        <div style="font-size:.73rem;text-transform:uppercase;letter-spacing:.8px;color:#ffa198;margin-bottom:.7rem;font-weight:700;">
+        <div style="font-size:.73rem;text-transform:uppercase;letter-spacing:.8px;color:var(--err-txt);margin-bottom:.7rem;font-weight:700;">
           <i class="bi bi-exclamation-triangle-fill me-1"></i>Detalle de errores (${errN})
         </div>
         ${errItems.map((it,i)=>`
-        <div style="background:#1a0a0a;border:1px solid #6e1a19;border-radius:12px;padding:.9rem 1.1rem;margin-bottom:.6rem;">
+        <div style="background:var(--err-det-bg);border:1px solid var(--err-det-bdr);border-radius:12px;padding:.9rem 1.1rem;margin-bottom:.6rem;">
           <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.5rem;flex-wrap:wrap;">
-            <span style="font-size:.7rem;color:#484f58;font-weight:700;">#${i+1}</span>
-            <span style="font-weight:800;color:#58a6ff;font-size:.85rem;">${it.zfer_base}</span>
+            <span style="font-size:.7rem;color:var(--muted);font-weight:700;">#${i+1}</span>
+            <span style="font-weight:800;color:var(--zfer-txt);font-size:.85rem;">${it.zfer_base}</span>
             ${it.tipo==='COLOR'
               ? `<span class="tipo-color"><i class="bi bi-palette me-1"></i>Color</span>
-                 <span style="font-size:.78rem;color:#79c0ff;">${it.color_nombre||it.color||'—'}</span>`
+                 <span style="font-size:.78rem;color:var(--info-txt);">${it.color_nombre||it.color||'—'}</span>`
               : `<span class="tipo-formula"><i class="bi bi-flask me-1"></i>Fórmula</span>
-                 <span style="font-size:.78rem;color:#d2a8ff;">${it.formula_nueva||'—'}</span>`}
-            <span style="font-size:.7rem;color:#484f58;margin-left:auto;">${it.ejecutado_el||''}</span>
+                 <span style="font-size:.78rem;color:var(--pur-txt);">${it.formula_nueva||'—'}</span>`}
+            <span style="font-size:.7rem;color:var(--muted);margin-left:auto;">${it.ejecutado_el||''}</span>
           </div>
-          <pre style="margin:0;font-size:.79rem;color:#ffa198;font-family:monospace;white-space:pre-wrap;word-break:break-word;background:#0d0606;border-radius:7px;padding:.6rem .8rem;">${(it.error_msg||'Sin detalle').replace(/</g,'&lt;')}</pre>
+          <pre style="margin:0;font-size:.79rem;color:var(--err-txt);font-family:monospace;white-space:pre-wrap;word-break:break-word;background:var(--err-pre-bg);border-radius:7px;padding:.6rem .8rem;">${(it.error_msg||'Sin detalle').replace(/</g,'&lt;')}</pre>
         </div>`).join('')}
       </div>` : ''}`;
 
@@ -540,7 +543,7 @@ async function _verReporteBloque(bloqueId) {
     document.getElementById('rep-tabla-body').innerHTML = renderTabla(items);
 
   } catch(e) {
-    document.getElementById('rep-cuerpo').innerHTML = `<div style="color:#ffa198;padding:1.5rem;"><i class="bi bi-exclamation-triangle me-2"></i>Error de red: ${e.message}</div>`;
+    document.getElementById('rep-cuerpo').innerHTML = `<div style="color:var(--err-txt);padding:1.5rem;"><i class="bi bi-exclamation-triangle me-2"></i>Error de red: ${e.message}</div>`;
   }
 }
 
@@ -566,26 +569,26 @@ setInterval(() => {
 <!-- ── Modal reporte ────────────────────────────────────────────────────────── -->
 <div id="modal-rep" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.8);
      z-index:9000; align-items:flex-start; justify-content:center; overflow-y:auto; padding:1.5rem 1rem;">
-  <div style="background:#0d1117; border:1px solid #30363d; border-radius:18px;
+  <div style="background:var(--modal-bg); border:1px solid var(--border); border-radius:18px;
               width:100%; max-width:1000px; margin:auto; padding:1.8rem 2rem; position:relative;">
 
     <!-- Header modal -->
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.4rem;">
       <div>
-        <div style="font-size:.7rem; text-transform:uppercase; letter-spacing:1px; color:#8b949e;">AGP Glass · Colombia CO01</div>
-        <h3 id="rep-titulo" style="margin:.15rem 0 0; font-size:1.2rem; font-weight:800; color:#e6edf3;">
+        <div style="font-size:.7rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted);">AGP Glass · Colombia CO01</div>
+        <h3 id="rep-titulo" style="margin:.15rem 0 0; font-size:1.2rem; font-weight:800; color:var(--text);">
           <i class="bi bi-file-earmark-bar-graph me-2" style="color:#7c3aed;"></i>Reporte de Homologación
         </h3>
       </div>
       <div style="display:flex; gap:.6rem; align-items:center;">
         <a id="rep-excel-btn" href="#"
-           style="background:#1c2e1c; border:1px solid #2ea043; color:#56d364; border-radius:8px;
+           style="background:var(--ok-bg); border:1px solid var(--ok-bdr); color:var(--ok-txt); border-radius:8px;
                   padding:.4rem 1rem; font-size:.82rem; text-decoration:none; display:inline-flex;
                   align-items:center; gap:.4rem; font-weight:700;">
           <i class="bi bi-file-earmark-excel"></i> Descargar Excel
         </a>
         <button onclick="document.getElementById('modal-rep').style.display='none'"
-                style="background:transparent; border:1px solid #30363d; color:#8b949e;
+                style="background:transparent; border:1px solid var(--border); color:var(--muted);
                        border-radius:8px; padding:.4rem .9rem; cursor:pointer; font-size:.85rem;">
           ✕ Cerrar
         </button>

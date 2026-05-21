@@ -1,17 +1,21 @@
 <!DOCTYPE html>
-<html lang="es" data-bs-theme="dark">
+<html lang="es" data-bs-theme="dark" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}AGP Intelligence{% endblock %}</title>
   <link rel="icon" type="image/png" href="/static/logo_agp.png">
+  <!-- Anti-flash: aplica tema guardado antes de que el navegador pinte -->
+  <script>(function(){var t=localStorage.getItem("agp_theme")||"dark";document.documentElement.setAttribute("data-theme",t);document.documentElement.setAttribute("data-bs-theme",t);})();</script>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
   <style>
-    :root {
+    /* ── Tema oscuro (default) ───────────────────────────────────────────── */
+    :root,
+    [data-theme="dark"] {
       --accent:   #00c2ff;
       --accent2:  #7c3aed;
       --card-bg:  #161b22;
@@ -19,13 +23,118 @@
       --text:     #e6edf3;
       --muted:    #8b949e;
       --bg:       #0d1117;
+      --nav-meta: #484f58;
+      --divider:  #21262d;
+      --attr-row-border: #1c2128;
+      --pct-bar-bg: #21262d;
+      --card-hdr-bg: rgba(255,255,255,.03);
+      --input-placeholder: #484f58;
+      --modal-bg: #0d1117;
+
+      /* status semánticos */
+      --ok-txt:  #56d364;  --ok-bg:  #1c2e1c;  --ok-bdr:  #2ea043;
+      --err-txt: #ffa198;  --err-bg: #2d1f1f;  --err-bdr: #f85149;
+      --warn-txt:#e3b341;  --warn-bg:#2d2416;  --warn-bdr:#9e6a03;
+      --info-txt:#79c0ff;  --info-bg:#1c2340;  --info-bdr:#1f6feb;
+      --pur-txt: #d2a8ff;  --pur-bg: #2d1f3d;  --pur-bdr: #8957e5;
+      --zfer-txt:#58a6ff;
+      --blq-title:#bc8cff;
+      --row-bg-ok:   rgba(56,211,100,.05);
+      --row-bg-err:  rgba(248,81,73,.06);
+      --row-bg-warn: rgba(227,179,65,.05);
+      --err-det-bg:  #1a0a0a;  --err-det-bdr: #6e1a19;
+      --err-pre-bg:  #0d0606;
+      --chip-prox-bg:#1a102e;  --chip-prox-bdr:#2d2150;
+
+      /* alert */
+      --alert-err-bg:#2d1f1f; --alert-err-bdr:#f85149; --alert-err-txt:#ffa198;
+
+      /* botones semánticos */
+      --btn-go-bg:   #1c2e1c; --btn-go-bdr:   #2ea043; --btn-go-txt:   #56d364; --btn-go-hov:   #243624;
+      --btn-red-bg:  #2d1f1f; --btn-red-bdr:  #f85149; --btn-red-txt:  #ffa198; --btn-red-hov:  #3d2626;
+      --btn-neu-bg:  #21262d; --btn-neu-bdr:  #30363d; --btn-neu-txt:  #8b949e; --btn-neu-hov:  #2d333b;
+      --btn-pur-bg:  #2d1f3d; --btn-pur-bdr:  #8957e5; --btn-pur-txt:  #d2a8ff; --btn-pur-hov:  #3d2557;
+      --input-bg:    #21262d; --input-bdr:    #30363d;
+      --rep-thead-bg:#161b22;
+      --rep-kpi-bg:  #161b22; --rep-kpi-bdr:  #21262d;
+      --rep-active-bg:#21262d; --rep-active-txt:#e6edf3; --rep-active-bdr:#8957e5;
+      --timer-on:#56d364; --timer-off:#484f58;
+      --tab-act-bg:#1c2340; --tab-act-txt:#79c0ff; --tab-act-bdr:#1f6feb;
+      --tab-ina-bg:#21262d; --tab-ina-txt:#8b949e; --tab-ina-bdr:#30363d;
+      --tab-his-bg:#1c2e1c; --tab-his-txt:#56d364; --tab-his-bdr:#2ea043;
+
+      /* tags */
+      --tag-color-bg:   #1c2e1c; --tag-color-txt:   #56d364; --tag-color-bdr:   #2ea043;
+      --tag-formula-bg: #1c2340; --tag-formula-txt: #79c0ff; --tag-formula-bdr: #1f6feb;
+      --tag-pieza-bg:   #2d1f3d; --tag-pieza-txt:   #d2a8ff; --tag-pieza-bdr:   #8957e5;
+      --tag-franja-bg:  #2d2416; --tag-franja-txt:  #e3b341; --tag-franja-bdr:  #9e6a03;
+      --tag-neutral-bg: #21262d; --tag-neutral-txt: #e6edf3; --tag-neutral-bdr: #30363d;
     }
+
+    /* ── Tema claro AGP ──────────────────────────────────────────────────── */
+    [data-theme="light"] {
+      --accent:   #00BFFF;
+      --accent2:  #0077b6;
+      --card-bg:  #ffffff;
+      --border:   #d0d7de;
+      --text:     #000019;
+      --muted:    #3F4040;
+      --bg:       #f5f6f8;
+      --nav-meta: #3F4040;
+      --divider:  #d0d7de;
+      --attr-row-border: #e1e7ef;
+      --pct-bar-bg: #d0d7de;
+      --card-hdr-bg: rgba(0,0,25,.03);
+      --input-placeholder: #9ea8b3;
+      --modal-bg: #ffffff;
+
+      /* status semánticos */
+      --ok-txt:  #1a6b35;  --ok-bg:  #e6f9ee;  --ok-bdr:  #4caf7d;
+      --err-txt: #b71c1c;  --err-bg: #fff0f0;  --err-bdr: #ef5350;
+      --warn-txt:#7a5500;  --warn-bg:#fff8e1;  --warn-bdr:#e6aa00;
+      --info-txt:#0055b3;  --info-bg:#e8f2ff;  --info-bdr:#4d9ef7;
+      --pur-txt: #5e2d99;  --pur-bg: #f0eaff;  --pur-bdr: #9b6ddb;
+      --zfer-txt:#0055b3;
+      --blq-title:#5e2d99;
+      --row-bg-ok:   rgba(26,107,53,.06);
+      --row-bg-err:  rgba(183,28,28,.06);
+      --row-bg-warn: rgba(122,85,0,.06);
+      --err-det-bg:  #fff8f8;  --err-det-bdr: #f0a0a0;
+      --err-pre-bg:  #fef2f2;
+      --chip-prox-bg:#f0eaff;  --chip-prox-bdr:#9b6ddb;
+
+      /* alert */
+      --alert-err-bg:#fff0f0; --alert-err-bdr:#d32f2f; --alert-err-txt:#b71c1c;
+
+      /* botones semánticos */
+      --btn-go-bg:   #e6f9ee; --btn-go-bdr:   #4caf7d; --btn-go-txt:   #1a6b35; --btn-go-hov:   #d5f2e1;
+      --btn-red-bg:  #fff0f0; --btn-red-bdr:  #ef5350; --btn-red-txt:  #b71c1c; --btn-red-hov:  #ffe0e0;
+      --btn-neu-bg:  #f0f4f8; --btn-neu-bdr:  #c4cdd6; --btn-neu-txt:  #3F4040; --btn-neu-hov:  #e5eaef;
+      --btn-pur-bg:  #f0eaff; --btn-pur-bdr:  #9b6ddb; --btn-pur-txt:  #5e2d99; --btn-pur-hov:  #e4d9ff;
+      --input-bg:    #ffffff; --input-bdr:    #c4cdd6;
+      --rep-thead-bg:#f5f7fa;
+      --rep-kpi-bg:  #ffffff; --rep-kpi-bdr:  #d0d7de;
+      --rep-active-bg:#f0f4f8; --rep-active-txt:#000019; --rep-active-bdr:#9b6ddb;
+      --timer-on:#1a6b35; --timer-off:#9ea8b3;
+      --tab-act-bg:#e8f2ff; --tab-act-txt:#0055b3; --tab-act-bdr:#4d9ef7;
+      --tab-ina-bg:#f0f4f8; --tab-ina-txt:#3F4040; --tab-ina-bdr:#c4cdd6;
+      --tab-his-bg:#e6f9ee; --tab-his-txt:#1a6b35; --tab-his-bdr:#4caf7d;
+
+      /* tags */
+      --tag-color-bg:   #e6f9ee; --tag-color-txt:   #1a6b35; --tag-color-bdr:   #4caf7d;
+      --tag-formula-bg: #e8f2ff; --tag-formula-txt: #0055b3; --tag-formula-bdr: #4d9ef7;
+      --tag-pieza-bg:   #f0eaff; --tag-pieza-txt:   #5e2d99; --tag-pieza-bdr:   #9b6ddb;
+      --tag-franja-bg:  #fff8e1; --tag-franja-txt:  #7a5500; --tag-franja-bdr:  #e6aa00;
+      --tag-neutral-bg: #f0f4f8; --tag-neutral-txt: #000019; --tag-neutral-bdr: #c4cdd6;
+    }
+
     * { box-sizing: border-box; }
     body {
       background: var(--bg);
       color: var(--text);
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
       min-height: 100vh;
+      transition: background .2s, color .2s;
     }
 
     /* ── Nav ─────────────────────────────── */
@@ -37,6 +146,7 @@
       align-items: center;
       justify-content: space-between;
       position: sticky; top: 0; z-index: 100;
+      transition: background .2s, border-color .2s;
     }
     .brand {
       font-weight: 800;
@@ -46,16 +156,51 @@
       letter-spacing: .5px;
     }
     .brand i { margin-right: .4rem; }
-    .nav-meta { color: #484f58; font-size: .8rem; }
+    .nav-meta { color: var(--nav-meta); font-size: .8rem; }
+
+    /* ── Botón logout ────────────────────── */
+    .btn-logout {
+      background: var(--btn-red-bg);
+      border: 1px solid var(--btn-red-bdr);
+      color: var(--btn-red-txt);
+      border-radius: 7px;
+      padding: .2rem .55rem;
+      font-size: .75rem;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background .15s;
+      display: inline-flex;
+      align-items: center;
+    }
+    .btn-logout:hover { background: var(--btn-red-hov); color: var(--btn-red-txt); }
+
+    /* ── Botón tema ──────────────────────── */
+    .theme-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: .28rem .55rem;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: border-color .15s, color .15s, background .15s;
+      line-height: 1;
+    }
+    .theme-toggle:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0,191,255,.08);
+    }
 
     /* ── Cards ───────────────────────────── */
     .card {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 14px;
+      transition: background .2s, border-color .2s;
     }
     .card-header {
-      background: rgba(255,255,255,.03);
+      background: var(--card-hdr-bg);
       border-bottom: 1px solid var(--border);
       padding: .9rem 1.5rem;
       border-radius: 14px 14px 0 0 !important;
@@ -96,11 +241,11 @@
       font-weight: 600;
       margin: 2px;
     }
-    .t-color   { background:#1c2e1c; color:#56d364; border:1px solid #2ea043; }
-    .t-formula { background:#1c2340; color:#79c0ff; border:1px solid #1f6feb; }
-    .t-pieza   { background:#2d1f3d; color:#d2a8ff; border:1px solid #8957e5; }
-    .t-franja  { background:#2d2416; color:#e3b341; border:1px solid #9e6a03; }
-    .t-neutral { background:#21262d; color:#e6edf3; border:1px solid #30363d; }
+    .t-color   { background:var(--tag-color-bg);   color:var(--tag-color-txt);   border:1px solid var(--tag-color-bdr); }
+    .t-formula { background:var(--tag-formula-bg);  color:var(--tag-formula-txt); border:1px solid var(--tag-formula-bdr); }
+    .t-pieza   { background:var(--tag-pieza-bg);    color:var(--tag-pieza-txt);   border:1px solid var(--tag-pieza-bdr); }
+    .t-franja  { background:var(--tag-franja-bg);   color:var(--tag-franja-txt);  border:1px solid var(--tag-franja-bdr); }
+    .t-neutral { background:var(--tag-neutral-bg);  color:var(--tag-neutral-txt); border:1px solid var(--tag-neutral-bdr); }
 
     /* ── Search ──────────────────────────── */
     .search-box {
@@ -111,15 +256,15 @@
       font-size: 1.05rem;
       padding: .7rem 1.1rem;
       outline: none;
-      transition: border-color .2s, box-shadow .2s;
+      transition: border-color .2s, box-shadow .2s, background .2s;
     }
     .search-box:focus {
       border-color: var(--accent);
-      box-shadow: 0 0 0 4px rgba(0,194,255,.12);
+      box-shadow: 0 0 0 4px rgba(0,191,255,.12);
       background: var(--card-bg);
       color: var(--text);
     }
-    .search-box::placeholder { color: #484f58; }
+    .search-box::placeholder { color: var(--input-placeholder); }
     .btn-go {
       background: var(--accent);
       color: #000;
@@ -131,13 +276,13 @@
       cursor: pointer;
       transition: background .2s;
     }
-    .btn-go:hover { background: #00a8d8; }
+    .btn-go:hover { background: #009fd4; }
 
     /* ── Alert ───────────────────────────── */
     .alert-err {
-      background: #2d1f1f;
-      border: 1px solid #f85149;
-      color: #ffa198;
+      background: var(--alert-err-bg);
+      border: 1px solid var(--alert-err-bdr);
+      color: var(--alert-err-txt);
       border-radius: 12px;
       padding: .9rem 1.2rem;
     }
@@ -150,18 +295,43 @@
       color: var(--muted);
       font-weight: 700;
     }
-    .divider { border-color: #21262d; }
+    .divider { border-color: var(--divider); }
     .back-link { color: var(--muted); font-size: .85rem; text-decoration: none; }
     .back-link:hover { color: var(--accent); }
     .zfer-hero { font-size: 2rem; font-weight: 900; color: var(--accent); letter-spacing: 1px; }
     .desc-text { font-size: 1.1rem; color: var(--text); font-weight: 600; }
-    .attr-row { border-bottom: 1px solid #1c2128; padding: .6rem 0; }
+    .attr-row { border-bottom: 1px solid var(--attr-row-border); padding: .6rem 0; }
     .attr-row:last-child { border-bottom: none; }
     .attr-key { color: var(--muted); font-size: .85rem; }
-    .market-tr:hover td { background: rgba(255,255,255,.025); }
-    .pct-bar-wrap { width: 80px; background: #21262d; border-radius: 4px; height: 6px; display:inline-block; vertical-align:middle; }
+    .market-tr:hover td { background: rgba(0,0,0,.03); }
+    .pct-bar-wrap { width: 80px; background: var(--pct-bar-bg); border-radius: 4px; height: 6px; display:inline-block; vertical-align:middle; }
     .pct-bar { height: 6px; border-radius: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
-    footer { color: #484f58; font-size: .78rem; border-top: 1px solid #21262d; }
+    footer { color: var(--muted); font-size: .78rem; border-top: 1px solid var(--divider); }
+
+    /* ── Light mode: Bootstrap overrides ────────────────────────────────── */
+    [data-theme="light"] table { color: var(--text); }
+    [data-theme="light"] .table { --bs-table-color: var(--text); --bs-table-bg: transparent; --bs-table-border-color: var(--border); --bs-table-striped-bg: rgba(0,0,25,.03); --bs-table-hover-bg: rgba(0,191,255,.05); }
+    [data-theme="light"] .table-dark { --bs-table-bg: #000019; --bs-table-color: #fff; }
+    [data-theme="light"] input:not([type=range]),
+    [data-theme="light"] select,
+    [data-theme="light"] textarea {
+      background: var(--card-bg) !important;
+      color: var(--text) !important;
+      border-color: var(--border) !important;
+      color-scheme: light;
+    }
+    [data-theme="light"] input::placeholder { color: var(--input-placeholder) !important; }
+    [data-theme="light"] .modal-content { background: var(--card-bg); color: var(--text); border-color: var(--border); }
+    [data-theme="light"] .dropdown-menu { background: var(--card-bg); border-color: var(--border); }
+    [data-theme="light"] .dropdown-item { color: var(--text); }
+    [data-theme="light"] .dropdown-item:hover { background: rgba(0,191,255,.1); }
+    /* Scrollbar light */
+    [data-theme="light"] ::-webkit-scrollbar { width: 8px; height: 8px; }
+    [data-theme="light"] ::-webkit-scrollbar-track { background: #f0f4f8; }
+    [data-theme="light"] ::-webkit-scrollbar-thumb { background: #c4cdd6; border-radius: 4px; }
+    [data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #00BFFF; }
+    /* Nav link color en light */
+    [data-theme="light"] .top-nav a[style*="color:var(--muted)"] { color: var(--muted) !important; }
   </style>
 </head>
 <body>
@@ -188,19 +358,16 @@
             text-align:center; position:absolute; top:-5px; right:-10px;"></span>
     </a>
     <span class="nav-meta"><i class="bi bi-database me-1"></i>DB_COL_SAP &nbsp;·&nbsp; CO01</span>
+    <button class="theme-toggle" id="themeToggleBtn" title="Cambiar tema" onclick="_toggleTheme()">
+      <i class="bi bi-moon-stars-fill" id="themeIcon"></i>
+    </button>
     {% if usuario_actual %}
     <div style="display:flex; align-items:center; gap:.5rem; border-left:1px solid #21262d; padding-left:.9rem;">
       <span style="font-size:.78rem; color:var(--muted); max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
             title="{{ usuario_actual }}">
         <i class="bi bi-person-circle me-1" style="color:var(--accent);"></i>{{ usuario_actual.split('@')[0] }}
       </span>
-      <a href="/logout"
-         style="background:#2d1f1f; border:1px solid #f85149; color:#ffa198;
-                border-radius:7px; padding:.2rem .55rem; font-size:.75rem;
-                text-decoration:none; white-space:nowrap; transition:background .15s;"
-         onmouseover="this.style.background='#4a1f1f'"
-         onmouseout="this.style.background='#2d1f1f'"
-         title="Cerrar sesión">
+      <a href="/logout" class="btn-logout" title="Cerrar sesión">
         <i class="bi bi-box-arrow-right"></i>
       </a>
     </div>
@@ -219,6 +386,30 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 {% block scripts %}{% endblock %}
 
+<script>
+
+function _applyTheme(theme, animate) {
+  const html = document.documentElement;
+  if (!animate) html.style.transition = "none";
+  html.setAttribute("data-theme", theme);
+  html.setAttribute("data-bs-theme", theme);
+  if (!animate) requestAnimationFrame(() => html.style.transition = "");
+  const icon = document.getElementById("themeIcon");
+  if (icon) {
+    icon.className = theme === "dark"
+      ? "bi bi-moon-stars-fill"
+      : "bi bi-sun-fill";
+    icon.style.color = theme === "dark" ? "" : "#f0a500";
+  }
+  localStorage.setItem("agp_theme", theme);
+}
+
+function _toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme") || "dark";
+  _applyTheme(current === "dark" ? "light" : "dark", true);
+}
+</script>
+
 <!-- ── Lightbox global de Planos ─────────────────────────────────────────── -->
 <div id="_lb" onclick="if(event.target===this)_lbClose()"
      style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);
@@ -235,16 +426,14 @@
            style="font-size:.78rem;color:#8b949e;margin-top:.1rem;"></div>
     </div>
     <div style="display:flex;gap:.6rem;align-items:center;">
-      <a id="_lb-dl" href="#" download
-         style="background:#21262d;border:1px solid #30363d;color:#e6edf3;
-                border-radius:8px;padding:.35rem .85rem;font-size:.8rem;
-                text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;"
+      <a id="_lb-dl" href="#" download class="btn-logout"
+         style="border-radius:8px;padding:.35rem .85rem;font-size:.8rem;gap:.4rem;
+                background:var(--btn-neu-bg);border-color:var(--btn-neu-bdr);color:var(--btn-neu-txt);"
          onclick="event.stopPropagation()">
         <i class="bi bi-download"></i> Descargar
       </a>
-      <button onclick="_lbClose()"
-              style="background:#2d1f1f;border:1px solid #f85149;color:#ffa198;
-                     border-radius:8px;padding:.35rem .85rem;font-size:.8rem;cursor:pointer;">
+      <button onclick="_lbClose()" class="btn-logout"
+              style="border-radius:8px;padding:.35rem .85rem;font-size:.8rem;cursor:pointer;">
         <i class="bi bi-x-lg me-1"></i>Cerrar
       </button>
     </div>

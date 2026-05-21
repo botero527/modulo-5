@@ -9,8 +9,8 @@
   <a href="/combinaciones/{{ material }}" style="display:inline-flex; align-items:center; background:var(--accent2); color:#fff; font-weight:700; border-radius:8px; padding:.4rem 1rem; font-size:.85rem; text-decoration:none;">
     <i class="bi bi-diagram-3-fill me-1"></i>Ver Combinaciones
   </a>
-  <span id="simetria-chip" style="display:inline-flex; font-size:.8rem; background:#1a102e;
-        border:1px solid #2d2150; border-radius:8px; padding:.3rem .75rem; color:#8b949e;
+  <span id="simetria-chip" style="display:inline-flex; font-size:.8rem; background:var(--chip-prox-bg);
+        border:1px solid var(--chip-prox-bdr); border-radius:8px; padding:.3rem .75rem; color:var(--muted);
         align-items:center; gap:.4rem;">
     <span class="paso-spinner" style="width:10px;height:10px;border-width:2px;flex-shrink:0;"></span>
     Simetría…
@@ -33,7 +33,7 @@
     <div class="desc-text mt-1">{{ head.TEXTO_BREVE_MATERIAL or '—' }}</div>
     <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
       <span class="tag t-neutral">
-        <i class="bi bi-circle-fill me-1" style="font-size:.5rem; color:#56d364;"></i>
+        <i class="bi bi-circle-fill me-1" style="font-size:.5rem; color:var(--ok-txt);"></i>
         STATUS: {{ head.STATUS or '—' }}
       </span>
       {% if head.ZFOR %}
@@ -73,10 +73,10 @@
     <div class="card mb-4">
       <div class="card-header d-flex align-items-center justify-content-between">
         <span>
-          <i class="bi bi-file-earmark-image me-2" style="color:#e3b341;"></i>
+          <i class="bi bi-file-earmark-image me-2" style="color:var(--warn-txt);"></i>
           Plano de Producción
         </span>
-        <span style="font-size:.72rem; color:#484f58; font-weight:400;">{{ plano.doc }}</span>
+        <span style="font-size:.72rem; color:var(--nav-meta); font-weight:400;">{{ plano.doc }}</span>
       </div>
       <div class="card-body" style="padding:.75rem;">
         <div class="_lb-thumb" style="min-height:160px;"
@@ -89,7 +89,7 @@
             <i class="bi bi-eye-fill _lb-eye"></i>
           </div>
         </div>
-        <div style="font-size:.7rem; color:#484f58; text-align:center; margin-top:.5rem;">
+        <div style="font-size:.7rem; color:var(--nav-meta); text-align:center; margin-top:.5rem;">
           <i class="bi bi-zoom-in me-1"></i>Clic para ampliar · doble clic para zoom
         </div>
       </div>
@@ -117,7 +117,7 @@
               {% elif a.atnam == 'Z_SHADE_BAND' %}
                 <span class="tag t-franja">{{ a.decoded }}</span>
               {% elif a.atnam == 'Z_AGP_PARTNUMBER' %}
-                <code style="color:#e3b341; font-size:.82rem;">{{ a.raw }}</code>
+                <code style="color:var(--warn-txt); font-size:.82rem;">{{ a.raw }}</code>
               {% elif a.atnam == 'Z_SUBPRODUCT' %}
                 {% set nombre_sub = SUBPRODUCTOS.get(a.raw, '') %}
                 {% if nombre_sub %}
@@ -147,7 +147,7 @@
           </div>
           {% endfor %}
         {% else %}
-          <div class="text-center py-4" style="color:#484f58;">
+          <div class="text-center py-4" style="color:var(--nav-meta);">
             <i class="bi bi-inbox" style="font-size:1.8rem; display:block; margin-bottom:.5rem;"></i>
             Sin atributos de clasificación
           </div>
@@ -184,7 +184,7 @@
           <div style="overflow-x:auto;">
             <table style="width:100%; border-collapse:collapse; font-size:.88rem;">
               <thead>
-                <tr style="color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid #21262d;">
+                <tr style="color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.8px; border-bottom:1px solid var(--divider);">
                   <th style="padding:.5rem .4rem; text-align:left;">Código</th>
                   <th style="padding:.5rem .4rem; text-align:left;">País / Mercado</th>
                   <th style="padding:.5rem .4rem; text-align:center;">Entregas</th>
@@ -219,7 +219,7 @@
           </div>
 
         {% else %}
-          <div class="text-center py-5" style="color:#484f58;">
+          <div class="text-center py-5" style="color:var(--nav-meta);">
             <i class="bi bi-box-seam" style="font-size:2.5rem; display:block; margin-bottom:.75rem;"></i>
             <div style="font-size:1rem;">Sin datos de entregas para este ZFER</div>
             <div style="font-size:.82rem; margin-top:.3rem;">Puede que no tenga movimientos registrados en CO01</div>
@@ -287,11 +287,11 @@ new Chart(document.getElementById('chartMercados'), {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#1c2128',
-        borderColor: '#30363d',
+        backgroundColor: 'var(--attr-row-border)',
+        borderColor: 'var(--border)',
         borderWidth: 1,
-        titleColor: '#e6edf3',
-        bodyColor: '#8b949e',
+        titleColor: 'var(--text)',
+        bodyColor: 'var(--muted)',
         callbacks: {
           label: ctx => ` ${ctx.raw} entregas  (${(ctx.raw/total*100).toFixed(1)}%)`
         }
@@ -299,12 +299,12 @@ new Chart(document.getElementById('chartMercados'), {
     },
     scales: {
       x: {
-        grid:  { color: '#21262d' },
-        ticks: { color: '#8b949e', font: { size: 11 } }
+        grid:  { color: 'var(--tag-neutral-bg)' },
+        ticks: { color: 'var(--muted)', font: { size: 11 } }
       },
       y: {
         grid:  { display: false },
-        ticks: { color: '#e6edf3', font: { size: 11 } }
+        ticks: { color: 'var(--text)', font: { size: 11 } }
       }
     }
   }
@@ -320,26 +320,26 @@ new Chart(document.getElementById('chartMercados'), {
     .then(d => {
       const chip = document.getElementById("simetria-chip");
       if (!d.encontrados || d.encontrados.length === 0) {
-        chip.style.background  = "#161b22";
-        chip.style.borderColor = "#30363d";
-        chip.style.color       = "#484f58";
+        chip.style.background  = "var(--card-bg)";
+        chip.style.borderColor = "var(--border)";
+        chip.style.color       = "var(--nav-meta)";
         chip.innerHTML = `<i class="bi bi-symmetry-horizontal" style="opacity:.4;"></i>&nbsp;Sin simétrico`;
         return;
       }
       const z = d.encontrados[0];
-      chip.style.background    = "#1a102e";
-      chip.style.borderColor   = "#6e40c9";
-      chip.style.color         = "#bc8cff";
+      chip.style.background = "var(--chip-prox-bg)";
+      chip.style.borderColor   = "var(--pur-bdr)";
+      chip.style.color         = "var(--blq-title)";
       chip.innerHTML =
         `<i class="bi bi-symmetry-horizontal"></i>` +
-        `Simétrico:&nbsp;<a href="/zfer/${z.zfer}" style="color:#bc8cff; font-weight:700; text-decoration:underline;">${z.zfer}</a>` +
-        (z.desc ? `&nbsp;<span style="color:#484f58; font-size:.72rem;">${z.desc}</span>` : '');
+        `Simétrico:&nbsp;<a href="/zfer/${z.zfer}" style="color:var(--blq-title); font-weight:700; text-decoration:underline;">${z.zfer}</a>` +
+        (z.desc ? `&nbsp;<span style="color:var(--nav-meta); font-size:.72rem;">${z.desc}</span>` : '');
     })
     .catch(() => {
       const chip = document.getElementById("simetria-chip");
-      chip.style.background  = "#161b22";
-      chip.style.borderColor = "#30363d";
-      chip.style.color       = "#484f58";
+      chip.style.background  = "var(--card-bg)";
+      chip.style.borderColor = "var(--border)";
+      chip.style.color       = "var(--nav-meta)";
       chip.innerHTML = `<i class="bi bi-symmetry-horizontal" style="opacity:.4;"></i>&nbsp;Sin simétrico`;
     });
 })();

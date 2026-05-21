@@ -4,44 +4,44 @@
 {% block content %}
 <style>
   .hr-card { background:var(--card-bg); border:1px solid var(--border); border-radius:14px; padding:1.4rem 1.6rem; margin-bottom:1.2rem; }
-  .hr-section-title { font-size:.7rem; text-transform:uppercase; letter-spacing:1px; color:#8b949e; font-weight:700; margin-bottom:.7rem; }
+  .hr-section-title { font-size:.7rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted); font-weight:700; margin-bottom:.7rem; }
   .crit-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:.5rem; }
-  .crit-item { background:#161b22; border:1px solid #21262d; border-radius:10px; padding:.6rem .9rem; }
-  .crit-item.match { border-color:#2ea043; }
-  .crit-item.null  { border-color:#30363d; opacity:.6; }
-  .crit-label { font-size:.68rem; text-transform:uppercase; letter-spacing:.6px; color:#8b949e; margin-bottom:.2rem; }
-  .crit-val   { font-size:.88rem; font-weight:700; color:#e6edf3; }
-  .crit-txt   { font-size:.72rem; color:#79c0ff; margin-top:.15rem; word-break:break-all; }
-  .crit-null  { font-size:.78rem; color:#484f58; font-style:italic; }
+  .crit-item { background:var(--card-bg); border:1px solid var(--divider); border-radius:10px; padding:.6rem .9rem; }
+  .crit-item.match { border-color:var(--ok-bdr); }
+  .crit-item.null  { border-color:var(--border); opacity:.6; }
+  .crit-label { font-size:.68rem; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:.2rem; }
+  .crit-val   { font-size:.88rem; font-weight:700; color:var(--text); }
+  .crit-txt   { font-size:.72rem; color:var(--info-txt); margin-top:.15rem; word-break:break-all; }
+  .crit-null  { font-size:.78rem; color:var(--nav-meta); font-style:italic; }
 
-  .res-card   { background:#0d1117; border:1px solid #30363d; border-radius:12px; padding:1rem 1.2rem; margin-bottom:.8rem; transition:border-color .15s; }
-  .res-card:hover { border-color:#58a6ff; }
-  .res-id     { font-size:1.1rem; font-weight:900; color:#58a6ff; font-family:monospace; }
-  .res-desc   { font-size:.88rem; color:#e6edf3; font-weight:600; margin-top:.15rem; }
-  .res-badge  { display:inline-flex; align-items:center; gap:.3rem; background:#161b22;
-                border:1px solid #30363d; border-radius:20px; font-size:.7rem; font-weight:700;
-                padding:.15rem .55rem; color:#8b949e; white-space:nowrap; }
+  .res-card   { background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:1rem 1.2rem; margin-bottom:.8rem; transition:border-color .15s; }
+  .res-card:hover { border-color:var(--zfer-txt); }
+  .res-id     { font-size:1.1rem; font-weight:900; color:var(--zfer-txt); font-family:monospace; }
+  .res-desc   { font-size:.88rem; color:var(--text); font-weight:600; margin-top:.15rem; }
+  .res-badge  { display:inline-flex; align-items:center; gap:.3rem; background:var(--card-bg);
+                border:1px solid var(--border); border-radius:20px; font-size:.7rem; font-weight:700;
+                padding:.15rem .55rem; color:var(--muted); white-space:nowrap; }
   .res-field-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:.4rem; margin-top:.8rem; }
-  .res-field  { background:#161b22; border-radius:8px; padding:.4rem .7rem; font-size:.75rem; }
-  .res-fkey   { color:#8b949e; font-size:.65rem; text-transform:uppercase; }
-  .res-fval   { color:#e6edf3; font-weight:700; }
-  .res-ftxt   { color:#79c0ff; font-size:.68rem; word-break:break-all; }
+  .res-field  { background:var(--card-bg); border-radius:8px; padding:.4rem .7rem; font-size:.75rem; }
+  .res-fkey   { color:var(--muted); font-size:.65rem; text-transform:uppercase; }
+  .res-fval   { color:var(--text); font-weight:700; }
+  .res-ftxt   { color:var(--info-txt); font-size:.68rem; word-break:break-all; }
 
   .bom-table  { width:100%; border-collapse:collapse; font-size:.82rem; }
-  .bom-table th { padding:.4rem .7rem; background:#161b22; color:#8b949e; font-size:.7rem;
-                  text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #21262d; }
-  .bom-table td { padding:.4rem .7rem; border-bottom:1px solid #161b22; }
-  .bom-pos-formula { color:#58a6ff; font-weight:800; }
-  .bom-pos-base    { color:#e3b341; font-weight:700; }
-  .bom-pos-prot    { color:#56d364; font-weight:700; }
-  .bom-pos-tapas   { color:#d2a8ff; font-weight:700; }
-  .bom-pos-seri    { color:#ffa198; font-weight:700; }
-  .bom-pos-mec     { color:#ff9d45; font-weight:700; }
-  .bom-pos-acero   { color:#f85149; font-weight:700; }
-  .bom-pos-other   { color:#8b949e; }
+  .bom-table th { padding:.4rem .7rem; background:var(--card-bg); color:var(--muted); font-size:.7rem;
+                  text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--divider); }
+  .bom-table td { padding:.4rem .7rem; border-bottom:1px solid var(--attr-row-border); }
+  .bom-pos-formula { color:var(--zfer-txt); font-weight:800; }
+  .bom-pos-base    { color:var(--warn-txt); font-weight:700; }
+  .bom-pos-prot    { color:var(--ok-txt); font-weight:700; }
+  .bom-pos-tapas   { color:var(--pur-txt); font-weight:700; }
+  .bom-pos-seri    { color:var(--err-txt); font-weight:700; }
+  .bom-pos-mec     { color:var(--warn-txt); font-weight:700; }
+  .bom-pos-acero   { color:var(--err-bdr); font-weight:700; }
+  .bom-pos-other   { color:var(--muted); }
 
-  .sql-box { background:#0d1117; border:1px solid #30363d; border-radius:10px; padding:.9rem 1.1rem;
-             font-family:monospace; font-size:.74rem; color:#8b949e; white-space:pre-wrap;
+  .sql-box { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:.9rem 1.1rem;
+             font-family:monospace; font-size:.74rem; color:var(--muted); white-space:pre-wrap;
              word-break:break-word; max-height:220px; overflow-y:auto; }
 
   .spinner-lg { display:inline-block; width:32px; height:32px; border:3px solid rgba(0,194,255,.2);
@@ -49,11 +49,11 @@
                 animation:_spin .75s linear infinite; }
   @keyframes _spin { to { transform:rotate(360deg); } }
 
-  .tab-hr { background:transparent; border:1px solid #30363d; color:#8b949e; border-radius:8px;
+  .tab-hr { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:8px;
             padding:.35rem 1rem; font-size:.82rem; cursor:pointer; transition:.12s; }
-  .tab-hr.active { background:#21262d; color:#e6edf3; border-color:#58a6ff; font-weight:700; }
+  .tab-hr.active { background:var(--tag-neutral-bg); color:var(--text); border-color:var(--zfer-txt); font-weight:700; }
 
-  .input-zfer { background:#161b22; border:1px solid #30363d; color:#e6edf3; border-radius:10px;
+  .input-zfer { background:var(--card-bg); border:1px solid var(--border); color:var(--text); border-radius:10px;
                 padding:.55rem .9rem; font-size:.9rem; outline:none; width:100%; max-width:220px; }
   .input-zfer:focus { border-color:var(--accent); }
 </style>
@@ -62,38 +62,38 @@
 <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
   <a href="/" class="back-link"><i class="bi bi-arrow-left me-1"></i>Inicio</a>
   <div style="flex:1;">
-    <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:#8b949e;">AGP Glass · Colombia CO01</div>
-    <h2 style="margin:.1rem 0 0; font-size:1.4rem; font-weight:900; color:#e6edf3;">
+    <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted);">AGP Glass · Colombia CO01</div>
+    <h2 style="margin:.1rem 0 0; font-size:1.4rem; font-weight:900; color:var(--text);">
       <i class="bi bi-signpost-split me-2" style="color:var(--accent);"></i>Hojas de Ruta
     </h2>
-    <div style="font-size:.78rem; color:#8b949e; margin-top:.1rem;">
+    <div style="font-size:.78rem; color:var(--muted); margin-top:.1rem;">
       Busca la hoja de ruta de producción para un ZFER o esa mrda
     </div>
   </div>
 </div>
 
 <!-- Formulario de búsqueda -->
-<div class="hr-card" style="border-color:#1f6feb;">
+<div class="hr-card" style="border-color:var(--info-bdr);">
   <div class="hr-section-title"><i class="bi bi-search me-1"></i>Búsqueda</div>
   <div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap;">
     <div>
-      <label style="font-size:.75rem; color:#8b949e; display:block; margin-bottom:.3rem;">ZFER Base <span style="color:#484f58;">(atributos + metrología)</span></label>
+      <label style="font-size:.75rem; color:var(--muted); display:block; margin-bottom:.3rem;">ZFER Base <span style="color:var(--nav-meta);">(atributos + metrología)</span></label>
       <input id="inp-base" type="text" class="input-zfer" placeholder="ej: 700179044"
              maxlength="18" oninput="this.value=this.value.replace(/\D/g,'')">
     </div>
     <div>
-      <label style="font-size:.75rem; color:#8b949e; display:block; margin-bottom:.3rem;">ZFER Nuevo <span style="color:#484f58;">(BOM desde SAP)</span></label>
+      <label style="font-size:.75rem; color:var(--muted); display:block; margin-bottom:.3rem;">ZFER Nuevo <span style="color:var(--nav-meta);">(BOM desde SAP)</span></label>
       <input id="inp-nuevo" type="text" class="input-zfer" placeholder="ej: 700185021"
              maxlength="18" oninput="this.value=this.value.replace(/\D/g,'')">
     </div>
     <button id="btn-buscar" onclick="_buscar()"
-            style="background:linear-gradient(135deg,#1f6feb,#d238fd); color:#fff; border:none;
+            style="background:linear-gradient(135deg,var(--info-bdr),var(--pur-bdr)); color:#fff; border:none;
                    border-radius:10px; padding:.55rem 1.5rem; font-size:.9rem; font-weight:700;
                    cursor:pointer; white-space:nowrap; height:38px;">
       <i class="bi bi-search me-1"></i>Buscar Hoja de Ruta
     </button>
   </div>
-  <div id="buscar-status" style="margin-top:.7rem; font-size:.8rem; color:#8b949e; display:none;"></div>
+  <div id="buscar-status" style="margin-top:.7rem; font-size:.8rem; color:var(--muted); display:none;"></div>
 </div>
 
 <!-- Resultado -->
@@ -104,14 +104,14 @@
 
   <!-- Tabs -->
   <div style="display:flex; gap:.5rem; margin-bottom:1rem; flex-wrap:wrap; align-items:center;">
-    <button class="tab-hr active" data-tab="candidata" onclick="_tabHr('candidata')"><i class="bi bi-star-fill me-1" style="color:#e3b341;"></i>Candidata</button>
-    <button class="tab-hr" data-tab="otras" onclick="_tabHr('otras')"><i class="bi bi-file-earmark-check me-1"></i>Otras opciones <span id="badge-n" style="background:#1f6feb;color:#fff;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.3rem;"></span></button>
+    <button class="tab-hr active" data-tab="candidata" onclick="_tabHr('candidata')"><i class="bi bi-star-fill me-1" style="color:var(--warn-txt);"></i>Candidata</button>
+    <button class="tab-hr" data-tab="otras" onclick="_tabHr('otras')"><i class="bi bi-file-earmark-check me-1"></i>Otras opciones <span id="badge-n" style="background:var(--info-bdr);color:#fff;border-radius:20px;padding:.05rem .4rem;font-size:.7rem;margin-left:.3rem;"></span></button>
     <button class="tab-hr" data-tab="criterios" onclick="_tabHr('criterios')"><i class="bi bi-funnel me-1"></i>Criterios</button>
     <button class="tab-hr" data-tab="bom" onclick="_tabHr('bom')"><i class="bi bi-diagram-3 me-1"></i>BOM</button>
     <button class="tab-hr" data-tab="sql" onclick="_tabHr('sql')"><i class="bi bi-code-slash me-1"></i>SQL</button>
     <div id="badge-identicas" style="display:none; align-items:center; gap:.4rem; margin-left:.3rem;
-         background:#2d1f3d; border:1px solid #8957e5; border-radius:8px;
-         padding:.3rem .75rem; font-size:.78rem; font-weight:700; color:#d2a8ff; cursor:default;"
+         background:var(--pur-bg); border:1px solid var(--pur-bdr); border-radius:8px;
+         padding:.3rem .75rem; font-size:.78rem; font-weight:700; color:var(--pur-txt); cursor:default;"
          title="Hojas de ruta con todos los campos idénticos (excepto ID)">
       <i class="bi bi-copy"></i>
       <span id="num-identicas"></span> idénticas
@@ -122,8 +122,8 @@
   <div id="tab-candidata">
     <!-- Alertas de validación BOM -->
     <div id="alertas-validacion" style="display:none; margin-bottom:.8rem; padding:.7rem 1rem;
-         background:#2d2208; border:1px solid #e3b341; border-radius:8px;
-         color:#e3b341; font-size:.82rem; flex-direction:column; gap:.4rem;"></div>
+         background:var(--warn-bg); border:1px solid var(--warn-bdr); border-radius:8px;
+         color:var(--warn-txt); font-size:.82rem; flex-direction:column; gap:.4rem;"></div>
     <div id="candidata-contenido"></div>
   </div>
 
@@ -132,7 +132,7 @@
     <div style="margin-bottom:.8rem;">
       <input id="inp-filtro-otras" type="text" placeholder="Buscar por ID, descripción, sub-ruta…"
              oninput="_filtrarOtras()"
-             style="background:#161b22; border:1px solid #30363d; color:#e6edf3; border-radius:10px;
+             style="background:var(--card-bg); border:1px solid var(--border); color:var(--text); border-radius:10px;
                     padding:.45rem .9rem; font-size:.82rem; outline:none; width:100%; max-width:380px;">
     </div>
     <div id="otras-lista"></div>
@@ -143,15 +143,15 @@
     <div class="hr-card">
       <div class="hr-section-title">Criterios enviados a ODATA_HR_CONSULTA</div>
       <div id="crit-atributos" style="margin-bottom:1rem;">
-        <div style="font-size:.75rem; color:#8b949e; margin-bottom:.4rem; font-weight:600;">ATRIBUTOS (del ZFER base)</div>
+        <div style="font-size:.75rem; color:var(--muted); margin-bottom:.4rem; font-weight:600;">ATRIBUTOS (del ZFER base)</div>
         <div class="crit-grid" id="crit-attrs-grid"></div>
       </div>
       <div id="crit-bom-section">
-        <div style="font-size:.75rem; color:#8b949e; margin-bottom:.4rem; font-weight:600;">POSICIONES BOM (del ZFER nuevo)</div>
+        <div style="font-size:.75rem; color:var(--muted); margin-bottom:.4rem; font-weight:600;">POSICIONES BOM (del ZFER nuevo)</div>
         <div class="crit-grid" id="crit-bom-grid"></div>
       </div>
       <div style="margin-top:1rem;">
-        <div style="font-size:.75rem; color:#8b949e; margin-bottom:.4rem; font-weight:600;">PROCESOS</div>
+        <div style="font-size:.75rem; color:var(--muted); margin-bottom:.4rem; font-weight:600;">PROCESOS</div>
         <div class="crit-grid" id="crit-proc-grid"></div>
       </div>
     </div>
@@ -206,7 +206,7 @@ function _filtrarOtras() {
     : _todasHRs;
   document.getElementById("otras-lista").innerHTML = filtradas.length
     ? filtradas.map(_hrCard).join("")
-    : `<div style="color:#484f58;padding:1rem;text-align:center;">Sin resultados para "${q}"</div>`;
+    : `<div style="color:var(--nav-meta);padding:1rem;text-align:center;">Sin resultados para "${q}"</div>`;
 }
 
 function _clasePos(pos) {
@@ -243,7 +243,7 @@ function _hrCard(r) {
         ${r.sub_ruta ? `<span class="res-badge">Sub-ruta: ${r.sub_ruta}</span>` : ""}
         ${r.tamano   ? `<span class="res-badge">${r.tamano}</span>` : ""}
         ${r.nivel    ? `<span class="res-badge">${r.nivel}</span>` : ""}
-        ${r.geometria? `<span class="res-badge" style="border-color:#8957e5;color:#d2a8ff;">${r.geometria}</span>` : ""}
+        ${r.geometria? `<span class="res-badge" style="border-color:var(--pur-bdr);color:var(--pur-txt);">${r.geometria}</span>` : ""}
         ${r.materiales != null ? `<span class="res-badge"><i class="bi bi-boxes me-1"></i>${r.materiales} materiales</span>` : ""}
       </div>
     </div>
@@ -267,7 +267,7 @@ function _hrCard(r) {
 function _resField(label, val, txt) {
   return `<div class="res-field">
     <div class="res-fkey">${label}</div>
-    <div class="res-fval">${val ?? '<span style="color:#484f58;font-style:italic;">NULL</span>'}</div>
+    <div class="res-fval">${val ?? '<span style="color:var(--nav-meta);font-style:italic;">NULL</span>'}</div>
     ${txt ? `<div class="res-ftxt">${txt}</div>` : ""}
   </div>`;
 }
@@ -316,28 +316,28 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
 
   // ── Info ZFER base ────────────────────────────────────────────────────────
   const geoBadge = zi.geometria === "02"
-    ? `<span class="res-badge" style="border-color:#8957e5;color:#d2a8ff;"><i class="bi bi-circle me-1"></i>Curvo</span>`
+    ? `<span class="res-badge" style="border-color:var(--pur-bdr);color:var(--pur-txt);"><i class="bi bi-circle me-1"></i>Curvo</span>`
     : `<span class="res-badge"><i class="bi bi-square me-1"></i>Plano</span>`;
   document.getElementById("res-zfer-info").innerHTML = `
     <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:.5rem;">
       <div>
-        <div style="font-size:.68rem; color:#8b949e; text-transform:uppercase; letter-spacing:.5px;">ZFER Base</div>
-        <div style="font-size:1.2rem; font-weight:900; color:#58a6ff; font-family:monospace;">${zfer_base}</div>
-        ${zi.texto ? `<div style="font-size:.82rem; color:#e6edf3;">${zi.texto}</div>` : ""}
+        <div style="font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">ZFER Base</div>
+        <div style="font-size:1.2rem; font-weight:900; color:var(--zfer-txt); font-family:monospace;">${zfer_base}</div>
+        ${zi.texto ? `<div style="font-size:.82rem; color:var(--text);">${zi.texto}</div>` : ""}
       </div>
-      <div style="width:1px; height:40px; background:#21262d;"></div>
+      <div style="width:1px; height:40px; background:var(--tag-neutral-bg);"></div>
       <div>
-        <div style="font-size:.68rem; color:#8b949e; text-transform:uppercase; letter-spacing:.5px;">ZFER Nuevo (BOM)</div>
-        <div style="font-size:1.2rem; font-weight:900; color:#56d364; font-family:monospace;">${zfer_nuevo}</div>
-        <div style="font-size:.78rem; color:#8b949e;">${d.bom_posiciones.length} posiciones en BOM</div>
+        <div style="font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">ZFER Nuevo (BOM)</div>
+        <div style="font-size:1.2rem; font-weight:900; color:var(--ok-txt); font-family:monospace;">${zfer_nuevo}</div>
+        <div style="font-size:.78rem; color:var(--muted);">${d.bom_posiciones.length} posiciones en BOM</div>
       </div>
-      <div style="width:1px; height:40px; background:#21262d;"></div>
+      <div style="width:1px; height:40px; background:var(--tag-neutral-bg);"></div>
       <div style="display:flex; gap:.4rem; flex-wrap:wrap; align-items:center;">
         ${geoBadge}
         ${c.tamano ? `<span class="res-badge">${c.tamano}</span>` : ""}
         ${c.nivel  ? `<span class="res-badge">${c.nivel}</span>`  : ""}
-        ${zi.formula ? `<span class="res-badge" style="border-color:#6e40c9;color:#bc8cff;">${zi.formula}</span>` : ""}
-        ${zi.differentials ? `<span class="res-badge" style="border-color:#2ea043;color:#56d364;">Diff: ${zi.differentials}</span>` : ""}
+        ${zi.formula ? `<span class="res-badge" style="border-color:var(--pur-bdr);color:var(--blq-title);">${zi.formula}</span>` : ""}
+        ${zi.differentials ? `<span class="res-badge" style="border-color:var(--ok-bdr);color:var(--ok-txt);">Diff: ${zi.differentials}</span>` : ""}
         ${zi.area != null ? `<span class="res-badge">Área: ${parseFloat(zi.area).toFixed(3)} m²</span>` : ""}
       </div>
     </div>`;
@@ -369,16 +369,16 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
   // ── BOM tabla ─────────────────────────────────────────────────────────────
   const filas = d.bom_filas || [];
   if (!filas.length) {
-    document.getElementById("bom-tabla").innerHTML = `<div style="color:#484f58;padding:1rem;">Sin posiciones en BOM</div>`;
+    document.getElementById("bom-tabla").innerHTML = `<div style="color:var(--nav-meta);padding:1rem;">Sin posiciones en BOM</div>`;
   } else {
     const rows = filas.map((f,i) => {
       const clave = CLAVE_FORMULA[f.pos] || "";
       const cls   = _clasePos(f.pos);
       return `<tr>
-        <td style="padding:.35rem .7rem;color:#484f58;font-size:.72rem;">${i+1}</td>
+        <td style="padding:.35rem .7rem;color:var(--nav-meta);font-size:.72rem;">${i+1}</td>
         <td style="padding:.35rem .7rem;" class="${cls}">${f.pos}</td>
-        <td style="padding:.35rem .7rem;font-size:.8rem;color:#8b949e;font-family:monospace;">${f.nombre||'—'}</td>
-        <td style="padding:.35rem .7rem;">${clave ? `<span style="background:#0d1e2e;color:#58a6ff;border:1px solid #1f6feb;border-radius:12px;font-size:.68rem;font-weight:700;padding:.1rem .45rem;">${clave}</span>` : ""}</td>
+        <td style="padding:.35rem .7rem;font-size:.8rem;color:var(--muted);font-family:monospace;">${f.nombre||'—'}</td>
+        <td style="padding:.35rem .7rem;">${clave ? `<span style="background:var(--info-bg);color:var(--zfer-txt);border:1px solid var(--info-bdr);border-radius:12px;font-size:.68rem;font-weight:700;padding:.1rem .45rem;">${clave}</span>` : ""}</td>
       </tr>`;
     }).join("");
     document.getElementById("bom-tabla").innerHTML = `
@@ -405,7 +405,7 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
   if (alertas.length) {
     alertasEl.innerHTML = alertas.map(a =>
       `<div style="display:flex;align-items:flex-start;gap:.5rem;">
-         <i class="bi bi-exclamation-triangle-fill" style="color:#e3b341;flex-shrink:0;margin-top:.1rem;"></i>
+         <i class="bi bi-exclamation-triangle-fill" style="color:var(--warn-txt);flex-shrink:0;margin-top:.1rem;"></i>
          <span>${a}</span>
        </div>`
     ).join("");
@@ -417,29 +417,29 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
 
   if (!res.length) {
     document.getElementById("candidata-contenido").innerHTML = `
-      <div class="hr-card" style="text-align:center; padding:2.5rem; color:#484f58;">
+      <div class="hr-card" style="text-align:center; padding:2.5rem; color:var(--nav-meta);">
         <i class="bi bi-search" style="font-size:2.5rem; display:block; margin-bottom:.7rem;"></i>
         No se encontró ninguna hoja de ruta con los criterios construidos.<br>
         <span style="font-size:.78rem;">Revisa los criterios y el BOM.</span>
       </div>`;
   } else if (!candidata) {
     document.getElementById("candidata-contenido").innerHTML = `
-      <div class="hr-card" style="text-align:center; padding:2rem; color:#e3b341; border-color:#e3b341;">
+      <div class="hr-card" style="text-align:center; padding:2rem; color:var(--warn-txt); border-color:var(--warn-txt);">
         <i class="bi bi-exclamation-triangle" style="font-size:2rem; display:block; margin-bottom:.6rem;"></i>
         Todas las hojas de ruta encontradas superan 950 materiales.<br>
-        <span style="font-size:.78rem; color:#8b949e;">Revisa las "Otras opciones" para elegir manualmente.</span>
+        <span style="font-size:.78rem; color:var(--muted);">Revisa las "Otras opciones" para elegir manualmente.</span>
       </div>` + res.map(_hrCard).join("");
   } else {
     // Barra de capacidad
     const pct     = Math.round((candidata.materiales / 950) * 100);
-    const barColor = pct >= 90 ? "#f85149" : pct >= 70 ? "#e3b341" : "#2ea043";
+    const barColor = pct >= 90 ? "var(--err-bdr)" : pct >= 70 ? "var(--warn-txt)" : "var(--ok-bdr)";
     document.getElementById("candidata-contenido").innerHTML = `
-      <div style="background:linear-gradient(135deg,#0d1f12,#0d1117); border:2px solid #2ea043;
+      <div style="background:linear-gradient(135deg,var(--ok-bg),var(--bg)); border:2px solid var(--ok-bdr);
                   border-radius:16px; padding:1.4rem 1.6rem; margin-bottom:1rem;">
         <div style="display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem;">
-          <i class="bi bi-star-fill" style="color:#e3b341; font-size:1.1rem;"></i>
-          <span style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:#56d364; font-weight:700;">Hoja de Ruta Candidata</span>
-          <span style="margin-left:auto; font-size:.72rem; color:#8b949e;">Mayor capacidad disponible ≤ 950</span>
+          <i class="bi bi-star-fill" style="color:var(--warn-txt); font-size:1.1rem;"></i>
+          <span style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--ok-txt); font-weight:700;">Hoja de Ruta Candidata</span>
+          <span style="margin-left:auto; font-size:.72rem; color:var(--muted);">Mayor capacidad disponible ≤ 950</span>
         </div>
         <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:.8rem;">
           <div>
@@ -447,21 +447,21 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
             <div class="res-desc" style="font-size:.95rem;">${candidata.descripcion || '—'}</div>
           </div>
           <div style="text-align:right; min-width:140px;">
-            <div style="font-size:2rem; font-weight:900; color:#56d364; line-height:1;">${candidata.materiales}</div>
-            <div style="font-size:.72rem; color:#8b949e;">materiales actuales</div>
-            <div style="font-size:.72rem; color:#484f58;">máx. 950</div>
+            <div style="font-size:2rem; font-weight:900; color:var(--ok-txt); line-height:1;">${candidata.materiales}</div>
+            <div style="font-size:.72rem; color:var(--muted);">materiales actuales</div>
+            <div style="font-size:.72rem; color:var(--nav-meta);">máx. 950</div>
           </div>
         </div>
         <!-- Barra de capacidad -->
-        <div style="background:#21262d; border-radius:20px; height:8px; overflow:hidden; margin-bottom:.4rem;">
+        <div style="background:var(--tag-neutral-bg); border-radius:20px; height:8px; overflow:hidden; margin-bottom:.4rem;">
           <div style="height:100%; width:${pct}%; background:${barColor}; border-radius:20px; transition:width .4s;"></div>
         </div>
-        <div style="font-size:.7rem; color:#8b949e; margin-bottom:1rem;">${pct}% de capacidad utilizada (${candidata.materiales}/950)</div>
+        <div style="font-size:.7rem; color:var(--muted); margin-bottom:1rem;">${pct}% de capacidad utilizada (${candidata.materiales}/950)</div>
         <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.8rem;">
           ${candidata.sub_ruta ? `<span class="res-badge">Sub-ruta: ${candidata.sub_ruta}</span>` : ""}
           ${candidata.tamano   ? `<span class="res-badge">${candidata.tamano}</span>` : ""}
           ${candidata.nivel    ? `<span class="res-badge">${candidata.nivel}</span>` : ""}
-          ${candidata.geometria? `<span class="res-badge" style="border-color:#8957e5;color:#d2a8ff;">${candidata.geometria}</span>` : ""}
+          ${candidata.geometria? `<span class="res-badge" style="border-color:var(--pur-bdr);color:var(--pur-txt);">${candidata.geometria}</span>` : ""}
         </div>
         <div class="res-field-grid">
           ${_resField("FORMULA", candidata.formula, candidata.txt_formula)}
@@ -484,7 +484,7 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
   document.getElementById("inp-filtro-otras").value = "";
   document.getElementById("otras-lista").innerHTML = res.length
     ? res.map(_hrCard).join("")
-    : `<div style="color:#484f58;padding:1rem;text-align:center;">Sin resultados</div>`;
+    : `<div style="color:var(--nav-meta);padding:1rem;text-align:center;">Sin resultados</div>`;
 
   // ── Badge HRs idénticas ───────────────────────────────────────────────────
   const badgeId = document.getElementById("badge-identicas");
