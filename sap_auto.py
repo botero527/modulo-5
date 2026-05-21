@@ -31,8 +31,8 @@ T_LENTO  = 8.0   # máx para ejecutar transacciones pesadas
 
 # Mínimos garantizados antes de empezar a hacer poll
 _T_MIN_RAPIDO = 0.05
-_T_MIN_MEDIO  = 0.15
-_T_MIN_LENTO  = 0.4
+_T_MIN_MEDIO  = 0.10
+_T_MIN_LENTO  = 0.20
 
 _SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
 
@@ -444,11 +444,11 @@ class AutomatizadorSAP:
         """
         print("     Abriendo sesión auxiliar para ZPPR0020...")
         self.session.createSession()
-        self._esperar(T_LENTO)
+        self._esperar(T_MEDIO)
 
         idx_nueva = self.conn_sap.Children.Count - 1
         ses2 = self.conn_sap.Children(idx_nueva)
-        self._esperar(T_LENTO)   # dar tiempo a que la sesión arranque
+        self._esperar(T_MEDIO)   # dar tiempo a que la sesión arranque
         ses2.findById("wnd[0]").maximize()
 
         # cerrar popup de bienvenida / avisos si existe
@@ -462,7 +462,7 @@ class AutomatizadorSAP:
             print("     ZPPR0020: navegando...")
             ses2.findById(self._ID_TCODE_BOX).text = "ZPPR0020"
             ses2.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_LENTO)   # esperar carga ZPPR0020
+            self._esperar(T_MEDIO)   # esperar carga ZPPR0020
 
             # cerrar cualquier popup post-navegación
             for _ in range(3):
@@ -1170,7 +1170,7 @@ class AutomatizadorSAP:
         resultado = {}
         print(f"     Leyendo clases ZPLA {zpla} desde ZPPR0008...")
         self.session.createSession()
-        self._esperar(T_LENTO)
+        self._esperar(T_MEDIO)
 
         idx_nueva = self.conn_sap.Children.Count - 1
         ses = self.conn_sap.Children(idx_nueva)
@@ -2316,9 +2316,9 @@ class AutomatizadorSAP:
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
             self.session.findById("wnd[0]/tbar[1]/btn[5]").press()
-            self._esperar(T_LENTO)
+            self._esperar(T_MEDIO)
             self.session.findById("wnd[0]/tbar[1]/btn[31]").press()
-            self._esperar(T_LENTO)
+            self._esperar(T_MEDIO)
 
             tbl = self.session.findById(_TBL)
             vis_rows   = tbl.VisibleRowCount
