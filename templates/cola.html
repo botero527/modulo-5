@@ -224,10 +224,14 @@ function _itemRow(it) {
   const detalle = it.tipo === 'color'
     ? `<span class="item-color">${it.color_nombre||it.color||'—'}</span>`
     : `<span class="item-tipo" style="background:#1c2e1c;color:#56d364;border-color:#2ea043;">${it.formula_nueva||'—'}</span>`;
-  const estadoHtml = it.estado === 'OK'
-    ? `<span class="item-estado-ok"><i class="bi bi-check-circle-fill me-1"></i>OK ${it.zfer_nuevo ? '→ '+it.zfer_nuevo : ''}</span>`
-    : it.estado === 'ERROR'
+  const esAdv = it.estado === 'OK' && (it.error_msg||'').startsWith('[ADV]');
+  const estadoHtml = it.estado === 'ERROR'
     ? `<span class="item-estado-err" title="${it.error_msg||''}"><i class="bi bi-x-circle-fill me-1"></i>${(it.error_msg||'Error').substring(0,60)}${(it.error_msg||'').length>60?'…':''}</span>`
+    : esAdv
+    ? `<span style="background:#2e2200;color:#e3b341;border:1px solid #b5820a;border-radius:10px;padding:.15rem .5rem;font-size:.72rem;font-weight:700;">⚠ ADV ${it.zfer_nuevo ? '→ '+it.zfer_nuevo : ''}</span>
+       <div style="font-size:.68rem;color:#e3b341;margin-top:.15rem;" title="${it.error_msg||''}">${(it.error_msg||'').substring(5,80)}${(it.error_msg||'').length>80?'…':''}</div>`
+    : it.estado === 'OK'
+    ? `<span class="item-estado-ok"><i class="bi bi-check-circle-fill me-1"></i>OK ${it.zfer_nuevo ? '→ '+it.zfer_nuevo : ''}</span>`
     : `<span class="item-estado-pend"><i class="bi bi-hourglass me-1"></i>Pendiente</span>`;
   return `<div class="item-row">
     <span class="item-zfer">${it.zfer_base}</span>
@@ -421,7 +425,8 @@ async function _verReporteBloque(bloqueId) {
     const renderTabla = (lista) => {
       if (!lista.length) return `<div style="padding:2rem;text-align:center;color:#484f58;">Sin ítems en esta categoría</div>`;
       return lista.map((it,i) => {
-        const bg = it.estado==='OK' ? 'rgba(56,211,100,.05)' : it.estado==='ERROR' ? 'rgba(248,81,73,.06)' : '';
+        const esAdv = it.estado==='OK' && (it.error_msg||'').startsWith('[ADV]');
+        const bg = it.estado==='ERROR' ? 'rgba(248,81,73,.06)' : esAdv ? 'rgba(227,179,65,.05)' : it.estado==='OK' ? 'rgba(56,211,100,.05)' : '';
         const tipoBadge = it.tipo==='COLOR'
           ? `<span class="tipo-color"><i class="bi bi-palette me-1"></i>Color</span>`
           : `<span class="tipo-formula"><i class="bi bi-flask me-1"></i>Fórmula</span>`;
@@ -430,12 +435,17 @@ async function _verReporteBloque(bloqueId) {
              <div style="font-size:.68rem;color:#484f58;">Franja: ${it.franja||'00'}</div>`
           : `<div style="font-size:.78rem;color:#d2a8ff;">${it.formula_nueva||'—'}</div>
              <div style="font-size:.68rem;color:#484f58;">${it.color_nombre||it.color||''}</div>`;
-        const estadoBadge = it.estado==='OK'
-          ? `<span class="rep-tag-ok"><i class="bi bi-check-circle-fill me-1"></i>OK</span>`
-          : it.estado==='ERROR'
+        const estadoBadge = it.estado==='ERROR'
           ? `<span class="rep-tag-err"><i class="bi bi-x-circle-fill me-1"></i>ERROR</span>`
+          : esAdv
+          ? `<span style="background:#2e2200;color:#e3b341;border:1px solid #b5820a;border-radius:10px;padding:.15rem .5rem;font-size:.72rem;font-weight:700;">⚠ ADV</span>`
+          : it.estado==='OK'
+          ? `<span class="rep-tag-ok"><i class="bi bi-check-circle-fill me-1"></i>OK</span>`
           : `<span style="color:#8b949e;font-size:.72rem;">—</span>`;
-        const errShort = it.error_msg ? (it.error_msg.length>60 ? it.error_msg.substring(0,60)+'…' : it.error_msg) : '—';
+        const advMsg = esAdv ? (it.error_msg||'').substring(5).trim() : '';
+        const errShort = esAdv
+          ? (advMsg.length>60 ? advMsg.substring(0,60)+'…' : advMsg||'—')
+          : it.error_msg ? (it.error_msg.length>60 ? it.error_msg.substring(0,60)+'…' : it.error_msg) : '—';
         return `<div class="rep-row" style="background:${bg};">
           <span style="color:#484f58;font-size:.7rem;">${i+1}</span>
           <span style="font-weight:700;color:#58a6ff;font-size:.8rem;">${it.zfer_base}</span>

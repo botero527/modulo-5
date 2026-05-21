@@ -2627,7 +2627,7 @@ buscarFormulasAlt();
   window._simetriaRenderizar = function() {
     const chk  = document.getElementById("sim-check");
     const chip = document.getElementById("sim-chip");
-    if (!chk) return;
+    if (!chk || !chip) return;
     chk.checked = _simActual.tiene_simetria;
     if (_simActual.tiene_simetria && _simActual.zfer_simetrico) {
       chip.innerHTML = `<i class="bi bi-symmetry-horizontal"></i>&nbsp;<a href="/zfer/${_simActual.zfer_simetrico}" style="color:#bc8cff; font-weight:700;">${_simActual.zfer_simetrico}</a>`;

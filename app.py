@@ -762,21 +762,44 @@ def q_formulas_por_pieza(piece_type: str, nivel: str, subproducto: str,
             r0 = rows[0]
             print(f"  [q_formulas] ejemplo fila0: mat={r0[0]} formula={r0[1]} color={r0[2]} differentials={r0[3]}")
 
-        # Agrupar por fórmula skyprom
+        # Agrupar por fórmula → color (un color puede tener varios ZPLAs)
         formulas: dict = {}
         for row in rows:
             mat, formula, color, differentials = row[0], row[1], row[2], row[3]
+            color_key = str(color).strip()
+            zpla_str  = str(mat).strip()
+            diff_str  = differentials or ""
             if formula not in formulas:
-                formulas[formula] = []
-            formulas[formula].append({
-                "zpla":          str(mat).strip(),
-                "color":         str(color).strip(),
-                "color_nombre":  COLORES.get(str(color).strip(), str(color).strip()),
-                "differentials": differentials or "",
-            })
+                formulas[formula] = {}
+            if color_key not in formulas[formula]:
+                formulas[formula][color_key] = {
+                    "color":         color_key,
+                    "color_nombre":  COLORES.get(color_key, color_key),
+                    "differentials": diff_str,
+                    "zpla_list":     [zpla_str],
+                }
+            else:
+                if zpla_str not in formulas[formula][color_key]["zpla_list"]:
+                    formulas[formula][color_key]["zpla_list"].append(zpla_str)
+                # usa los differentials del zpla con acero si existe
+                if "06" in diff_str.split(","):
+                    formulas[formula][color_key]["differentials"] = diff_str
 
-        return [{"formula": f, "colores": cols}
-                for f, cols in sorted(formulas.items())]
+        result = []
+        for f, color_dict in sorted(formulas.items()):
+            colores = []
+            for c in color_dict.values():
+                zpla_list = c["zpla_list"]
+                colores.append({
+                    "zpla":          zpla_list[0],
+                    "zpla_list":     zpla_list,
+                    "zpla_count":    len(zpla_list),
+                    "color":         c["color"],
+                    "color_nombre":  c["color_nombre"],
+                    "differentials": c["differentials"],
+                })
+            result.append({"formula": f, "colores": colores})
+        return result
     except Exception as e:
         return [{"_error": str(e)}]
 
@@ -2460,7 +2483,7 @@ def _cola_proximo_bloque() -> dict | None:
         return None
 
 
-def _cola_archivar_y_limpiar(bloque_id: int):
+def _cola_archivar_y_limpiar(bloque_id: int, ejecutado_por: str = "sistema"):
     """Al completar un bloque: mueve ejecutados → M5_LogEjecuciones, limpia M5_Cola. Deja el bloque COMPLETADO visible."""
     try:
         with _get_conn_local() as cn:
@@ -2468,13 +2491,15 @@ def _cola_archivar_y_limpiar(bloque_id: int):
             cur.execute("""
                 INSERT INTO dbo.M5_LogEjecuciones
                     (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                     formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg, ejecutado_el)
+                     pn_base, nivel, tipo_pieza, formula_nueva, acero_dir,
+                     zfer_nuevo, estado, error_msg, ejecutado_el, ejecutado_por)
                 SELECT bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                       formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg,
-                       ISNULL(ejecutado_el, GETDATE())
+                       pn_base, nivel, tipo_pieza, formula_nueva, acero_dir,
+                       zfer_nuevo, estado, error_msg,
+                       ISNULL(ejecutado_el, GETDATE()), ?
                 FROM dbo.M5_Cola
                 WHERE bloque_id = ? AND estado IN ('OK','ERROR')
-            """, bloque_id)
+            """, ejecutado_por, bloque_id)
             archivados = cur.rowcount
             # Limpiar cola temporal (todos los items del bloque)
             cur.execute("DELETE FROM dbo.M5_Cola WHERE bloque_id=?", bloque_id)
@@ -2632,6 +2657,10 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                     estado_item, zfer_nuevo, error_msg = "ERROR", "", str(ex)[:500]
                     print(f"[COLA] item {item['_cola_id']} error: {ex}")
 
+                # Adjuntar advertencias SAP al error_msg si el item fue OK pero tuvo warnings
+                if estado_item == "OK" and res and getattr(res, "advertencias", []):
+                    adv_txt = " | ".join(res.advertencias)
+                    error_msg = f"[ADV] {adv_txt}"
                 # Guardar resultado — también en try para no cortar el loop si falla la BD
                 try:
                     with _get_conn_local() as cn:
@@ -2682,7 +2711,7 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                     nuevo_num, manana7
                 )
         # Mover ejecutados de M5_Cola → M5_LogEjecuciones y limpiar cola temporal
-        _cola_archivar_y_limpiar(bloque_id)
+        _cola_archivar_y_limpiar(bloque_id, ejecutado_por)
         print(f"[COLA] bloque {bloque_id} completado: OK={ok_n} ERR={err_n}")
 
     except Exception as e:
@@ -3105,122 +3134,247 @@ def api_cola_bloque_reporte(bloque_id: int):
 @app.route("/api/cola/bloque/<int:bloque_id>/reporte/excel")
 @login_required
 def api_cola_bloque_excel(bloque_id: int):
-    """Descarga Excel del reporte de un bloque ejecutado — 4 hojas."""
+    """Descarga Excel corporativo del reporte de un bloque ejecutado."""
     import io
     try:
         from openpyxl import Workbook
-        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side, GradientFill
         from openpyxl.utils import get_column_letter
+        from openpyxl.worksheet.table import Table, TableStyleInfo
 
         with _get_conn_local() as cn:
             cur = cn.cursor()
-            cur.execute("SELECT bloque_num, hora_prog, ejecutado_el, ok_count, error_count FROM dbo.M5_Bloques WHERE id=?", bloque_id)
-            br = cur.fetchone()
             cur.execute("""
+                SELECT bloque_num, hora_prog, ejecutado_el, ok_count, error_count
+                FROM dbo.M5_Bloques WHERE id=?
+            """, bloque_id)
+            br = cur.fetchone()
+            # Detectar columnas opcionales (pueden no existir si aún no se corrió la migración)
+            cur.execute("""
+                SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME='M5_LogEjecuciones'
+                AND COLUMN_NAME IN ('pn_base','acero_dir','ejecutado_por','nivel')
+            """)
+            existing_cols = {r[0] for r in cur.fetchall()}
+            def _col(name, alias=None, default="''"):
+                a = alias or name
+                return f"ISNULL({name},'')" if name in existing_cols else f"{default} AS {a}"
+            sel_extra = ", ".join([
+                _col("pn_base"),
+                _col("acero_dir"),
+                _col("ejecutado_por"),
+                _col("nivel"),
+            ])
+            cur.execute(f"""
                 SELECT zfer_base, tipo, color, color_nombre, zpla, franja,
-                       formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg, ejecutado_el
+                       formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg,
+                       ejecutado_el, {sel_extra}
                 FROM dbo.M5_LogEjecuciones WHERE bloque_id=?
                 ORDER BY tipo, ejecutado_el
             """, bloque_id)
             rows = cur.fetchall()
 
-        # Paleta de colores
-        HDR_FILL  = PatternFill("solid", fgColor="1C1A2E")
-        OK_FILL   = PatternFill("solid", fgColor="0D2818")
-        ERR_FILL  = PatternFill("solid", fgColor="2D0E0E")
-        COL_FILL  = PatternFill("solid", fgColor="0D1E2E")
-        FOR_FILL  = PatternFill("solid", fgColor="1A0E2D")
-        HDR_FONT  = Font(bold=True, color="FFFFFF", size=10)
-        thin      = Side(style="thin", color="303030")
-        brd       = Border(left=thin, right=thin, top=thin, bottom=thin)
+        # ── Paleta corporativa AGP ──────────────────────────────────────────
+        C_NAVY    = "0D1B2A"   # header principal
+        C_TEAL    = "00848A"   # acento AGP
+        C_OK      = "0A3D1F"   # fondo verde OK
+        C_OK_TXT  = "56D364"   # texto verde
+        C_ERR     = "3D0A0A"   # fondo rojo ERROR
+        C_ERR_TXT = "FF7B7B"   # texto rojo
+        C_ADV     = "2E2200"   # fondo amarillo ADVERTENCIA
+        C_ADV_TXT = "E3B341"   # texto amarillo
+        C_HDR_TXT = "FFFFFF"
+        C_ROW_A   = "0D1117"   # fila par
+        C_ROW_B   = "161B22"   # fila impar
+        C_LABEL   = "8B949E"   # etiquetas resumen
 
-        def _autofit(ws):
-            for col in ws.columns:
-                w = max((len(str(c.value or "")) for c in col), default=8)
-                ws.column_dimensions[get_column_letter(col[0].column)].width = min(w + 3, 50)
+        def _fill(c): return PatternFill("solid", fgColor=c)
+        def _font(c, bold=False, sz=10): return Font(color=c, bold=bold, size=sz, name="Calibri")
+        thin = Side(style="thin", color="21262D")
+        brd  = Border(left=thin, right=thin, top=thin, bottom=thin)
+        ctr  = Alignment(horizontal="center", vertical="center", wrap_text=False)
+        lft  = Alignment(horizontal="left",   vertical="center", wrap_text=False)
 
-        def _header_row(ws, cols):
-            ws.append(cols)
-            for cell in ws[1]:
-                cell.fill = HDR_FILL; cell.font = HDR_FONT
-                cell.alignment = Alignment(horizontal="center"); cell.border = brd
-            ws.row_dimensions[1].height = 20
+        def _estado_fill_font(estado, error_msg):
+            em = (error_msg or "").strip()
+            if estado == "OK" and em.startswith("[ADV]"):
+                return _fill(C_ADV), _font(C_ADV_TXT)
+            if estado == "OK":
+                return _fill(C_OK),  _font(C_OK_TXT)
+            return _fill(C_ERR), _font(C_ERR_TXT)
 
-        def _write_items(ws, subset):
-            for r in subset:
-                ts = r[11].strftime("%d/%m/%Y %H:%M:%S") if r[11] else ""
-                ws.append([r[0], r[1], r[2] or "", r[3] or "", r[4] or "", r[5] or "00",
-                           r[6] or "", r[7] or "", r[8] or "", r[9], r[10] or "", ts])
-                fill = OK_FILL if r[9] == "OK" else (ERR_FILL if r[9] == "ERROR" else PatternFill())
-                for cell in ws[ws.max_row]:
-                    cell.fill = fill; cell.border = brd
-                    cell.alignment = Alignment(vertical="center")
+        def _ts(dt):
+            return dt.strftime("%d/%m/%Y %H:%M:%S") if dt else ""
 
-        COLS = ["ZFER Base","Tipo","Color (código)","Color Nombre","ZPLA","Franja",
-                "Fórmula Nueva","Tipo Pieza","ZFER Nuevo","Estado","Error","Ejecutado el"]
+        def _duracion(r):
+            # r no tiene duracion_seg directo en este query — dejamos vacío
+            return ""
+
+        # Clasificar rows
+        ok_rows  = [r for r in rows if r[9] == "OK" and not (r[10] or "").startswith("[ADV]")]
+        adv_rows = [r for r in rows if r[9] == "OK" and (r[10] or "").startswith("[ADV]")]
+        err_rows = [r for r in rows if r[9] == "ERROR"]
+        col_rows = [r for r in rows if r[1] and r[1].upper() == "COLOR"]
+        for_rows = [r for r in rows if r[1] and r[1].upper().startswith("FORMULA")]
+
+        ok_n  = len(ok_rows) + len(adv_rows)
+        err_n = len(err_rows)
+        adv_n = len(adv_rows)
+        total = len(rows)
+        hora_prog_str = _ts(br[1]) if br else ""
+        ejecutado_str = _ts(br[2]) if br else ""
+        operador      = rows[0][14] if rows and rows[0][14] else "—"
+
+        COLS = ["#", "ZFER Base", "PN Base", "Tipo", "Dirección Acero",
+                "Color (cód.)", "Color Nombre", "Fórmula Nueva", "Tipo Pieza",
+                "ZPLA", "Franja", "Nivel", "ZFER Nuevo", "Estado",
+                "Hora Ejecución", "Operador", "Advertencias / Error"]
+
+        def _header_row(ws, title_color=C_NAVY):
+            for col_idx, col_name in enumerate(COLS, 1):
+                cell = ws.cell(row=1, column=col_idx, value=col_name)
+                cell.fill = _fill(title_color)
+                cell.font = _font(C_HDR_TXT, bold=True, sz=10)
+                cell.alignment = ctr
+                cell.border = brd
+            ws.row_dimensions[1].height = 22
+            ws.freeze_panes = "A2"
+            ws.auto_filter.ref = f"A1:{get_column_letter(len(COLS))}1"
+
+        def _write_row(ws, row_num, r, alt=False):
+            ts   = _ts(r[11])
+            em   = (r[10] or "").strip()
+            adv  = em[5:].strip() if em.startswith("[ADV]") else ""
+            err  = em if not em.startswith("[ADV]") else ""
+            msg  = adv if adv else err
+            base_fill, txt_font = _estado_fill_font(r[9], r[10])
+            row_fill = base_fill if r[9] == "ERROR" or (r[9]=="OK" and em.startswith("[ADV]")) else _fill(C_ROW_B if alt else C_ROW_A)
+
+            vals = [row_num - 1, r[0] or "", r[12] or "", r[1] or "",
+                    r[13] or "", r[2] or "", r[3] or "", r[6] or "",
+                    r[7] or "", r[4] or "", r[5] or "00", r[15] or "",
+                    r[8] or "", r[9] or "", ts, r[14] or "", msg]
+
+            for col_idx, val in enumerate(vals, 1):
+                cell = ws.cell(row=row_num, column=col_idx, value=val)
+                cell.border = brd
+                cell.alignment = lft
+                if r[9] == "ERROR":
+                    cell.fill = _fill(C_ERR)
+                    cell.font = _font(C_ERR_TXT, sz=9)
+                elif em.startswith("[ADV]"):
+                    cell.fill = _fill(C_ADV)
+                    cell.font = _font(C_ADV_TXT, sz=9)
+                else:
+                    cell.fill = row_fill
+                    cell.font = _font("C9D1D9", sz=9)
+                # Columna Estado con color especial
+                if col_idx == 14:
+                    cell.font = txt_font
+                    cell.font = Font(color=txt_font.color, bold=True, size=9, name="Calibri")
+                    cell.alignment = ctr
+
+        def _write_items(ws, subset, color_header=C_NAVY):
+            _header_row(ws, color_header)
+            for i, r in enumerate(subset):
+                _write_row(ws, i + 2, r, alt=(i % 2 == 1))
+            # Ajuste de anchos fijos (mejor que autofit)
+            widths = [4, 14, 22, 18, 16, 10, 22, 14, 12, 14, 8, 8, 14, 10, 20, 18, 45]
+            for ci, w in enumerate(widths, 1):
+                ws.column_dimensions[get_column_letter(ci)].width = w
 
         wb = Workbook()
 
         # ── Hoja 1: RESUMEN ──────────────────────────────────────────────────
-        ws_r = wb.active; ws_r.title = "RESUMEN"
-        ok_n  = sum(1 for r in rows if r[9] == "OK")
-        err_n = sum(1 for r in rows if r[9] == "ERROR")
-        col_n = sum(1 for r in rows if r[1] == "COLOR")
-        for_n = sum(1 for r in rows if r[1] == "FORMULA")
-        hora_prog_str = br[1].strftime("%d/%m/%Y %H:%M") if br and br[1] else ""
-        ejecutado_str = br[2].strftime("%d/%m/%Y %H:%M") if br and br[2] else ""
-        resumen = [
-            ("Bloque #", br[0] if br else bloque_id),
-            ("Hora programada", hora_prog_str),
-            ("Ejecutado el", ejecutado_str),
-            ("", ""),
-            ("Total ítems", len(rows)),
-            ("Exitosos (OK)", ok_n),
-            ("Con error (ERROR)", err_n),
-            ("Tasa de éxito", f"{round(ok_n/len(rows)*100,1)}%" if rows else "—"),
-            ("", ""),
-            ("Cambios de Color", col_n),
-            ("Cambios de Fórmula", for_n),
+        ws_r = wb.active
+        ws_r.title = "RESUMEN"
+        ws_r.sheet_view.showGridLines = False
+
+        # Título
+        ws_r.merge_cells("A1:D1")
+        t = ws_r["A1"]
+        t.value = "AGP Glass — Reporte de Ejecución SAP"
+        t.fill  = _fill(C_NAVY)
+        t.font  = _font(C_HDR_TXT, bold=True, sz=14)
+        t.alignment = Alignment(horizontal="center", vertical="center")
+        ws_r.row_dimensions[1].height = 32
+
+        ws_r.merge_cells("A2:D2")
+        sub = ws_r["A2"]
+        sub.value = f"Bloque #{br[0] if br else bloque_id}  ·  {ejecutado_str}  ·  Operador: {operador}"
+        sub.fill  = _fill(C_TEAL)
+        sub.font  = _font(C_HDR_TXT, sz=10)
+        sub.alignment = Alignment(horizontal="center", vertical="center")
+        ws_r.row_dimensions[2].height = 20
+
+        ws_r.append([])  # fila vacía
+
+        kpis = [
+            ("Total ítems procesados", total, "C9D1D9"),
+            ("✅  Exitosos (OK)",        ok_n,  C_OK_TXT),
+            ("⚠️  Con advertencias",     adv_n, C_ADV_TXT),
+            ("❌  Con error",            err_n, C_ERR_TXT),
+            ("",                         "",    "C9D1D9"),
+            ("Tasa de éxito",   f"{round(ok_n/total*100,1)}%" if total else "—", C_OK_TXT),
+            ("",                         "",    "C9D1D9"),
+            ("Cambios de Color",   len(col_rows), "58A6FF"),
+            ("Cambios de Fórmula", len(for_rows), "D2A8FF"),
+            ("",                         "",    "C9D1D9"),
+            ("Hora programada",    hora_prog_str, "C9D1D9"),
+            ("Hora de ejecución",  ejecutado_str, "C9D1D9"),
         ]
-        for lbl, val in resumen:
+        for lbl, val, color in kpis:
             ws_r.append([lbl, val])
+            row = ws_r.max_row
             if lbl:
-                ws_r.cell(ws_r.max_row, 1).font = Font(bold=True, color="8B949E", size=10)
-                ws_r.cell(ws_r.max_row, 2).font = Font(color="E6EDF3", size=11)
-        ws_r.column_dimensions["A"].width = 22
-        ws_r.column_dimensions["B"].width = 22
+                ws_r.cell(row, 1).font = _font(C_LABEL, bold=True, sz=10)
+                ws_r.cell(row, 2).font = _font(color, bold=True, sz=12)
+                ws_r.cell(row, 1).fill = _fill(C_ROW_A)
+                ws_r.cell(row, 2).fill = _fill(C_ROW_A)
+            ws_r.row_dimensions[row].height = 18
 
-        # ── Hoja 2: TODOS ────────────────────────────────────────────────────
-        ws_t = wb.create_sheet("Todos")
-        _header_row(ws_t, COLS)
-        _write_items(ws_t, rows)
-        _autofit(ws_t)
+        ws_r.column_dimensions["A"].width = 28
+        ws_r.column_dimensions["B"].width = 18
 
-        # ── Hoja 3: COLORES ──────────────────────────────────────────────────
-        ws_c = wb.create_sheet("Cambio de Color")
-        _header_row(ws_c, COLS)
-        _write_items(ws_c, [r for r in rows if r[1] == "COLOR"])
-        _autofit(ws_c)
+        # ── Hoja 2: Todos ────────────────────────────────────────────────────
+        ws_t = wb.create_sheet("📋 Todos")
+        ws_t.sheet_view.showGridLines = False
+        _write_items(ws_t, rows, C_NAVY)
 
-        # ── Hoja 4: FÓRMULAS ─────────────────────────────────────────────────
-        ws_f = wb.create_sheet("Cambio de Fórmula")
-        _header_row(ws_f, COLS)
-        _write_items(ws_f, [r for r in rows if r[1] == "FORMULA"])
-        _autofit(ws_f)
+        # ── Hoja 3: OK ───────────────────────────────────────────────────────
+        ws_ok = wb.create_sheet("✅ OK")
+        ws_ok.sheet_view.showGridLines = False
+        _write_items(ws_ok, ok_rows, "0A3D1F")
 
-        # ── Hoja 5: ERRORES ───────────────────────────────────────────────────
-        err_rows = [r for r in rows if r[9] == "ERROR"]
+        # ── Hoja 4: Advertencias ─────────────────────────────────────────────
+        if adv_rows:
+            ws_a = wb.create_sheet("⚠️ Advertencias")
+            ws_a.sheet_view.showGridLines = False
+            _write_items(ws_a, adv_rows, "2E2200")
+
+        # ── Hoja 5: Errores ───────────────────────────────────────────────────
         if err_rows:
-            ws_e = wb.create_sheet("Errores")
-            _header_row(ws_e, COLS)
-            _write_items(ws_e, err_rows)
-            _autofit(ws_e)
+            ws_e = wb.create_sheet("❌ Errores")
+            ws_e.sheet_view.showGridLines = False
+            _write_items(ws_e, err_rows, "3D0A0A")
+
+        # ── Hoja 6: Fórmulas ─────────────────────────────────────────────────
+        if for_rows:
+            ws_f = wb.create_sheet("🔬 Fórmulas")
+            ws_f.sheet_view.showGridLines = False
+            _write_items(ws_f, for_rows, "1A0E2D")
+
+        # ── Hoja 7: Colores ───────────────────────────────────────────────────
+        if col_rows:
+            ws_c = wb.create_sheet("🎨 Colores")
+            ws_c.sheet_view.showGridLines = False
+            _write_items(ws_c, col_rows, "0D1E2E")
 
         buf = io.BytesIO()
         wb.save(buf); buf.seek(0)
         bloque_num = br[0] if br else bloque_id
         return send_file(buf, as_attachment=True,
-                         download_name=f"reporte_bloque_{bloque_num}.xlsx",
+                         download_name=f"AGP_Reporte_Bloque_{bloque_num}.xlsx",
                          mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500

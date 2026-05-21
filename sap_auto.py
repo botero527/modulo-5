@@ -34,7 +34,7 @@ _T_MIN_RAPIDO = 0.05
 _T_MIN_MEDIO  = 0.10
 _T_MIN_LENTO  = 0.20
 
-_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "FESPITIA") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -67,6 +67,7 @@ class ResultadoItem:
     zpla:           str   = ""
     posiciones_bom: list  = field(default_factory=list)
     bom_detalle:    list  = field(default_factory=list)  # [{posnr, clase_destino}]
+    advertencias:   list  = field(default_factory=list)  # advertencias no-fatales
     estado:         str   = "PENDIENTE"   # EN_PROCESO | OK | ERROR
     error:          str   = ""
     fecha_inicio:   Optional[datetime.datetime] = None
@@ -88,6 +89,11 @@ class ResultadoItem:
     def _log(self, msg: str):
         print(f"  [SAP] {msg}")
         self.log.append(msg)
+
+    def _advertir(self, msg: str):
+        print(f"  [SAP][ADV] {msg}")
+        self.advertencias.append(msg)
+        self.log.append(f"[ADV] {msg}")
 
 
 # ── Automatizador ─────────────────────────────────────────────────────────────
@@ -188,6 +194,26 @@ class AutomatizadorSAP:
             return self.session.findById(self._ID_STATUSBAR).text.strip()
         except Exception:
             return ""
+
+    def _sbar(self) -> tuple:
+        """Retorna (tipo, texto) del statusbar. tipo: 'E','W','S','I','' """
+        try:
+            sbar = self.session.findById(self._ID_STATUSBAR)
+            txt  = (sbar.text or "").strip()
+            try:
+                mtype = (sbar.messageType or "").strip().upper()
+            except Exception:
+                # messageType no disponible en todas las versiones — inferir del texto
+                mtype = ""
+            if not mtype and txt:
+                tup = txt.upper()
+                if any(w in tup for w in ("ERROR", "NO EXISTE", "NO SE PUEDE", "INCORRECTO", "FALTA")):
+                    mtype = "E"
+                elif any(w in tup for w in ("ADVERTENCIA", "WARNING", "ATENCIÓN")):
+                    mtype = "W"
+            return mtype, txt
+        except Exception:
+            return "", ""
 
     def _aceptar_dialogo(self):
         try:
@@ -1046,8 +1072,17 @@ class AutomatizadorSAP:
                 try:
                     self.session.findById(self._ID_BTN_COPY_ITEM).press()
                     self._esperar(T_LENTO)
-                    msg = self._estado_sap()
-                    print(f"    Ejecutar BOM: {msg}")
+                    sbar_tipo, sbar_txt = self._sbar()
+                    print(f"    Ejecutar BOM sbar: [{sbar_tipo}] {sbar_txt!r}")
+                    if sbar_txt:
+                        if sbar_tipo == "E":
+                            raise RuntimeError(f"BOM COPY_ITEM error SAP: {sbar_txt}")
+                        elif sbar_tipo in ("W", ""):
+                            # advertencia o mensaje informativo — no frena pero queda en log
+                            if on_retry:
+                                on_retry(f"[BOM-SAP] {sbar_txt}")
+                            else:
+                                print(f"    [ADV][BOM] sbar: {sbar_txt}")
                     for wnd_id in ("wnd[2]", "wnd[1]"):
                         try:
                             self.session.findById(wnd_id)
@@ -1061,6 +1096,16 @@ class AutomatizadorSAP:
                                     pass
                         except Exception:
                             pass
+                    # Segunda lectura de sbar DESPUÉS de cerrar popups
+                    sbar_tipo2, sbar_txt2 = self._sbar()
+                    if sbar_tipo2 == "E" and sbar_txt2:
+                        raise RuntimeError(f"BOM post-popup error SAP: {sbar_txt2}")
+                    if sbar_txt2 and sbar_tipo2 in ("W", "") and sbar_txt2 != sbar_txt:
+                        print(f"    [ADV][BOM] sbar post-popup: {sbar_txt2}")
+                        if on_retry:
+                            on_retry(f"[BOM-SAP-post] {sbar_txt2}")
+                except RuntimeError:
+                    raise
                 except Exception as _e:
                     print(f"    [WARN] Ejecutar BOM: {_e}")
                 return posiciones_acum
@@ -2216,7 +2261,7 @@ class AutomatizadorSAP:
         """
         def _warn(msg):
             print(f"    [WARN] ca02_desasignar: {msg}")
-            if res: res._log(f"  [HR-DESASIGNAR] ADVERTENCIA: {msg}")
+            if res: res._advertir(f"HR-Desasignar: {msg}")
 
         print(f"    CA02 desasignar HR: {zfer_nuevo}")
         _TBL = "wnd[1]/usr/tblSAPLCZDITCTRL_1010"
@@ -2300,7 +2345,7 @@ class AutomatizadorSAP:
         """
         def _warn(msg):
             print(f"    [WARN] ca02_asignar: {msg}")
-            if res: res._log(f"  [HR-ASIGNAR] ADVERTENCIA: {msg}")
+            if res: res._advertir(f"HR-Asignar: {msg}")
 
         print(f"    CA02 asignar HR {id_hruta} → {zfer_nuevo}")
         _TBL = "wnd[1]/usr/tblSAPLCZDITCTRL_1010"
@@ -2602,7 +2647,7 @@ class AutomatizadorSAP:
             else:
                 res._log("  [WARN] Sin ZPLA para leer clases")
 
-            posiciones = self.bom_con_retry(zpla_usado, clases)
+            posiciones = self.bom_con_retry(zpla_usado, clases, on_retry=lambda m: res._advertir(m))
             res.posiciones_bom = posiciones
             res.bom_detalle    = [{"posnr": p["pos"], "clase_destino": clases.get(p["pos"], clases.get(p["pos"].lstrip("0"), ""))} for p in posiciones]
             res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
@@ -2757,7 +2802,7 @@ class AutomatizadorSAP:
             else:
                 res._log("  [WARN] Sin ZPLA para leer clases")
 
-            posiciones = self.bom_con_retry(zpla_usado, clases)
+            posiciones = self.bom_con_retry(zpla_usado, clases, on_retry=lambda m: res._advertir(m))
             res.posiciones_bom = posiciones
             res.bom_detalle    = [{"posnr": p["pos"], "clase_destino": clases.get(p["pos"], clases.get(p["pos"].lstrip("0"), ""))} for p in posiciones]
             res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
@@ -2930,7 +2975,7 @@ class AutomatizadorSAP:
             else:
                 res._log("  [WARN] Sin ZPLA para leer clases")
 
-            posiciones = self.bom_con_retry(zpla_usado, clases)
+            posiciones = self.bom_con_retry(zpla_usado, clases, on_retry=lambda m: res._advertir(m))
             res.posiciones_bom = posiciones
             res.bom_detalle    = [{"posnr": p["pos"], "clase_destino": clases.get(p["pos"], clases.get(p["pos"].lstrip("0"), ""))} for p in posiciones]
             res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
@@ -3322,7 +3367,7 @@ class AutomatizadorSAP:
             else:
                 res._log("  [WARN] Sin ZPLA para leer clases")
 
-            posiciones = self.bom_con_retry(zpla_usado, clases)
+            posiciones = self.bom_con_retry(zpla_usado, clases, on_retry=lambda m: res._advertir(m))
             res.posiciones_bom = posiciones
             res.bom_detalle    = [{"posnr": p["pos"], "clase_destino": clases.get(p["pos"], clases.get(p["pos"].lstrip("0"), ""))} for p in posiciones]
             res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
