@@ -83,12 +83,12 @@
         <div style="font-weight:700; font-size:.9rem; margin-top:.2rem;">{{ pn_parsed.version }}</div>
       </div>
       <div class="col-auto" style="border-left:1px solid var(--divider); padding-left:1.5rem;">
-        <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Fórmula</span>
-        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem; color:var(--info-txt);">{{ pn_parsed.formula }}</div>
-      </div>
-      <div class="col-auto" style="border-left:1px solid var(--divider); padding-left:1.5rem;">
         <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Pieza</span>
         <div style="font-weight:700; font-size:.9rem; margin-top:.2rem;">{{ pn_parsed.pieza }}</div>
+      </div>
+      <div class="col-auto" style="border-left:1px solid var(--divider); padding-left:1.5rem;">
+        <span style="color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.8px;">Fórmula</span>
+        <div style="font-weight:700; font-size:.9rem; margin-top:.2rem; color:var(--info-txt);">{{ pn_parsed.formula }}</div>
       </div>
       {% if differentials %}
       <div class="col-auto" style="border-left:1px solid var(--divider); padding-left:1.5rem;">
@@ -876,16 +876,47 @@
                  autocomplete="off" maxlength="10">
         </div>
 
-        <!-- Filtro Subproducto -->
-        <div>
-          <label style="font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; display:block; margin-bottom:.3rem;">
-            <i class="bi bi-tag me-1"></i>Subproducto
-          </label>
-          <input id="flt-sub" type="text" value="{{ subproducto }}"
-                 placeholder="ej: X57, B1"
-                 style="background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px;
-                        padding:.45rem .75rem; font-size:.88rem; width:140px;"
-                 autocomplete="off" maxlength="20">
+        <!-- Filtro Subproducto + lookup -->
+        <div style="display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap;">
+          <div>
+            <label style="font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; display:block; margin-bottom:.3rem;">
+              <i class="bi bi-tag me-1"></i>Subproducto <span style="font-weight:400;text-transform:none;letter-spacing:0;">(código)</span>
+            </label>
+            <input id="flt-sub" type="text" value="{{ subproducto }}"
+                   placeholder="ej: X57, B1"
+                   style="background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px;
+                          padding:.45rem .75rem; font-size:.88rem; width:120px;"
+                   autocomplete="off" maxlength="20">
+          </div>
+
+          <!-- Separador -->
+          <div style="padding-bottom:.55rem; color:var(--muted); font-size:.8rem;">↔</div>
+
+          <!-- Lookup bidireccional -->
+          <div style="position:relative;">
+            <label style="font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; display:block; margin-bottom:.3rem;">
+              <i class="bi bi-search me-1"></i>Buscar por nombre o código
+            </label>
+            <input id="sub-lookup" type="text" placeholder="escribe código o nombre…"
+                   style="background:var(--bg); border:1px solid var(--info-bdr); color:var(--text); border-radius:8px;
+                          padding:.45rem .75rem; font-size:.88rem; width:230px; outline:none;
+                          transition:border-color .15s, box-shadow .15s;"
+                   autocomplete="off"
+                   onfocus="this.style.boxShadow='0 0 0 3px rgba(0,191,255,.15)'"
+                   onblur="setTimeout(()=>document.getElementById('sub-dropdown').style.display='none',200); this.style.boxShadow=''">
+            <!-- Dropdown sugerencias -->
+            <div id="sub-dropdown"
+                 style="display:none; position:absolute; top:100%; left:0; z-index:500; min-width:280px; max-width:360px;
+                        background:var(--card-bg); border:1px solid var(--border); border-radius:10px;
+                        box-shadow:0 8px 24px rgba(0,0,0,.18); overflow:hidden; margin-top:3px;
+                        max-height:260px; overflow-y:auto;">
+            </div>
+            <!-- Chip resultado -->
+            <div id="sub-result" style="display:none; margin-top:.35rem; font-size:.78rem;
+                 background:var(--info-bg); color:var(--info-txt); border:1px solid var(--info-bdr);
+                 border-radius:20px; padding:.2rem .65rem; display:inline-flex; align-items:center; gap:.4rem;">
+            </div>
+          </div>
         </div>
 
         <!-- Botón buscar -->
@@ -898,7 +929,7 @@
 
         <!-- Info vacíos -->
         <span style="font-size:.78rem; color:var(--nav-meta); align-self:center;">
-          Deja vacío para no filtrar por ese campo
+          Deja vacío para no filtrar
         </span>
       </div>
     </div>
@@ -964,6 +995,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script type="application/json" id="_sub-map-data">{{ SUBPRODUCTOS | tojson }}</script>
 <style>
 /* ── Animación spinner paso activo ── */
 @keyframes _spin { to { transform: rotate(360deg); } }
@@ -1208,6 +1240,7 @@ function _recolectarTodoSeleccionado() {
       nivel:         isSim ? SIM_NIVEL     : NIVEL_BASE,
       tipo_pieza:    isSim ? SIM_PIECE_TYPE: PIECE_TYPE,
       formula_nueva: chk.dataset.formula,
+      subproducto:   chk.dataset.subproducto || "",
     });
   });
   // 3. Colores disponibles del simétrico (.col-queue-check)
@@ -2055,6 +2088,7 @@ function _renderFormulaCards(formulas, opts = {}) {
                  data-zpla="${c.zpla}"
                  data-zfer="${_ZFER}" data-franja="${_FRJ}"
                  data-pn-base="${_PN}" data-nivel="${_NIV}"
+                 data-subproducto="${fa.subproducto || ''}"
                  style="width:15px; height:15px; accent-color:var(--blq-title); cursor:pointer;">
         </td>
         <td style="padding:.5rem .8rem;"><span class="tag t-color">${c.color}</span></td>
@@ -2276,6 +2310,7 @@ async function _fcEnviarCola(idx, formula, p = "") {
     nivel:         _niv_fc,
     tipo_pieza:    p ? SIM_PIECE_TYPE : PIECE_TYPE,
     formula_nueva: formula,
+    subproducto:   c.dataset.subproducto || "",
   }));
 
   if (statusEl) statusEl.textContent = "Consultando cola…";
@@ -2530,6 +2565,97 @@ document.getElementById("btn-buscar-formulas")?.addEventListener("click", buscar
     if (e.key === "Enter") buscarFormulasAlt();
   });
 });
+
+// ── Autocomplete subproducto ──────────────────────────────────────────────
+(function() {
+  const inp  = document.getElementById("sub-lookup");
+  const drop = document.getElementById("sub-dropdown");
+  const res  = document.getElementById("sub-result");
+  const flt  = document.getElementById("flt-sub");
+  if (!inp) return;
+
+  let _timer = null;
+
+  function _highlight(text, q) {
+    if (!q) return text;
+    const i = text.toLowerCase().indexOf(q.toLowerCase());
+    if (i < 0) return text;
+    return text.slice(0,i) + `<b style="color:var(--accent);">${text.slice(i,i+q.length)}</b>` + text.slice(i+q.length);
+  }
+
+  function _select(codigo, nombre) {
+    inp.value  = "";
+    drop.style.display = "none";
+    flt.value  = codigo;
+    flt.style.borderColor = "var(--info-bdr)";
+    res.style.display = "inline-flex";
+    res.innerHTML = `<i class="bi bi-tag-fill me-1"></i><b>${codigo}</b>&nbsp;—&nbsp;${nombre}
+      <span onclick="_subClear()" style="cursor:pointer;margin-left:.3rem;opacity:.6;" title="Limpiar">✕</span>`;
+  }
+
+  window._subClear = function() {
+    flt.value = "";
+    flt.style.borderColor = "";
+    res.style.display = "none";
+    res.innerHTML = "";
+    inp.value = "";
+  };
+
+  async function _fetch(q) {
+    if (!q) { drop.style.display = "none"; return; }
+    try {
+      const data = await fetch(`/api/subproductos?q=${encodeURIComponent(q)}`).then(r => r.json());
+      if (!data.length) {
+        drop.innerHTML = `<div style="padding:.7rem 1rem; color:var(--muted); font-size:.82rem;">Sin resultados para "${q}"</div>`;
+        drop.style.display = "block";
+        return;
+      }
+      drop.innerHTML = data.map(item => `
+        <div class="_sub-opt" data-code="${item.codigo}" data-name="${item.nombre}"
+             style="padding:.55rem 1rem; cursor:pointer; display:flex; justify-content:space-between;
+                    align-items:center; gap:.8rem; border-bottom:1px solid var(--divider); font-size:.84rem;
+                    transition:background .1s;"
+             onmouseenter="this.style.background='var(--info-bg)'"
+             onmouseleave="this.style.background=''">
+          <span style="font-weight:700; color:var(--info-txt); min-width:48px;">${_highlight(item.codigo, q)}</span>
+          <span style="color:var(--text); flex:1;">${_highlight(item.nombre, q)}</span>
+        </div>`).join('');
+      drop.querySelectorAll("._sub-opt").forEach(el => {
+        el.addEventListener("mousedown", () => _select(el.dataset.code, el.dataset.name));
+      });
+      drop.style.display = "block";
+    } catch(e) {
+      drop.style.display = "none";
+    }
+  }
+
+  inp.addEventListener("input", () => {
+    clearTimeout(_timer);
+    _timer = setTimeout(() => _fetch(inp.value.trim()), 160);
+  });
+
+  inp.addEventListener("keydown", e => {
+    if (e.key === "Escape") { drop.style.display = "none"; inp.value = ""; }
+    if (e.key === "Enter") {
+      const first = drop.querySelector("._sub-opt");
+      if (first) { _select(first.dataset.code, first.dataset.name); e.preventDefault(); }
+    }
+    if (e.key === "ArrowDown") {
+      const opts = [...drop.querySelectorAll("._sub-opt")];
+      if (opts.length) { opts[0].focus(); e.preventDefault(); }
+    }
+  });
+
+  // Si ya hay un valor en flt-sub al cargar, mostrar el chip
+  const _SUBPRODUCTOS_MAP = JSON.parse(document.getElementById("_sub-map-data").textContent);
+  const existing = flt.value.trim();
+  if (existing) {
+    const nombre = _SUBPRODUCTOS_MAP[existing] || existing;
+    res.style.display = "inline-flex";
+    res.innerHTML = `<i class="bi bi-tag-fill me-1"></i><b>${existing}</b>&nbsp;—&nbsp;${nombre}
+      <span onclick="_subClear()" style="cursor:pointer;margin-left:.3rem;opacity:.6;" title="Limpiar">✕</span>`;
+  }
+})();
 
 // Carga inicial con los valores del ZFER
 buscarFormulasAlt();

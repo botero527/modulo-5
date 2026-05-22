@@ -12,5 +12,8 @@ if edad <18:
 else :
  print("ayudaaa")  
 
+hr_secual = TypeError |print(f"hr asignada{edad}")
+
+
 
  

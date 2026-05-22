@@ -734,7 +734,8 @@ def q_formulas_por_pieza(piece_type: str, nivel: str, subproducto: str,
                 h.MATERIAL,
                 MAX(CASE WHEN a.ATNAM = 'Z_FORMULA_CODE'           THEN a.ATWRT END) AS formula,
                 MAX(CASE WHEN a.ATNAM = 'Z_COLOR'                  THEN a.ATWRT END) AS color,
-                MAX(CASE WHEN a.ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS' THEN a.ATWRT END) AS differentials
+                MAX(CASE WHEN a.ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS' THEN a.ATWRT END) AS differentials,
+                MAX(CASE WHEN a.ATNAM = 'Z_SUBPRODUCT'             THEN a.ATWRT END) AS subproducto
             FROM   ZPLA_HEAD h
             LEFT JOIN ZPLA_001 a ON a.MATERIAL = h.MATERIAL
             GROUP BY h.MATERIAL
@@ -764,11 +765,17 @@ def q_formulas_por_pieza(piece_type: str, nivel: str, subproducto: str,
 
         # Agrupar por fórmula → color (un color puede tener varios ZPLAs)
         formulas: dict = {}
+        # subproducto_por_formula guarda el subproducto de cada fórmula
+        subproducto_por_formula: dict = {}
         for row in rows:
-            mat, formula, color, differentials = row[0], row[1], row[2], row[3]
+            mat, formula, color, differentials, subprod = row[0], row[1], row[2], row[3], row[4]
             color_key = str(color).strip()
             zpla_str  = str(mat).strip()
             diff_str  = differentials or ""
+            sub_str   = str(subprod or "").strip()
+            # guardar subproducto por fórmula (primer valor no vacío)
+            if formula not in subproducto_por_formula and sub_str:
+                subproducto_por_formula[formula] = sub_str
             if formula not in formulas:
                 formulas[formula] = {}
             if color_key not in formulas[formula]:
@@ -798,7 +805,11 @@ def q_formulas_por_pieza(piece_type: str, nivel: str, subproducto: str,
                     "color_nombre":  c["color_nombre"],
                     "differentials": c["differentials"],
                 })
-            result.append({"formula": f, "colores": colores})
+            result.append({
+                "formula":     f,
+                "colores":     colores,
+                "subproducto": subproducto_por_formula.get(f, ""),
+            })
         return result
     except Exception as e:
         return [{"_error": str(e)}]
@@ -1256,6 +1267,7 @@ def combinaciones(material: str):
         # Panel simétrico
         sim_material   = sim_material if sim else "",
         sim            = sim,
+        SUBPRODUCTOS   = SUBPRODUCTOS,
     )
 
 
@@ -1275,6 +1287,18 @@ def api_formulas_alt():
     if result and "_error" in result[0]:
         return jsonify({"error": result[0]["_error"]}), 500
     return jsonify(result)
+
+
+@app.route("/api/subproductos")
+@login_required
+def api_subproductos():
+    """Devuelve lista de subproductos {codigo, nombre} para autocomplete."""
+    q = request.args.get("q", "").strip().lower()
+    items = [{"codigo": k, "nombre": v} for k, v in SUBPRODUCTOS.items()]
+    if q:
+        items = [i for i in items if q in i["codigo"].lower() or q in i["nombre"].lower()]
+    items.sort(key=lambda x: (not x["codigo"].lower().startswith(q), x["codigo"]))
+    return jsonify(items[:30])
 
 
 @app.route("/api/colores_disponibles/<material>")
@@ -2227,9 +2251,10 @@ def _guardar_homologacion_formula(item: dict, res, session_user: str = "sistema"
 def _migracion_bd_local():
     """Aplica migraciones de columnas faltantes en la BD local (idempotente)."""
     migraciones = [
-        ("dbo.M5_Cola", "cambiar_hr", "ALTER TABLE dbo.M5_Cola ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
-        ("dbo.M5_Cola", "zhal",       "ALTER TABLE dbo.M5_Cola ADD zhal NVARCHAR(20) NULL"),
-        ("dbo.M5_Cola", "acero_dir",  "ALTER TABLE dbo.M5_Cola ADD acero_dir NVARCHAR(10) NULL"),
+        ("dbo.M5_Cola", "cambiar_hr",  "ALTER TABLE dbo.M5_Cola ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
+        ("dbo.M5_Cola", "zhal",        "ALTER TABLE dbo.M5_Cola ADD zhal NVARCHAR(20) NULL"),
+        ("dbo.M5_Cola", "acero_dir",   "ALTER TABLE dbo.M5_Cola ADD acero_dir NVARCHAR(10) NULL"),
+        ("dbo.M5_Cola", "subproducto", "ALTER TABLE dbo.M5_Cola ADD subproducto NVARCHAR(20) NULL"),
     ]
     try:
         cn  = _get_conn_local()
@@ -2519,7 +2544,8 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
             cur.execute("UPDATE dbo.M5_Bloques SET estado='EJECUTANDO' WHERE id=?", bloque_id)
             cur.execute("""
                 SELECT id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                       pn_base, nivel, tipo_pieza, formula_nueva, acero_dir, cambiar_hr, zhal
+                       pn_base, nivel, tipo_pieza, formula_nueva, acero_dir, cambiar_hr, zhal,
+                       ISNULL(subproducto,'')
                 FROM dbo.M5_Cola
                 WHERE bloque_id=? AND estado='PENDIENTE'
             """, bloque_id)
@@ -2534,6 +2560,7 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                  "zpla": r[5], "franja": r[6] or "00", "pn_base": r[7] or "",
                  "nivel": r[8] or "", "tipo_pieza": r[9] or "", "formula_nueva": r[10] or "",
                  "acero_dir": r[11] or "", "cambiar_hr": bool(r[12]), "zhal": r[13] or "",
+                 "subproducto": r[14] or "",
                  "_cola_id": r[0]} for r in rows]
 
         try:
@@ -2577,7 +2604,8 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                                 item["zfer"], item.get("formula_nueva",""),
                                 item["color"], item.get("color_nombre",""),
                                 item.get("franja","00"), item.get("pn_base",""),
-                                item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza","")
+                                item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza",""),
+                                subproducto=item.get("subproducto","")
                             )
                         elif not usar_sin and _proc_formula_con:
                             res = _proc_formula_con(
@@ -2585,7 +2613,8 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                                 item["color"], item.get("color_nombre",""),
                                 item.get("franja","00"), item.get("pn_base",""),
                                 item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza",""),
-                                zhal=item.get("zhal","")
+                                zhal=item.get("zhal",""),
+                                subproducto=item.get("subproducto","")
                             )
                         else:
                             raise RuntimeError("No se encontró función de procesamiento de fórmula en sap_auto")
@@ -2598,6 +2627,7 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                                 item.get("franja","00"), item.get("pn_base",""),
                                 item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza",""),
                                 cambio_hr=item.get("cambiar_hr", True),
+                                subproducto=item.get("subproducto","")
                             )
                         else:
                             raise RuntimeError("No se encontró función procesar_combinacion_formula_mismo_acero en sap_auto")
@@ -2609,7 +2639,8 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                                 item["color"], item.get("color_nombre",""),
                                 item.get("franja","00"), item.get("pn_base",""),
                                 item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza",""),
-                                zhal=item.get("zhal","")
+                                zhal=item.get("zhal",""),
+                                subproducto=item.get("subproducto","")
                             )
                         else:
                             raise RuntimeError("No se encontró función de procesamiento en sap_auto")
@@ -2878,8 +2909,8 @@ def api_cola_agregar():
                 cur.execute("""
                     INSERT INTO dbo.M5_Cola
                     (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                     pn_base, nivel, tipo_pieza, formula_nueva, descripcion, acero_dir, cambiar_hr, zhal)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     pn_base, nivel, tipo_pieza, formula_nueva, descripcion, acero_dir, cambiar_hr, zhal, subproducto)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, bloque_id,
                     str(it.get("zfer",""))[:20], tipo_item[:20],
                     str(it.get("color",""))[:10], str(it.get("color_nombre",""))[:100],
@@ -2887,7 +2918,8 @@ def api_cola_agregar():
                     str(it.get("pn_base",""))[:50], str(it.get("nivel",""))[:10],
                     str(it.get("tipo_pieza",""))[:10], str(it.get("formula_nueva",""))[:30],
                     desc[:200], str(it.get("acero_dir",""))[:10] or None,
-                    1 if cambiar_hr else 0, zhal_val)
+                    1 if cambiar_hr else 0, zhal_val,
+                    str(it.get("subproducto",""))[:20] or None)
 
         hora_str = hora_prog.strftime("%d/%m/%Y %H:%M") if hora_prog else ""
         return jsonify({"ok": True, "bloque_id": bloque_id, "bloque_num": bloque_num,

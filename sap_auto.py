@@ -1678,44 +1678,15 @@ class AutomatizadorSAP:
         IDs confirmados por VBS grabado en QUAS.
         """
         print(f"    MM02 diferencial: desmarcando 06 en {zfer}")
-        
-        # Navegar a MM02 y abrir tab PIEZA (igual que mm02_actualizar_partnumber)
-        self._cerrar_dialogs_abiertos()
-        self.session.findById(self._ID_TCODE_BOX).text = "/NMM02"
-        self.session.findById("wnd[0]").sendVKey(0)
-        self._esperar(T_MEDIO)
-        self.session.findById(self._ID_MM02_MATNR).text = zfer
-        self.session.findById("wnd[0]").sendVKey(0)
-        self._esperar(T_MEDIO)
-        for _ in range(3):
-            try:
-                self.session.findById(self._ID_MM02_TAB03)
-                break
-            except Exception:
-                pass
-            if not self._primera_opcion_si_popup():
-                self.session.findById("wnd[0]").sendVKey(0)
-                self._esperar(T_MEDIO)
-        self.session.findById(self._ID_MM02_TAB03).select()
-        self._esperar(T_RAPIDO)
-        self._primera_opcion_si_popup()
-        self.session.findById(self._ID_MM02_TAB4).select()
-        self._esperar(T_RAPIDO)
-
+        self._mm02_navegar_pieza_tab(zfer)
         tbl = self._ID_MM02_TBL_PIEZA
-        # Scroll a posición 6 (confirma VBS)
         self.session.findById(tbl).verticalScrollbar.position = 6
         self._esperar(T_RAPIDO)
-
-        # Fila visual 7, columna MWERT (1) = Z_BEHAVIOR_DIFFERENTIALS (confirma VBS)
-        campo_name = tbl + "/ctxtRCTMS-MWERT[1,7]"
+        campo_name = tbl + "/ctxtRCTMS-MWERT[1,6]"
         self.session.findById(campo_name).setFocus()
         self.session.findById(campo_name).caretPosition = 8
-        self.session.findById("wnd[0]").sendVKey(2)   # abre popup de valores
+        self.session.findById("wnd[0]").sendVKey(2)
         self._esperar(T_MEDIO)
-
-        # En popup wnd[1]: desmarcar checkbox fila 5 (el "06") → btn[8] para confirmar
-        # Confirmado por VBS: selected=False → setFocus → btn[8].press()
         chk = "wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]"
         try:
             self.session.findById(chk).selected = False
@@ -1725,20 +1696,7 @@ class AutomatizadorSAP:
         except Exception as e:
             print(f"    [WARN] Diferencial popup check: {e}")
         self._esperar(T_RAPIDO)
-
-        # Guardar con btn[11] y salir con F3 → OPTION1
-        try:
-            self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
-            self._esperar(T_MEDIO)
-            self._primera_opcion_si_popup()
-        except Exception as e:
-            print(f"    [WARN] Diferencial guardar: {e}")
-        try:
-            self.session.findById("wnd[0]/tbar[0]/btn[3]").press()
-            self._esperar(T_RAPIDO)
-            self._primera_opcion_si_popup()
-        except Exception:
-            pass
+        self._mm02_guardar_y_salir()
 
     # ── MM02 — Cambio de plano (tab ZU04) ────────────────────────────────────
 
@@ -2029,6 +1987,30 @@ class AutomatizadorSAP:
         IDs idénticos confirmados por VBS.
         """
         print(f"    MM02 diferencial: activando 06 en {zfer}")
+        self._mm02_navegar_pieza_tab(zfer)
+        tbl = self._ID_MM02_TBL_PIEZA
+        self.session.findById(tbl).verticalScrollbar.position = 6
+        self._esperar(T_RAPIDO)
+        campo_name = tbl + "/ctxtRCTMS-MWERT[1,6]"
+        self.session.findById(campo_name).setFocus()
+        self.session.findById(campo_name).caretPosition = 8
+        self.session.findById("wnd[0]").sendVKey(2)
+        self._esperar(T_MEDIO)
+        chk = "wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]"
+        try:
+            self.session.findById(chk).selected = True
+            self.session.findById(chk).setFocus()
+            self._esperar(T_RAPIDO)
+            self.session.findById("wnd[1]/tbar[0]/btn[8]").press()
+        except Exception as e:
+            print(f"    [WARN] Activar diferencial popup check: {e}")
+        self._esperar(T_RAPIDO)
+        self._mm02_guardar_y_salir()
+
+    # ── MM02 — Navegar a tab PIEZA (helper) ──────────────────────────────────
+
+    def _mm02_navegar_pieza_tab(self, zfer: str):
+        """Abre MM02 del material y deja activo el tab PIEZA (Clasificación > PIEZA)."""
         self._cerrar_dialogs_abiertos()
         self.session.findById(self._ID_TCODE_BOX).text = "/NMM02"
         self.session.findById("wnd[0]").sendVKey(0)
@@ -2051,38 +2033,252 @@ class AutomatizadorSAP:
         self.session.findById(self._ID_MM02_TAB4).select()
         self._esperar(T_RAPIDO)
 
-        tbl = self._ID_MM02_TBL_PIEZA
-        self.session.findById(tbl).verticalScrollbar.position = 6
-        self._esperar(T_RAPIDO)
-
-        campo_name = tbl + "/ctxtRCTMS-MWERT[1,7]"
-        self.session.findById(campo_name).setFocus()
-        self.session.findById(campo_name).caretPosition = 8
-        self.session.findById("wnd[0]").sendVKey(2)
-        self._esperar(T_MEDIO)
-
-        chk = "wnd[1]/usr/tblSAPLCTMSVALUE_S/chkRCTMS-SEL01[0,5]"
-        try:
-            self.session.findById(chk).selected = True
-            self.session.findById(chk).setFocus()
-            self._esperar(T_RAPIDO)
-            self.session.findById("wnd[1]/tbar[0]/btn[8]").press()
-        except Exception as e:
-            print(f"    [WARN] Activar diferencial popup check: {e}")
-        self._esperar(T_RAPIDO)
-
+    def _mm02_guardar_y_salir(self):
+        """Guarda MM02 (btn[11]) y sale con F3, confirmando popup si aparece."""
         try:
             self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
             self._esperar(T_MEDIO)
             self._primera_opcion_si_popup()
         except Exception as e:
-            print(f"    [WARN] Activar diferencial guardar: {e}")
+            print(f"    [WARN] MM02 guardar: {e}")
         try:
             self.session.findById("wnd[0]/tbar[0]/btn[3]").press()
             self._esperar(T_RAPIDO)
             self._primera_opcion_si_popup()
         except Exception:
             pass
+
+    def _mm02_buscar_fila_car(self, nombre: str) -> tuple:
+        """
+        Escanea tblSAPLCTMSCHARS_S buscando la característica por nombre (ctxtRCTMS-MNAME).
+        Debe estar en el tab PIEZA antes de llamar.
+        Retorna (scroll_pos, vis_row) o (-1, -1) si no encuentra.
+        """
+        tbl = self._ID_MM02_TBL_PIEZA
+        try:
+            tbl_obj   = self.session.findById(tbl)
+            total     = tbl_obj.RowCount
+            vis       = tbl_obj.VisibleRowCount or 8
+            scroll_max = max(0, total - vis)
+        except Exception:
+            return -1, -1
+        nombre_u = nombre.strip().upper()
+        for sc in range(scroll_max + 1):
+            try:
+                self.session.findById(tbl).verticalScrollbar.position = sc
+                self._esperar(T_RAPIDO)
+            except Exception:
+                pass
+            for vr in range(vis):
+                try:
+                    mname = self.session.findById(
+                        f"{tbl}/ctxtRCTMS-MNAME[0,{vr}]"
+                    ).text.strip().upper()
+                    if mname == nombre_u:
+                        return sc, vr
+                except Exception:
+                    pass
+        return -1, -1
+
+    # ── MM02 — Actualizar SUBPRODUCTO ─────────────────────────────────────────
+
+    # Posición confirmada por VBS (ZFER 700011171): scroll=3, vis_row=8
+    _MM02_SUBPROD_SCROLL  = 3
+    _MM02_SUBPROD_VIS_ROW = 8
+
+    def mm02_actualizar_subproducto(self, zfer: str, subproducto: str, res=None):
+        """
+        Escribe el código de subproducto en el campo SUBPRODUCTO del tab PIEZA en MM02.
+        Posición confirmada por VBS: scroll=3, vis_row=8.
+        """
+        sub = str(subproducto or "").strip()
+        if not sub:
+            if res:
+                res._log(f"  [SKIP] mm02_actualizar_subproducto: subproducto vacío para {zfer}")
+            return
+        print(f"    MM02 subproducto: escribiendo '{sub}' en {zfer}")
+        try:
+            self._mm02_navegar_pieza_tab(zfer)
+            tbl = self._ID_MM02_TBL_PIEZA
+            self.session.findById(tbl).verticalScrollbar.position = self._MM02_SUBPROD_SCROLL
+            self._esperar(T_RAPIDO)
+            campo_val = f"{tbl}/ctxtRCTMS-MWERT[1,{self._MM02_SUBPROD_VIS_ROW}]"
+            self.session.findById(campo_val).text = sub
+            self.session.findById(campo_val).setFocus()
+            self.session.findById(campo_val).caretPosition = len(sub)
+            self.session.findById("wnd[0]").sendVKey(0)   # Enter para confirmar valor
+            self._esperar(T_RAPIDO)
+            if res:
+                res._log(f"  MM02 SUBPRODUCTO={sub} → {zfer} OK")
+            self._mm02_guardar_y_salir()
+        except Exception as e:
+            msg = f"[WARN] mm02_actualizar_subproducto({zfer}): {e}"
+            print(f"    {msg}")
+            if res:
+                res._log(f"  {msg}")
+
+    # ── MM02 — Actualizar todos los diferenciales de comportamiento ───────────
+
+    def _buscar_diferenciales_zpla(self, zpla_base: str) -> list:
+        """
+        Consulta ODATA_ZPLA_CLASS_001 para obtener los valores Z_BEHAVIOR_DIFFERENTIALS
+        del ZPLA base. Retorna lista normalizada de strings, ej: ['001','002','006'].
+        ATWRT puede ser una fila con valores separados por coma, o varias filas.
+        """
+        if not zpla_base:
+            return []
+        try:
+            cn  = pyodbc.connect(_DB_SAP_STR, autocommit=True)
+            cur = cn.cursor()
+            cur.execute(
+                "SELECT ATWRT FROM dbo.ODATA_ZPLA_CLASS_001 "
+                "WHERE MATERIAL = ? AND ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS'",
+                zpla_base
+            )
+            rows = cur.fetchall()
+            cn.close()
+        except Exception as e:
+            print(f"    [WARN] _buscar_diferenciales_zpla({zpla_base}): {e}")
+            return []
+
+        valores = []
+        for r in rows:
+            raw = str(r[0] or "").strip()
+            # puede ser "001,002,006" o "006" directamente
+            for part in raw.split(","):
+                v = part.strip()
+                if v:
+                    valores.append(v)
+        return valores
+
+    def mm02_actualizar_diferenciales_zpla(self, zfer: str, zpla_base: str, res=None):
+        """
+        Reemplaza todos los diferenciales de comportamiento del ZFER_NUEVO en MM02:
+        1. Consulta ODATA_ZPLA_CLASS_001 para obtener los diferenciales del ZPLA base
+        2. Abre popup Z_BEHAVIOR_DIFFERENTIALS en MM02 PIEZA
+        3. Desmarca todos → marca solo los del ZPLA base
+        Confirma con btn[8] y guarda.
+        """
+        diffs_zpla = self._buscar_diferenciales_zpla(zpla_base)
+        log_diffs  = ",".join(diffs_zpla) if diffs_zpla else "(ninguno)"
+        print(f"    MM02 diferenciales {zfer}: ZPLA={zpla_base} → valores={log_diffs}")
+        if res:
+            res._log(f"  MM02 diferenciales a asignar desde ZPLA {zpla_base}: {log_diffs}")
+
+        # Normalizar a entero para comparación flexible (006 == 06 == 6)
+        def _norm(s: str):
+            try:
+                return int(s)
+            except Exception:
+                return s.strip().lower()
+
+        target_set = {_norm(v) for v in diffs_zpla}
+
+        try:
+            self._mm02_navegar_pieza_tab(zfer)
+            tbl = self._ID_MM02_TBL_PIEZA
+
+            # Posición confirmada por VBS: scroll=6, vis_row=6 = Z_BEHAVIOR_DIFFERENTIALS
+            self.session.findById(tbl).verticalScrollbar.position = 6
+            self._esperar(T_RAPIDO)
+            campo_name = f"{tbl}/ctxtRCTMS-MWERT[1,6]"
+            self.session.findById(campo_name).setFocus()
+            self.session.findById(campo_name).caretPosition = 9
+            self.session.findById("wnd[0]").sendVKey(2)   # F4 abre popup de valores
+            self._esperar(T_MEDIO)
+
+            popup_tbl = "wnd[1]/usr/tblSAPLCTMSVALUE_S"
+            try:
+                pop_obj   = self.session.findById(popup_tbl)
+                total_pop = pop_obj.RowCount
+                vis_pop   = pop_obj.VisibleRowCount or 3
+            except Exception as ep:
+                print(f"    [WARN] Popup diferencial no encontrado: {ep}")
+                try:
+                    self.session.findById("wnd[1]").close()
+                except Exception:
+                    pass
+                return
+
+            # FASE 1 — construir mapa abs_row → valor leyendo ctxtRCTMS-ATWTB[1,vis_row]
+            # El popup muestra 3 filas visibles (según VBS scrollea de 3 en 3).
+            # Recorremos de atrás hacia adelante igual que el VBS para que pos=0 quede al final.
+            idx_to_val: dict = {}   # abs_row → valor str (ej "001","006")
+            scroll_max = max(0, total_pop - vis_pop)
+            for sc in range(scroll_max + 1):
+                try:
+                    self.session.findById(popup_tbl).verticalScrollbar.position = sc
+                    self._esperar(0.15)
+                except Exception:
+                    pass
+                for vr in range(vis_pop):
+                    abs_r = sc + vr
+                    if abs_r >= total_pop:
+                        break
+                    if abs_r in idx_to_val:
+                        continue
+                    for col_id in (
+                        f"{popup_tbl}/ctxtRCTMS-ATWTB[1,{vr}]",
+                        f"{popup_tbl}/ctxtRCTMS-ATWRT[1,{vr}]",
+                        f"{popup_tbl}/txtRCTMS-ATWTB[1,{vr}]",
+                    ):
+                        try:
+                            v = self.session.findById(col_id).text.strip()
+                            if v:
+                                idx_to_val[abs_r] = v
+                                break
+                        except Exception:
+                            pass
+
+            print(f"    Popup diferencial: {total_pop} valores mapeados={idx_to_val}")
+            if res:
+                res._log(f"  Popup diferencial: {total_pop} entradas, mapeadas={len(idx_to_val)}")
+
+            # FASE 2 — volver a pos=0 y recorrer marcando/desmarcando
+            self.session.findById(popup_tbl).verticalScrollbar.position = 0
+            self._esperar(T_RAPIDO)
+
+            for sc in range(scroll_max + 1):
+                try:
+                    self.session.findById(popup_tbl).verticalScrollbar.position = sc
+                    self._esperar(0.15)
+                except Exception:
+                    pass
+                for vr in range(vis_pop):
+                    abs_r = sc + vr
+                    if abs_r >= total_pop:
+                        break
+                    val_str = idx_to_val.get(abs_r)
+                    if val_str is None:
+                        continue
+                    should_check = (_norm(val_str) in target_set)
+                    try:
+                        self.session.findById(f"{popup_tbl}/chkRCTMS-SEL01[0,{vr}]").selected = should_check
+                    except Exception:
+                        pass
+
+            # Confirmar popup con btn[8] (chulo verde — confirmado por VBS)
+            try:
+                last_chk = f"{popup_tbl}/chkRCTMS-SEL01[0,{vis_pop - 1}]"
+                self.session.findById(last_chk).setFocus()
+            except Exception:
+                pass
+            try:
+                self.session.findById("wnd[1]/tbar[0]/btn[8]").press()
+            except Exception as e:
+                print(f"    [WARN] Diferencial popup confirmar: {e}")
+            self._esperar(T_RAPIDO)
+
+            checked_vals = [v for r, v in sorted(idx_to_val.items()) if _norm(v) in target_set]
+            if res:
+                res._log(f"  MM02 diferenciales actualizados en {zfer}: {checked_vals or '(ninguno)'}")
+            self._mm02_guardar_y_salir()
+
+        except Exception as e:
+            msg = f"[WARN] mm02_actualizar_diferenciales_zpla({zfer}): {e}"
+            print(f"    {msg}")
+            if res:
+                res._log(f"  {msg}")
 
     # ── MM02 — Cambio de plano CON SP (flujo sin acero → con acero) ──────────
 
@@ -2687,6 +2883,7 @@ class AutomatizadorSAP:
             color_codigo: str, color_nombre: str,
             franja: str = "00", pn_base: str = "", zpla: str = "",
             nivel: str = "", tipo_pieza: str = "",
+            subproducto: str = "",
             step_callback=None) -> ResultadoItem:
         """
         Flujo completo: cambio de fórmula con acero → sin acero.
@@ -2807,8 +3004,8 @@ class AutomatizadorSAP:
             res.bom_detalle    = [{"posnr": p["pos"], "clase_destino": clases.get(p["pos"], clases.get(p["pos"].lstrip("0"), ""))} for p in posiciones]
             res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
 
-            # PASO 5 — MM02 extendido: PN + diferencial 06 + plano
-            _cb(5, f"Actualizando MM02 (PN, diferencial, plano) — {zfer_nuevo}")
+            # PASO 5 — MM02 extendido: PN + subproducto + diferenciales + plano
+            _cb(5, f"Actualizando MM02 (PN, subproducto, diferenciales, plano) — {zfer_nuevo}")
             nuevo_pn = self._construir_nuevo_pn_formula(pn_base, formula_nueva, p_color)
             res._log(f"  Nuevo PN={nuevo_pn}")
 
@@ -2816,10 +3013,13 @@ class AutomatizadorSAP:
                 # 5a — PARTNUMBER
                 if nuevo_pn and nuevo_pn != pn_base:
                     self.mm02_actualizar_partnumber(mat, nuevo_pn)
-                # 5b — Diferencial 06
-                self.mm02_desactivar_diferencial_06(mat)
+                # 5b — Subproducto (solo si viene informado)
+                if subproducto:
+                    self.mm02_actualizar_subproducto(mat, subproducto, res)
+                # 5c — Diferenciales de comportamiento: reemplazar con los del ZPLA base
+                self.mm02_actualizar_diferenciales_zpla(mat, zpla_base, res)
 
-            # 5c — Plano: solo para ZFER nuevo (no ZFOR)
+            # 5d — Plano: solo para ZFER nuevo (no ZFOR)
             self.mm02_cambiar_plano(zfer_nuevo, res, zfer_base=zfer_base)
 
             # PASO 6 — CEWB: eliminar posición acero del ZFER nuevo
@@ -2865,7 +3065,7 @@ class AutomatizadorSAP:
             color_codigo: str, color_nombre: str,
             franja: str = "00", pn_base: str = "", zpla: str = "",
             nivel: str = "", tipo_pieza: str = "",
-            cambio_hr: bool = False,
+            cambio_hr: bool = False, subproducto: str = "",
             step_callback=None) -> ResultadoItem:
         """
         Flujo cambio de fórmula sin cambio de acero (sin→sin o con→con).
@@ -2980,13 +3180,17 @@ class AutomatizadorSAP:
             res.bom_detalle    = [{"posnr": p["pos"], "clase_destino": clases.get(p["pos"], clases.get(p["pos"].lstrip("0"), ""))} for p in posiciones]
             res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
 
-            # PASO 4 — MM02: solo actualizar PN (sin diferencial, sin plano)
-            _cb(4, f"Actualizando MM02 (solo PN) — {zfer_nuevo}")
+            # PASO 4 — MM02: PN + subproducto + diferenciales
+            _cb(4, f"Actualizando MM02 (PN, subproducto, diferenciales) — {zfer_nuevo}")
             nuevo_pn = self._construir_nuevo_pn_formula(pn_base, formula_nueva, p_color)
             res._log(f"  Nuevo PN={nuevo_pn}")
+            zpla_base_m = zplas_validos[0] if zplas_validos else ""
             for mat in ([zfer_nuevo] + ([zfor_nuevo] if zfor_nuevo else [])):
                 if nuevo_pn and nuevo_pn != pn_base:
                     self.mm02_actualizar_partnumber(mat, nuevo_pn)
+                if subproducto:
+                    self.mm02_actualizar_subproducto(mat, subproducto, res)
+                self.mm02_actualizar_diferenciales_zpla(mat, zpla_base_m, res)
 
             # PASO 5 — CA02 (solo si cambio_hr=True)
             if cambio_hr:
@@ -3244,7 +3448,7 @@ class AutomatizadorSAP:
             color_codigo: str, color_nombre: str,
             franja: str = "00", pn_base: str = "", zpla: str = "",
             nivel: str = "", tipo_pieza: str = "",
-            zhal: str = "",
+            zhal: str = "", subproducto: str = "",
             step_callback=None) -> ResultadoItem:
         """
         Flujo completo: cambio de fórmula sin acero → con acero.
@@ -3372,19 +3576,24 @@ class AutomatizadorSAP:
             res.bom_detalle    = [{"posnr": p["pos"], "clase_destino": clases.get(p["pos"], clases.get(p["pos"].lstrip("0"), ""))} for p in posiciones]
             res._log(f"  Posiciones BOM procesadas ({len(posiciones)}): {posiciones}")
 
-            # PASO 5 — MM02: PN + activar diferencial 06 + plano CON SP
-            _cb(5, f"Actualizando MM02 (PN, diferencial 06, plano SP) — {zfer_nuevo}")
+            # PASO 5 — MM02: PN + subproducto + diferenciales + plano CON SP
+            _cb(5, f"Actualizando MM02 (PN, subproducto, diferenciales, plano SP) — {zfer_nuevo}")
             nuevo_pn = self._construir_nuevo_pn_formula(pn_base, formula_nueva, p_color)
             res._log(f"  Nuevo PN={nuevo_pn}")
+            zplas_v = [z.strip() for z in str(zpla).split(",") if z.strip()]
+            zpla_base_c = zplas_validos[0] if zplas_validos else ""
 
             for mat in ([zfer_nuevo] + ([zfor_nuevo] if zfor_nuevo else [])):
                 # 5a — PARTNUMBER
                 if nuevo_pn and nuevo_pn != pn_base:
                     self.mm02_actualizar_partnumber(mat, nuevo_pn)
-                # 5b — Activar diferencial 06 (lo marca, no desmarca)
-                self.mm02_activar_diferencial_06(mat)
+                # 5b — Subproducto
+                if subproducto:
+                    self.mm02_actualizar_subproducto(mat, subproducto, res)
+                # 5c — Diferenciales de comportamiento: reemplazar con los del ZPLA base
+                self.mm02_actualizar_diferenciales_zpla(mat, zpla_base_c, res)
 
-            # 5c — Plano con SP: solo para ZFER nuevo
+            # 5d — Plano con SP: solo para ZFER nuevo
             self.mm02_cambiar_plano_con_sp(zfer_nuevo, res, zfer_base=zfer_base)
 
             # PASO 6 — CS02: agregar posición acero en BOM del ZFOR
@@ -3464,7 +3673,7 @@ def procesar_combinacion_formula_con_acero(
         color_codigo: str, color_nombre: str,
         franja: str = "00", pn_base: str = "", zpla: str = "",
         nivel: str = "", tipo_pieza: str = "",
-        zhal: str = "",
+        zhal: str = "", subproducto: str = "",
         step_callback=None) -> "ResultadoItem":
     """Entrada pública para flujo sin acero → con acero."""
     auto = AutomatizadorSAP()
@@ -3479,7 +3688,7 @@ def procesar_combinacion_formula_con_acero(
     return auto.procesar_formula_con_acero(
         zfer_base, formula_nueva, color_codigo, color_nombre,
         franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
-        zhal=zhal, step_callback=step_callback,
+        zhal=zhal, subproducto=subproducto, step_callback=step_callback,
     )
 
 
@@ -3488,7 +3697,7 @@ def procesar_combinacion_formula_mismo_acero(
         color_codigo: str, color_nombre: str,
         franja: str = "00", pn_base: str = "", zpla: str = "",
         nivel: str = "", tipo_pieza: str = "",
-        cambio_hr: bool = False,
+        cambio_hr: bool = False, subproducto: str = "",
         step_callback=None) -> "ResultadoItem":
     """Entrada pública para flujo mismo acero (sin→sin o con→con)."""
     auto = AutomatizadorSAP()
@@ -3503,7 +3712,7 @@ def procesar_combinacion_formula_mismo_acero(
     return auto.procesar_formula_mismo_acero(
         zfer_base, formula_nueva, color_codigo, color_nombre,
         franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
-        cambio_hr=cambio_hr, step_callback=step_callback,
+        cambio_hr=cambio_hr, subproducto=subproducto, step_callback=step_callback,
     )
 
 
@@ -3512,6 +3721,7 @@ def procesar_combinacion_formula_sin_acero(
         color_codigo: str, color_nombre: str,
         franja: str = "00", pn_base: str = "", zpla: str = "",
         nivel: str = "", tipo_pieza: str = "",
+        subproducto: str = "",
         step_callback=None) -> ResultadoItem:
     auto = AutomatizadorSAP()
     if not auto.conectar():
@@ -3525,7 +3735,7 @@ def procesar_combinacion_formula_sin_acero(
     return auto.procesar_formula_sin_acero(
         zfer_base, formula_nueva, color_codigo, color_nombre,
         franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
-        step_callback=step_callback,
+        subproducto=subproducto, step_callback=step_callback,
     )
 
 
