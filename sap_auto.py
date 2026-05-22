@@ -25,16 +25,19 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 # ── Tiempos de espera (máximos por categoría) ────────────────────────────────
-T_RAPIDO = 0.8   # máx para clicks / campos simples
-T_MEDIO  = 2.5   # máx para navegación entre pantallas
-T_LENTO  = 8.0   # máx para ejecutar transacciones pesadas
+T_RAPIDO = 0.5   # máx para clicks / campos simples
+T_MEDIO  = 1.5   # máx para navegación entre pantallas
+T_LENTO  = 6.0   # máx para ejecutar transacciones pesadas
 
 # Mínimos garantizados antes de empezar a hacer poll
-_T_MIN_RAPIDO = 0.05
-_T_MIN_MEDIO  = 0.10
-_T_MIN_LENTO  = 0.20
+_T_MIN_RAPIDO = 0.02
+_T_MIN_MEDIO  = 0.03
+_T_MIN_LENTO  = 0.05
 
-_SAP_USER = os.environ.get("SAP_USER", "FESPITIA") #PROGRAING
+# Intervalo de poll interno
+_T_POLL = 0.05
+
+_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -181,7 +184,7 @@ class AutomatizadorSAP:
                     return
             except Exception:
                 pass
-            time.sleep(0.1)
+            time.sleep(_T_POLL)
         # si llegó al tope: continúa de todas formas (no falla)
 
     def _navegar(self, tcode: str):
@@ -1732,6 +1735,7 @@ class AutomatizadorSAP:
                 "FROM dbo.ODATA_ZFER_RUTAS_JPG "
                 "WHERE DOCUMENTO LIKE ? "
                 "  AND DOCUMENTO NOT LIKE '% SP' "
+                "  AND DOCUMENTO NOT LIKE '% L[0-9]%' "
                 "ORDER BY ULTIMA_MOD DESC",
                 f"%{base}%"
             )
@@ -2012,11 +2016,12 @@ class AutomatizadorSAP:
     def _mm02_navegar_pieza_tab(self, zfer: str):
         """Abre MM02 del material y deja activo el tab PIEZA (Clasificación > PIEZA)."""
         self._cerrar_dialogs_abiertos()
+        wnd = self.session.findById("wnd[0]")
         self.session.findById(self._ID_TCODE_BOX).text = "/NMM02"
-        self.session.findById("wnd[0]").sendVKey(0)
+        wnd.sendVKey(0)
         self._esperar(T_MEDIO)
         self.session.findById(self._ID_MM02_MATNR).text = zfer
-        self.session.findById("wnd[0]").sendVKey(0)
+        wnd.sendVKey(0)
         self._esperar(T_MEDIO)
         for _ in range(3):
             try:
@@ -2025,7 +2030,7 @@ class AutomatizadorSAP:
             except Exception:
                 pass
             if not self._primera_opcion_si_popup():
-                self.session.findById("wnd[0]").sendVKey(0)
+                wnd.sendVKey(0)
                 self._esperar(T_MEDIO)
         self.session.findById(self._ID_MM02_TAB03).select()
         self._esperar(T_RAPIDO)
@@ -2101,12 +2106,13 @@ class AutomatizadorSAP:
             self._mm02_navegar_pieza_tab(zfer)
             tbl = self._ID_MM02_TBL_PIEZA
             self.session.findById(tbl).verticalScrollbar.position = self._MM02_SUBPROD_SCROLL
-            self._esperar(T_RAPIDO)
+            time.sleep(0.05)
             campo_val = f"{tbl}/ctxtRCTMS-MWERT[1,{self._MM02_SUBPROD_VIS_ROW}]"
-            self.session.findById(campo_val).text = sub
-            self.session.findById(campo_val).setFocus()
-            self.session.findById(campo_val).caretPosition = len(sub)
-            self.session.findById("wnd[0]").sendVKey(0)   # Enter para confirmar valor
+            campo_obj = self.session.findById(campo_val)
+            campo_obj.text = sub
+            campo_obj.setFocus()
+            campo_obj.caretPosition = len(sub)
+            self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_RAPIDO)
             if res:
                 res._log(f"  MM02 SUBPRODUCTO={sub} → {zfer} OK")
@@ -2122,8 +2128,7 @@ class AutomatizadorSAP:
     def _buscar_diferenciales_zpla(self, zpla_base: str) -> list:
         """
         Consulta ODATA_ZPLA_CLASS_001 para obtener los valores Z_BEHAVIOR_DIFFERENTIALS
-        del ZPLA base. Retorna lista normalizada de strings, ej: ['001','002','006'].
-        ATWRT puede ser una fila con valores separados por coma, o varias filas.
+        del ZPLA base. ATWRT es CSV ("03,06,10"). Retorna lista de strings normalizados.
         """
         if not zpla_base:
             return []
@@ -2140,32 +2145,53 @@ class AutomatizadorSAP:
         except Exception as e:
             print(f"    [WARN] _buscar_diferenciales_zpla({zpla_base}): {e}")
             return []
-
         valores = []
         for r in rows:
-            raw = str(r[0] or "").strip()
-            # puede ser "001,002,006" o "006" directamente
-            for part in raw.split(","):
+            for part in str(r[0] or "").split(","):
                 v = part.strip()
                 if v:
                     valores.append(v)
         return valores
 
+    def _obtener_orden_diferenciales(self) -> list:
+        """
+        Retorna la lista COMPLETA y ORDENADA de todos los valores posibles de
+        Z_BEHAVIOR_DIFFERENTIALS usando STRING_SPLIT sobre ODATA_ZPLA_CLASS_001.
+        Este orden coincide con el orden del popup de SAP (ordenado lexicográficamente).
+        """
+        try:
+            cn  = pyodbc.connect(_DB_SAP_STR, autocommit=True)
+            cur = cn.cursor()
+            cur.execute("""
+                SELECT DISTINCT LTRIM(RTRIM(s.value)) AS val
+                FROM dbo.ODATA_ZPLA_CLASS_001
+                CROSS APPLY STRING_SPLIT(ATWRT, ',') AS s
+                WHERE ATNAM = 'Z_BEHAVIOR_DIFFERENTIALS'
+                  AND LTRIM(RTRIM(s.value)) <> ''
+                ORDER BY val
+            """)
+            rows = cur.fetchall()
+            cn.close()
+            return [str(r[0]) for r in rows]
+        except Exception as e:
+            print(f"    [WARN] _obtener_orden_diferenciales: {e}")
+            return []
+
     def mm02_actualizar_diferenciales_zpla(self, zfer: str, zpla_base: str, res=None):
         """
-        Reemplaza todos los diferenciales de comportamiento del ZFER_NUEVO en MM02:
-        1. Consulta ODATA_ZPLA_CLASS_001 para obtener los diferenciales del ZPLA base
-        2. Abre popup Z_BEHAVIOR_DIFFERENTIALS en MM02 PIEZA
-        3. Desmarca todos → marca solo los del ZPLA base
-        Confirma con btn[8] y guarda.
+        Reemplaza TODOS los diferenciales de comportamiento del ZFER_NUEVO en MM02:
+        1. Consulta BD: diferenciales del ZPLA base (target) + orden completo del popup
+        2. Calcula el índice (abs_row) de cada valor en el popup a partir del orden BD
+        3. Abre popup → navega directo a cada fila → marca/desmarca → confirma → guarda
+        NO lee el popup — usa índices calculados. Elimina el bucle lento de findById fallidos.
         """
         diffs_zpla = self._buscar_diferenciales_zpla(zpla_base)
         log_diffs  = ",".join(diffs_zpla) if diffs_zpla else "(ninguno)"
-        print(f"    MM02 diferenciales {zfer}: ZPLA={zpla_base} → valores={log_diffs}")
+        print(f"    MM02 diferenciales {zfer}: ZPLA={zpla_base} → target={log_diffs}")
         if res:
             res._log(f"  MM02 diferenciales a asignar desde ZPLA {zpla_base}: {log_diffs}")
 
-        # Normalizar a entero para comparación flexible (006 == 06 == 6)
+        # Normalizar: "06" == "006" == "6" → int 6
         def _norm(s: str):
             try:
                 return int(s)
@@ -2174,17 +2200,31 @@ class AutomatizadorSAP:
 
         target_set = {_norm(v) for v in diffs_zpla}
 
+        # Lista ordenada de todos los posibles valores → define el orden del popup
+        orden_completo = self._obtener_orden_diferenciales()
+        if not orden_completo:
+            print(f"    [WARN] No se obtuvo orden de diferenciales desde BD — omitiendo")
+            if res:
+                res._log("  [WARN] Sin orden de diferenciales BD — diferencial no actualizado")
+            return
+
+        print(f"    Orden diferencial BD: {len(orden_completo)} valores")
+
+        # Mapa valor_normalizado → índice absoluto en el popup
+        val_to_idx: dict = {_norm(v): i for i, v in enumerate(orden_completo)}
+
         try:
             self._mm02_navegar_pieza_tab(zfer)
             tbl = self._ID_MM02_TBL_PIEZA
 
-            # Posición confirmada por VBS: scroll=6, vis_row=6 = Z_BEHAVIOR_DIFFERENTIALS
+            # scroll=6, vis_row=6 = Z_BEHAVIOR_DIFFERENTIALS (confirmado por VBS)
             self.session.findById(tbl).verticalScrollbar.position = 6
-            self._esperar(T_RAPIDO)
+            time.sleep(0.05)
             campo_name = f"{tbl}/ctxtRCTMS-MWERT[1,6]"
-            self.session.findById(campo_name).setFocus()
-            self.session.findById(campo_name).caretPosition = 9
-            self.session.findById("wnd[0]").sendVKey(2)   # F4 abre popup de valores
+            campo_obj  = self.session.findById(campo_name)
+            campo_obj.setFocus()
+            campo_obj.caretPosition = 9
+            self.session.findById("wnd[0]").sendVKey(2)   # F4 abre popup
             self._esperar(T_MEDIO)
 
             popup_tbl = "wnd[1]/usr/tblSAPLCTMSVALUE_S"
@@ -2200,78 +2240,51 @@ class AutomatizadorSAP:
                     pass
                 return
 
-            # FASE 1 — construir mapa abs_row → valor leyendo ctxtRCTMS-ATWTB[1,vis_row]
-            # El popup muestra 3 filas visibles (según VBS scrollea de 3 en 3).
-            # Recorremos de atrás hacia adelante igual que el VBS para que pos=0 quede al final.
-            idx_to_val: dict = {}   # abs_row → valor str (ej "001","006")
-            scroll_max = max(0, total_pop - vis_pop)
-            for sc in range(scroll_max + 1):
-                try:
-                    self.session.findById(popup_tbl).verticalScrollbar.position = sc
-                    self._esperar(0.15)
-                except Exception:
-                    pass
-                for vr in range(vis_pop):
-                    abs_r = sc + vr
-                    if abs_r >= total_pop:
-                        break
-                    if abs_r in idx_to_val:
-                        continue
-                    for col_id in (
-                        f"{popup_tbl}/ctxtRCTMS-ATWTB[1,{vr}]",
-                        f"{popup_tbl}/ctxtRCTMS-ATWRT[1,{vr}]",
-                        f"{popup_tbl}/txtRCTMS-ATWTB[1,{vr}]",
-                    ):
-                        try:
-                            v = self.session.findById(col_id).text.strip()
-                            if v:
-                                idx_to_val[abs_r] = v
-                                break
-                        except Exception:
-                            pass
+            print(f"    Popup diferencial: total={total_pop} vis={vis_pop}")
 
-            print(f"    Popup diferencial: {total_pop} valores mapeados={idx_to_val}")
-            if res:
-                res._log(f"  Popup diferencial: {total_pop} entradas, mapeadas={len(idx_to_val)}")
+            # Iterar todos los valores del popup (por índice absoluto calculado desde BD)
+            # Agrupar por posición de scroll para minimizar movimientos
+            acciones: list = []   # (abs_row, should_check)
+            for i in range(total_pop):
+                # Determinar si este índice absoluto corresponde a un valor conocido
+                # El valor en la posición i es orden_completo[i] si i < len(orden_completo)
+                if i < len(orden_completo):
+                    val_norm = _norm(orden_completo[i])
+                    should_check = val_norm in target_set
+                else:
+                    should_check = False   # filas extra del popup → desmarcar
+                acciones.append((i, should_check))
 
-            # FASE 2 — volver a pos=0 y recorrer marcando/desmarcando
-            self.session.findById(popup_tbl).verticalScrollbar.position = 0
-            self._esperar(T_RAPIDO)
-
-            for sc in range(scroll_max + 1):
-                try:
-                    self.session.findById(popup_tbl).verticalScrollbar.position = sc
-                    self._esperar(0.15)
-                except Exception:
-                    pass
-                for vr in range(vis_pop):
-                    abs_r = sc + vr
-                    if abs_r >= total_pop:
-                        break
-                    val_str = idx_to_val.get(abs_r)
-                    if val_str is None:
-                        continue
-                    should_check = (_norm(val_str) in target_set)
+            sc_actual = -1
+            pop_obj_ref = self.session.findById(popup_tbl)
+            for abs_r, should_check in acciones:
+                sc_needed = max(0, min(abs_r, total_pop - vis_pop))
+                vis_r     = abs_r - sc_needed
+                if sc_actual != sc_needed:
                     try:
-                        self.session.findById(f"{popup_tbl}/chkRCTMS-SEL01[0,{vr}]").selected = should_check
+                        pop_obj_ref.verticalScrollbar.position = sc_needed
+                        time.sleep(0.01)
+                        sc_actual = sc_needed
                     except Exception:
                         pass
+                try:
+                    self.session.findById(
+                        f"{popup_tbl}/chkRCTMS-SEL01[0,{vis_r}]"
+                    ).selected = should_check
+                except Exception:
+                    pass
 
-            # Confirmar popup con btn[8] (chulo verde — confirmado por VBS)
-            try:
-                last_chk = f"{popup_tbl}/chkRCTMS-SEL01[0,{vis_pop - 1}]"
-                self.session.findById(last_chk).setFocus()
-            except Exception:
-                pass
+            # Confirmar con btn[8] (confirmado por VBS)
             try:
                 self.session.findById("wnd[1]/tbar[0]/btn[8]").press()
             except Exception as e:
                 print(f"    [WARN] Diferencial popup confirmar: {e}")
             self._esperar(T_RAPIDO)
 
-            checked_vals = [v for r, v in sorted(idx_to_val.items()) if _norm(v) in target_set]
+            marcados = [orden_completo[i] for i, chk in acciones if chk and i < len(orden_completo)]
+            print(f"    Diferenciales marcados: {marcados}")
             if res:
-                res._log(f"  MM02 diferenciales actualizados en {zfer}: {checked_vals or '(ninguno)'}")
+                res._log(f"  MM02 diferenciales actualizados en {zfer}: {marcados or '(ninguno)'}")
             self._mm02_guardar_y_salir()
 
         except Exception as e:
@@ -2300,6 +2313,7 @@ class AutomatizadorSAP:
                 "FROM dbo.ODATA_ZFER_RUTAS_JPG "
                 "WHERE DOCUMENTO LIKE ? "
                 "  AND DOCUMENTO LIKE '% SP' "
+                "  AND DOCUMENTO NOT LIKE '% L[0-9]%[0-9] SP' "
                 "ORDER BY ULTIMA_MOD DESC",
                 f"%{base}%"
             )
@@ -2446,7 +2460,7 @@ class AutomatizadorSAP:
     def _ca02_scroll(self, tbl, pos: int):
         try:
             tbl.verticalScrollbar.position = pos
-            self._esperar(T_RAPIDO)
+            time.sleep(0.02)
         except Exception:
             pass
 
@@ -2466,11 +2480,13 @@ class AutomatizadorSAP:
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
             # Desasignar: solo MATNR, PLNNR debe estar vacío
+            wnd0 = self.session.findById("wnd[0]")
             self.session.findById("wnd[0]/usr/ctxtRC271-PLNNR").text = ""
             self.session.findById("wnd[0]/usr/ctxtRC27M-MATNR").text = zfer_nuevo
-            self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS").text = "CO01"
-            self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS").caretPosition = 4
-            self.session.findById("wnd[0]").sendVKey(0)
+            werks = self.session.findById("wnd[0]/usr/ctxtRC27M-WERKS")
+            werks.text = "CO01"
+            werks.caretPosition = 4
+            wnd0.sendVKey(0)
             self._esperar(T_MEDIO)
             self.session.findById("wnd[0]/tbar[1]/btn[5]").press()
             self._esperar(T_MEDIO)
@@ -2508,9 +2524,9 @@ class AutomatizadorSAP:
                 return False
 
             print(f"    CA02 desasignar: scroll={fila_scroll} vis_row={fila_vis}")
-            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{fila_vis}]").setFocus()
-            self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{fila_vis}]").caretPosition = 9
-            self._esperar(T_RAPIDO)
+            campo_fila = self.session.findById(f"{_TBL}/ctxtMAPL-MATNR[2,{fila_vis}]")
+            campo_fila.setFocus()
+            campo_fila.caretPosition = 9
             self.session.findById("wnd[1]/tbar[0]/btn[14]").press()
             self._esperar(T_RAPIDO)
             for _id in ("wnd[2]/tbar[0]/btn[0]", "wnd[2]/usr/btnSPOP-OPTION1"):
@@ -2615,6 +2631,81 @@ class AutomatizadorSAP:
             return True
         except Exception as e:
             _warn(str(e))
+            return False
+
+    # ── C223 — Versión de fabricación: actualizar PLNNR ─────────────────────
+
+    def c223_actualizar_version_fabricacion(self, zfer_nuevo: str, id_hruta: str, res=None) -> bool:
+        """
+        C223: entra con planta CO01 + zfer_nuevo, escribe id_hruta en columna 16 fila 0,
+        confirma popup, verifica (btnPRUEFEN) y guarda.
+        Solo se llama si ca02_asignar_hr retornó True.
+        """
+        print(f"    C223 versión fabricación: {zfer_nuevo} ← HR {id_hruta}")
+        _SUB = "wnd[0]/usr/ssubSUBSCR_1200:SAPLCMFV:1200/tblSAPLCMFVT_MKAL"
+        try:
+            self.session.findById(self._ID_TCODE_BOX).text = "/nC223"
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+
+            self.session.findById(
+                "wnd[0]/usr/subSUBSCR_1100:SAPLCMFV:1100/ctxtMKAL-WERKS"
+            ).text = "CO01"
+            campo_mat = "wnd[0]/usr/subSUBSCR_1100:SAPLCMFV:1100/ctxtMKAL-MATNR"
+            self.session.findById(campo_mat).text = zfer_nuevo
+            self.session.findById(campo_mat).setFocus()
+            self.session.findById(campo_mat).caretPosition = len(zfer_nuevo)
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+
+            # Escribir PLNNR en columna 16, fila 0
+            campo_plnnr = f"{_SUB}/ctxtMKAL_EXPAND-PLNNR[16,0]"
+            self.session.findById(campo_plnnr).text = str(id_hruta)
+            self.session.findById(campo_plnnr).setFocus()
+            self.session.findById(campo_plnnr).caretPosition = len(str(id_hruta))
+            self.session.findById("wnd[0]").sendVKey(0)
+            self._esperar(T_MEDIO)
+
+            # Confirmar popup si aparece
+            try:
+                self.session.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+                self._esperar(T_RAPIDO)
+            except Exception:
+                pass
+
+            # Verificar: foco en MATNR col 1 fila 0 → VKey 2 → popup verificación
+            try:
+                campo_matnr = f"{_SUB}/ctxtMKAL_EXPAND-MATNR[1,0]"
+                self.session.findById(campo_matnr).setFocus()
+                self.session.findById(campo_matnr).caretPosition = len(zfer_nuevo)
+                self.session.findById("wnd[0]").sendVKey(2)
+                self._esperar(T_MEDIO)
+                self.session.findById("wnd[1]/usr/btnPRUEFEN").press()
+                self._esperar(T_MEDIO)
+                self.session.findById("wnd[1]/tbar[0]/btn[12]").press()
+                self._esperar(T_RAPIDO)
+                self.session.findById("wnd[1]/tbar[0]/btn[8]").press()
+                self._esperar(T_RAPIDO)
+            except Exception as ev:
+                print(f"    [WARN] C223 verificación: {ev}")
+
+            # Guardar y salir
+            self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
+            self._esperar(T_MEDIO)
+            try:
+                self.session.findById("wnd[0]/tbar[0]/btn[15]").press()
+                self._esperar(T_RAPIDO)
+            except Exception:
+                pass
+
+            print(f"    C223 OK: HR={id_hruta} asignada en versión fabricación de {zfer_nuevo}")
+            if res: res._log(f"  [C223] Versión fabricación actualizada: HR={id_hruta} → {zfer_nuevo}")
+            return True
+
+        except Exception as e:
+            msg = f"[WARN] c223_actualizar_version_fabricacion({zfer_nuevo}): {e}"
+            print(f"    {msg}")
+            if res: res._advertir(msg)
             return False
 
     # ── CEWB — Eliminar posición acero ───────────────────────────────────────
@@ -3206,6 +3297,7 @@ class AutomatizadorSAP:
                         ok_asi = self.ca02_asignar_hr(zfer_nuevo, hr_id, res)
                         if ok_asi:
                             res._log(f"  CA02 OK: HR={hr_id} → {zfer_nuevo}")
+                            self.c223_actualizar_version_fabricacion(zfer_nuevo, hr_id, res)
                         else:
                             res._log(f"  [WARN] CA02 asignación falló — revisar manualmente")
                 except Exception as e_hr:
@@ -3750,5 +3842,6 @@ def cambiar_hoja_ruta(zfer_nuevo: str, id_hruta: str) -> dict:
     auto.ca02_desasignar_hr(zfer_nuevo)
     ok_asi = auto.ca02_asignar_hr(zfer_nuevo, id_hruta)
     if ok_asi:
+        auto.c223_actualizar_version_fabricacion(zfer_nuevo, id_hruta)
         return {"ok": True, "error": ""}
     return {"ok": False, "error": "ca02_asignar falló — revisa logs SAP"}
