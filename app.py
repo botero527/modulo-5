@@ -2982,7 +2982,6 @@ def api_cola_bloques():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 200
 
-
 @app.route("/api/cola/bloque/<int:bloque_id>/ejecutar", methods=["POST"])
 @login_required
 def api_cola_ejecutar_bloque(bloque_id: int):
@@ -3560,7 +3559,7 @@ def _hr_construir_criterios(attrs_base: dict, area, bom_posiciones: list,
 def _hr_buscar_candidata(zfer_base: str, zfer_nuevo: str) -> tuple:
     """
     Dado zfer_base (atributos BD) y zfer_nuevo (BOM SAP), busca la HR candidata:
-    la de mayor MATERIALES que no supere 950.
+    la de mayor MATERIALES que no supere 450.
     Retorna (id_hruta: str | None, descripcion: str, error: str | None)
     """
     try:
@@ -3603,9 +3602,9 @@ def _hr_buscar_candidata(zfer_base: str, zfer_nuevo: str) -> tuple:
         criterios = _hr_construir_criterios(attrs, area, bom_posiciones, metrologia_base, prueba_agua_base)
         resultados, _, _, _ = _hr_buscar(criterios)
 
-        elegibles = [r for r in resultados if r.get("TOTAL_MATERIALES") is not None and r["TOTAL_MATERIALES"] <= 950]
+        elegibles = [r for r in resultados if r.get("TOTAL_MATERIALES") is not None and r["TOTAL_MATERIALES"] <= 450]
         if not elegibles:
-            return None, "", "Sin HRs candidatas con materiales ≤ 950"
+            return None, "", "Sin HRs candidatas con materiales ≤ 450"
         candidata = max(elegibles, key=lambda r: r["TOTAL_MATERIALES"])
         return str(candidata["ID_HRUTA"]), candidata.get("DESCRIPCION",""), None
 

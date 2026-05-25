@@ -37,7 +37,7 @@ _T_MIN_LENTO  = 0.05
 # Intervalo de poll interno
 _T_POLL = 0.05
 
-_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "JPINZON") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -465,7 +465,7 @@ class AutomatizadorSAP:
 
     def zppr0020_esperar_fases(self, zfer_nuevo: str,
                                 intervalo_seg: int = 5,
-                                max_espera_seg: int = 600) -> dict:
+                                max_espera_seg: int = 300) -> dict:
         """
         Abre sesión auxiliar SAP para ZPPR0020 (deja ZMME0001 intacta en sesión
         principal). Polling hasta > 7 fases con 'S', o error 'E', o timeout.
@@ -1807,7 +1807,7 @@ class AutomatizadorSAP:
         def _warn(msg):
             print(f"    [WARN] mm02_cambiar_plano: {msg}")
             if res:
-                res._log(f"  [PLANO] ADVERTENCIA: {msg}")
+                res._advertir(f"PLANO: {msg}")
 
         zfer_lectura = zfer_base if zfer_base else zfer
         print(f"    MM02 plano: leyendo DOKNR de {zfer_lectura}, escribiendo en {zfer}")
@@ -2255,31 +2255,43 @@ class AutomatizadorSAP:
                     should_check = False   # filas extra del popup → desmarcar
                 acciones.append((i, should_check))
 
-            sc_actual = -1
+            # Agrupar acciones por página de scroll para minimizar scrolls
+            # página p → scroll_pos = p * vis_pop (capped), rows vis 0..vis_pop-1
             pop_obj_ref = self.session.findById(popup_tbl)
+            max_scroll_pop = max(0, total_pop - vis_pop)
+
+            # Agrupar: {scroll_pos: [(vis_r, should_check), ...]}
+            paginas: dict = {}
             for abs_r, should_check in acciones:
-                sc_needed = max(0, min(abs_r, total_pop - vis_pop))
-                vis_r     = abs_r - sc_needed
-                if sc_actual != sc_needed:
+                sc = max(0, min(abs_r, max_scroll_pop))
+                vr = abs_r - sc
+                paginas.setdefault(sc, []).append((vr, should_check))
+
+            sc_actual = -1
+            for sc_pos in sorted(paginas.keys()):
+                if sc_actual != sc_pos:
                     try:
-                        pop_obj_ref.verticalScrollbar.position = sc_needed
-                        time.sleep(0.01)
-                        sc_actual = sc_needed
+                        pop_obj_ref.verticalScrollbar.position = sc_pos
+                        time.sleep(0.08)   # esperar redibujado de filas
+                        sc_actual = sc_pos
                     except Exception:
                         pass
-                try:
-                    self.session.findById(
-                        f"{popup_tbl}/chkRCTMS-SEL01[0,{vis_r}]"
-                    ).selected = should_check
-                except Exception:
-                    pass
+                for vis_r, should_check in paginas[sc_pos]:
+                    try:
+                        chk = self.session.findById(
+                            f"{popup_tbl}/chkRCTMS-SEL01[0,{vis_r}]"
+                        )
+                        chk.setFocus()
+                        chk.selected = should_check
+                    except Exception:
+                        pass
 
             # Confirmar con btn[8] (confirmado por VBS)
             try:
                 self.session.findById("wnd[1]/tbar[0]/btn[8]").press()
             except Exception as e:
                 print(f"    [WARN] Diferencial popup confirmar: {e}")
-            self._esperar(T_RAPIDO)
+            self._esperar(T_MEDIO)
 
             marcados = [orden_completo[i] for i, chk in acciones if chk and i < len(orden_completo)]
             print(f"    Diferenciales marcados: {marcados}")
@@ -2342,7 +2354,7 @@ class AutomatizadorSAP:
         def _warn(msg):
             print(f"    [WARN] mm02_cambiar_plano_con_sp: {msg}")
             if res:
-                res._log(f"  [PLANO-SP] ADVERTENCIA: {msg}")
+                res._advertir(f"PLANO-SP: {msg}")
 
         zfer_lectura = zfer_base if zfer_base else zfer
         print(f"    MM02 plano (con SP): leyendo DOKNR de {zfer_lectura}, escribiendo en {zfer}")
@@ -2504,18 +2516,24 @@ class AutomatizadorSAP:
                 except Exception: pass
                 return False
 
-            # Escanear via findById en cada posición de scroll
+            # Escanear via findById — saltar de vis_rows en vis_rows para no releer filas
             fila_scroll = None
             fila_vis    = None
-            for sp in range(max_scroll + 1):
+            sp = 0
+            while sp <= max_scroll:
                 self._ca02_scroll(tbl, sp)
+                found_in_page = False
                 for vis in range(vis_rows):
-                    if self._ca02_leer_matnr_vis(_TBL, vis) == zfer_nuevo:
+                    val = self._ca02_leer_matnr_vis(_TBL, vis)
+                    if val == zfer_nuevo:
                         fila_scroll = sp
                         fila_vis    = vis
+                        found_in_page = True
                         break
-                if fila_scroll is not None:
+                if found_in_page:
                     break
+                # saltar al siguiente bloque de filas nuevas
+                sp += max(1, vis_rows - 1)
 
             if fila_scroll is None:
                 _warn(f"No se encontró asignación de HR para {zfer_nuevo} en CA02")
@@ -2581,10 +2599,11 @@ class AutomatizadorSAP:
             vis_rows   = tbl.VisibleRowCount
             max_scroll = tbl.verticalScrollbar.maximum
 
-            # Buscar primera fila vacía escaneando desde el final via findById
+            # Buscar primera fila vacía desde el final, saltando bloques para ir rápido
             fila_scroll = None
             fila_vis    = None
-            for sp in range(max_scroll, -1, -1):
+            sp = max_scroll
+            while sp >= 0:
                 self._ca02_scroll(tbl, sp)
                 for vis in range(vis_rows - 1, -1, -1):
                     val = self._ca02_leer_matnr_vis(_TBL, vis)
@@ -2596,6 +2615,7 @@ class AutomatizadorSAP:
                             break
                 if fila_scroll is not None:
                     break
+                sp -= max(1, vis_rows - 1)
 
             if fila_scroll is None:
                 _warn("No se encontró fila vacía en la tabla de materiales de CA02")
@@ -2642,17 +2662,29 @@ class AutomatizadorSAP:
         Solo se llama si ca02_asignar_hr retornó True.
         """
         print(f"    C223 versión fabricación: {zfer_nuevo} ← HR {id_hruta}")
+        _PRE = "wnd[0]/usr/subSUBSCR_1100:SAPLCMFV:1100"
         _SUB = "wnd[0]/usr/ssubSUBSCR_1200:SAPLCMFV:1200/tblSAPLCMFVT_MKAL"
         try:
             self.session.findById(self._ID_TCODE_BOX).text = "/nC223"
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
 
-            self.session.findById(
-                "wnd[0]/usr/subSUBSCR_1100:SAPLCMFV:1100/ctxtMKAL-WERKS"
-            ).text = "CO01"
-            campo_mat = "wnd[0]/usr/subSUBSCR_1100:SAPLCMFV:1100/ctxtMKAL-MATNR"
-            self.session.findById(campo_mat).text = zfer_nuevo
+            # Limpiar todos los campos de selección para evitar valores residuales
+            for fid, val in [
+                (f"{_PRE}/ctxtMKAL-WERKS",  "CO01"),
+                (f"{_PRE}/ctxtMKAL-MATNR",  zfer_nuevo),
+                (f"{_PRE}/ctxtMKAL-PLNTY",  ""),   # Tipo hoja ruta
+                (f"{_PRE}/ctxtMKAL-PLNNR",  ""),   # Grupo (PLNNR en filtro)
+                (f"{_PRE}/txtMKAL-BEDPL",   ""),   # Planif.neces.
+                (f"{_PRE}/ctxtMKAL-DATUV",  ""),   # Fecha clave
+                (f"{_PRE}/ctxtMKAL-FERTH",  ""),   # Lín.fabricación
+            ]:
+                try:
+                    self.session.findById(fid).text = val
+                except Exception:
+                    pass
+
+            campo_mat = f"{_PRE}/ctxtMKAL-MATNR"
             self.session.findById(campo_mat).setFocus()
             self.session.findById(campo_mat).caretPosition = len(zfer_nuevo)
             self.session.findById("wnd[0]").sendVKey(0)
