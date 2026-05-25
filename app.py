@@ -2723,6 +2723,7 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
             except Exception:
                 pass
 
+        _scheduler_disparados.discard(bloque_id)
         with _get_conn_local() as cn:
             cur2 = cn.cursor()
             cur2.execute("""
@@ -2746,6 +2747,7 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
         print(f"[COLA] bloque {bloque_id} completado: OK={ok_n} ERR={err_n}")
 
     except Exception as e:
+        _scheduler_disparados.discard(bloque_id)
         print(f"[COLA] error ejecutando bloque {bloque_id}: {e}")
 
 
@@ -2780,25 +2782,35 @@ def _cola_limpiar_al_inicio():
         print(f"[COLA] error limpieza inicial: {e}")
 
 
+_scheduler_disparados: set = set()   # IDs ya lanzados en este proceso
+
 def _cola_scheduler():
-    """Hilo de fondo: cada 60s revisa bloques vencidos."""
+    """Hilo de fondo: cada 20s revisa bloques vencidos."""
     _cola_limpiar_al_inicio()  # limpiar residuos y resetear pegados al arrancar
+    # Revisión inmediata al arrancar (por si la hora ya pasó)
+    _cola_scheduler_tick()
     while True:
-        _time.sleep(60)
-        try:
-            with _get_conn_local() as cn:
-                cur = cn.cursor()
-                # Comparar con hora local Python para evitar desfase UTC vs local de GETDATE()
-                cur.execute("""
-                    SELECT id, hora_prog FROM dbo.M5_Bloques
-                    WHERE estado='PENDIENTE' AND timer_activo=1 AND hora_prog IS NOT NULL
-                """)
-                ahora = _dt.now()
-                vencidos = [r[0] for r in cur.fetchall() if r[1] <= ahora]
-            for bid in vencidos:
+        _time.sleep(20)
+        _cola_scheduler_tick()
+
+def _cola_scheduler_tick():
+    """Un ciclo de revisión: dispara bloques cuya hora_prog ya llegó."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("""
+                SELECT id, hora_prog FROM dbo.M5_Bloques
+                WHERE estado='PENDIENTE' AND timer_activo=1 AND hora_prog IS NOT NULL
+            """)
+            ahora = _dt.now()
+            vencidos = [r[0] for r in cur.fetchall() if r[1] <= ahora]
+        for bid in vencidos:
+            if bid not in _scheduler_disparados:
+                _scheduler_disparados.add(bid)
+                print(f"[COLA] scheduler: disparando bloque {bid}")
                 threading.Thread(target=_cola_ejecutar_bloque, args=(bid,), daemon=True).start()
-        except Exception as e:
-            print(f"[COLA] scheduler error: {e}")
+    except Exception as e:
+        print(f"[COLA] scheduler error: {e}")
 
 # Arrancar hilo scheduler al iniciar la app
 _t_cola = threading.Thread(target=_cola_scheduler, daemon=True)

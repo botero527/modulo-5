@@ -37,7 +37,7 @@ _T_MIN_LENTO  = 0.05
 # Intervalo de poll interno
 _T_POLL = 0.05
 
-_SAP_USER = os.environ.get("SAP_USER", "JPINZON") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -1702,7 +1702,7 @@ class AutomatizadorSAP:
         self._mm02_guardar_y_salir()
 
     # ── MM02 — Cambio de plano (tab ZU04) ────────────────────────────────────
-
+    
     def _plano_base(self, doknr: str) -> str:
         """
         Extrae el núcleo de un DOKNR quitando desde la derecha cualquier
@@ -1905,7 +1905,13 @@ class AutomatizadorSAP:
                 pass
             self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
             self._esperar(T_LENTO)
-            print(f"    MM02 plano guardado: {zfer} → '{nuevo_plano}'")
+            sbar_tipo, sbar_txt = self._sbar()
+            if sbar_tipo == "E":
+                _warn(f"SAP rechazó el plano '{nuevo_plano}': {sbar_txt}")
+                return False
+            if sbar_tipo == "W" and sbar_txt:
+                if res: res._advertir(f"PLANO guardado con advertencia SAP: {sbar_txt}")
+            print(f"    MM02 plano guardado: {zfer} → '{nuevo_plano}' [{sbar_txt or 'OK'}]")
             if res:
                 res._log(f"  [PLANO] Guardado: '{doknr_actual or '(vacío)'}' → '{nuevo_plano}'")
             return True
@@ -2255,36 +2261,28 @@ class AutomatizadorSAP:
                     should_check = False   # filas extra del popup → desmarcar
                 acciones.append((i, should_check))
 
-            # Agrupar acciones por página de scroll para minimizar scrolls
-            # página p → scroll_pos = p * vis_pop (capped), rows vis 0..vis_pop-1
+            # Iterar por páginas completas (vis_pop filas por scroll)
+            # Para vis_pop=10: página 0→sc=0 (rows 0-9), página 1→sc=10 (rows 10-19)…
             pop_obj_ref = self.session.findById(popup_tbl)
             max_scroll_pop = max(0, total_pop - vis_pop)
 
-            # Agrupar: {scroll_pos: [(vis_r, should_check), ...]}
-            paginas: dict = {}
-            for abs_r, should_check in acciones:
-                sc = max(0, min(abs_r, max_scroll_pop))
-                vr = abs_r - sc
-                paginas.setdefault(sc, []).append((vr, should_check))
-
             sc_actual = -1
-            for sc_pos in sorted(paginas.keys()):
-                if sc_actual != sc_pos:
+            for abs_r, should_check in acciones:
+                sc = min((abs_r // vis_pop) * vis_pop, max_scroll_pop)
+                vr = abs_r - sc
+                if sc_actual != sc:
                     try:
-                        pop_obj_ref.verticalScrollbar.position = sc_pos
-                        time.sleep(0.08)   # esperar redibujado de filas
-                        sc_actual = sc_pos
+                        pop_obj_ref.verticalScrollbar.position = sc
+                        time.sleep(0.15)   # esperar redibujado completo de la página
+                        sc_actual = sc
                     except Exception:
                         pass
-                for vis_r, should_check in paginas[sc_pos]:
-                    try:
-                        chk = self.session.findById(
-                            f"{popup_tbl}/chkRCTMS-SEL01[0,{vis_r}]"
-                        )
-                        chk.setFocus()
-                        chk.selected = should_check
-                    except Exception:
-                        pass
+                try:
+                    self.session.findById(
+                        f"{popup_tbl}/chkRCTMS-SEL01[0,{vr}]"
+                    ).selected = should_check
+                except Exception:
+                    pass
 
             # Confirmar con btn[8] (confirmado por VBS)
             try:
@@ -2452,7 +2450,13 @@ class AutomatizadorSAP:
                 pass
             self.session.findById("wnd[0]/tbar[0]/btn[11]").press()
             self._esperar(T_LENTO)
-            print(f"    MM02 plano (con SP) guardado: {zfer} → '{nuevo_plano}'")
+            sbar_tipo, sbar_txt = self._sbar()
+            if sbar_tipo == "E":
+                _warn(f"SAP rechazó el plano '{nuevo_plano}': {sbar_txt}")
+                return False
+            if sbar_tipo == "W" and sbar_txt:
+                if res: res._advertir(f"PLANO-SP guardado con advertencia SAP: {sbar_txt}")
+            print(f"    MM02 plano (con SP) guardado: {zfer} → '{nuevo_plano}' [{sbar_txt or 'OK'}]")
             if res:
                 res._log(f"  [PLANO-SP] Guardado: '{doknr_actual or '(vacío)'}' → '{nuevo_plano}'")
             return True
