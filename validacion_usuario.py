@@ -1,5 +1,5 @@
 
 
 numero = 1
-numera = 10
-print (f"hola me llamo juan mi edad es {numera}")
+numera = 1
+print (f"hola nata tienes en total  {numera} pedidos para liberar hoy ")

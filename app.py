@@ -2243,9 +2243,107 @@ def _guardar_homologacion_formula(item: dict, res, session_user: str = "sistema"
                 )
 
         print(f"[HOMOLOG] Guardado id={hom_id} zfer_nuevo={zfer_nuevo} BOM={len(bom_detalle)} pos")
+        return hom_id
 
     except Exception as e:
         print(f"[HOMOLOG] Error guardando homologación: {e}")
+        return None
+
+
+def _guardar_gestor_auto(item: dict, res, hom_id: int) -> None:
+    """
+    Inserta en jobs_gestor_auto + bom_zfer_gestor_auto después de una
+    homologación de fórmula exitosa (cuando ya existe el registro en
+    M5_HomologacionFormula con id=hom_id).
+    No lanza excepción — cualquier error solo se imprime.
+    Solo inserta si ruta_3dm no está vacía (constraint NOT NULL).
+    """
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+
+            # Leer el registro recién guardado en M5_HomologacionFormula
+            row = cur.execute("""
+                SELECT id, vehiculo_nombre, version_vehiculo, vehiculo_codigo,
+                       pieza, tiene_simetria, zfer_simetrico,
+                       zfer_base, zfor_nuevo, zpla, ruta_3dm, zfer_nuevo
+                FROM dbo.M5_HomologacionFormula
+                WHERE id = ?
+            """, hom_id).fetchone()
+
+            if not row:
+                print(f"[GESTOR] No se encontró M5_HomologacionFormula id={hom_id}")
+                return
+
+            (id_origen, veh_nombre, veh_version, veh_codigo,
+             pieza, tiene_sim, zfer_sim,
+             zfer_base, zfor_nuevo, zpla, ruta_3dm, zfer_nuevo) = row
+
+            # ruta_3dm es NOT NULL en la tabla destino — omitir si falta
+            if not ruta_3dm or not str(ruta_3dm).strip():
+                print(f"[GESTOR] Omitido id={hom_id}: ruta_3dm vacía")
+                return
+
+            # Valores con defaults para campos NOT NULL
+            veh_nombre   = (veh_nombre   or "").strip() or "SIN NOMBRE"
+            veh_version  = (veh_version  or "").strip() or "SIN VERSION"
+            veh_codigo   = (veh_codigo   or "").strip() or "0000"
+            pieza_3d     = str(pieza or "").strip().zfill(3)[:3] if pieza else "000"
+            simetria_val = "SI" if tiene_sim else "NO"
+            zfer_sim_val = str(zfer_sim or "").strip() or None
+
+            # Si ya existe id_origen, actualizar en lugar de insertar
+            existe = cur.execute(
+                "SELECT 1 FROM dbo.jobs_gestor_auto WHERE id_origen = ?", id_origen
+            ).fetchone()
+
+            if existe:
+                cur.execute("""
+                    UPDATE dbo.jobs_gestor_auto SET
+                        vehiculo_nombre  = ?, version_vehiculo = ?, vehiculo_codigo = ?,
+                        pieza = ?, simetria = ?, zfer_simetria = ?,
+                        zfer  = ?, zfor = ?, zpla = ?, ruta_3dm = ?
+                    WHERE id_origen = ?
+                """,
+                    veh_nombre, veh_version, veh_codigo,
+                    pieza_3d, simetria_val, zfer_sim_val,
+                    str(zfer_nuevo or zfer_base), str(zfor_nuevo or "") or None,
+                    str(zpla or "") or None, str(ruta_3dm).strip(),
+                    id_origen
+                )
+                print(f"[GESTOR] Actualizado jobs id_origen={id_origen}")
+            else:
+                cur.execute("""
+                    INSERT INTO dbo.jobs_gestor_auto
+                        (id_origen, vehiculo_nombre, version_vehiculo, vehiculo_codigo,
+                         pieza, simetria, zfer_simetria, zfer, zfor, zpla, ruta_3dm)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                    id_origen, veh_nombre, veh_version, veh_codigo,
+                    pieza_3d, simetria_val, zfer_sim_val,
+                    str(zfer_nuevo or zfer_base), str(zfor_nuevo or "") or None,
+                    str(zpla or "") or None, str(ruta_3dm).strip()
+                )
+                print(f"[GESTOR] Insertado jobs id_origen={id_origen}")
+
+            # ── BOM: borrar anteriores y reinsertar (idempotente) ─────────
+            zfer_key = str(zfer_nuevo or zfer_base)
+            cur.execute("DELETE FROM dbo.bom_zfer_gestor_auto WHERE zfer = ?", zfer_key)
+
+            bom_detalle = getattr(res, "bom_detalle", []) or []
+            if bom_detalle:
+                cur.executemany(
+                    "INSERT INTO dbo.bom_zfer_gestor_auto (zfer, posicion, clase, descripcion) VALUES (?,?,?,?)",
+                    [(zfer_key,
+                      str(b.get("posnr", "")).strip(),
+                      str(b.get("clase_destino", "")).strip(),
+                      None)   # descripcion siempre NULL — no disponible
+                     for b in bom_detalle if b.get("posnr")]
+                )
+                print(f"[GESTOR] BOM {len(bom_detalle)} posiciones para {zfer_key}")
+
+    except Exception as e:
+        print(f"[GESTOR] Error guardando gestor_auto: {e}")
 
 
 def _migracion_bd_local():
@@ -2705,7 +2803,9 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
 
                 # Registrar homologación de fórmula en tabla dedicada
                 if estado_item == "OK" and tipo in ("FORMULA", "FORMULA_CON_ACERO", "FORMULA_SIN_SIN", "FORMULA_CON_CON") and res:
-                    _guardar_homologacion_formula(item, res, session_user=ejecutado_por)
+                    _hom_id = _guardar_homologacion_formula(item, res, session_user=ejecutado_por)
+                    if _hom_id:
+                        _guardar_gestor_auto(item, res, _hom_id)
 
                 if estado_item == "OK": ok_n += 1
                 else:                  err_n += 1
