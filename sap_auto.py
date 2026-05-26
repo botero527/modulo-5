@@ -37,7 +37,7 @@ _T_MIN_LENTO  = 0.05
 # Intervalo de poll interno
 _T_POLL = 0.05
 
-_SAP_USER = os.environ.get("SAP_USER", "PROGRAING") #PROGRAING
+_SAP_USER = os.environ.get("SAP_USER", "JPINZON") #PROGRAING
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
