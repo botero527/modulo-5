@@ -34,7 +34,7 @@ _USUARIOS = {
     "pract3@agpglass.com":             "PRACT_ING3",
     "pract4@agpglass.com":             "PRACT_ING4",
     "spina@agpglass.com":              "1010236538",
-    "lcruz@agpglass.com":              "1032937021",
+    "lcruz@agp_usuaglass.com":              "1032937021",
     "jgalvis@agpglass.com":            "1032877183",
     "spimentel@agpglass.com":          "1000034924",
     "practingenieria@agpglass.com":    "1000971646",
@@ -2663,6 +2663,19 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
 
         try:
             sap = importlib.import_module("sap_auto")
+
+            # ── Verificar / abrir SAP antes de empezar ────────────────────
+            _AutoSAP = getattr(sap, "AutomatizadorSAP", None)
+            if _AutoSAP:
+                _sap_inst = _AutoSAP()
+                if not _sap_inst.asegurar_sap_abierto():
+                    print(f"[COLA] bloque {bloque_id}: no se pudo abrir SAP — abortando")
+                    with _get_conn_local() as cn:
+                        cn.cursor().execute(
+                            "UPDATE dbo.M5_Bloques SET estado='ERROR' WHERE id=?", bloque_id
+                        )
+                    return
+
             # Usar funciones libres del módulo (no instancia — ver sap_auto.py)
             _proc_color             = getattr(sap, "procesar_combinacion",                          None)
             _proc_formula_sin       = getattr(sap, "procesar_combinacion_formula_sin_acero",      None)
@@ -3162,14 +3175,16 @@ def api_cola_reset_bloque(bloque_id: int):
     try:
         with _get_conn_local() as cn:
             cur = cn.cursor()
-            cur.execute("UPDATE dbo.M5_Bloques SET estado='PENDIENTE' WHERE id=? AND estado='EJECUTANDO'",
-                        bloque_id)
+            cur.execute("""
+                UPDATE dbo.M5_Bloques SET estado='PENDIENTE'
+                WHERE id=? AND estado IN ('EJECUTANDO','ERROR','COMPLETADO')
+            """, bloque_id)
             if cur.rowcount == 0:
-                return jsonify({"ok": False, "error": "El bloque no está en estado EJECUTANDO"})
-            # Resetear items PENDIENTE y ERROR a PENDIENTE para reintento
+                return jsonify({"ok": False, "error": "Bloque no encontrado o ya está en estado PENDIENTE"})
+            # Resetear TODOS los ítems (incluso EJECUTANDO) a PENDIENTE para reintento completo
             cur.execute("""
                 UPDATE dbo.M5_Cola SET estado='PENDIENTE', error_msg=NULL, ejecutado_el=NULL
-                WHERE bloque_id=? AND estado IN ('PENDIENTE','ERROR')
+                WHERE bloque_id=? AND estado IN ('PENDIENTE','ERROR','EJECUTANDO')
             """, bloque_id)
         return jsonify({"ok": True})
     except Exception as e:

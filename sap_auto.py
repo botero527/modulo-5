@@ -21,8 +21,48 @@ import time
 import pyodbc
 import datetime
 import uuid
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
+
+try:
+    import win32gui
+    import win32con
+    _WIN32GUI_OK = True
+except ImportError:
+    _WIN32GUI_OK = False
+
+
+def _aceptar_popup_saplogon(timeout: float = 15.0):
+    """
+    Hilo auxiliar: busca el diálogo nativo de SAP Logon
+    'Un script está abriendo una conexión...' y hace clic en OK automáticamente.
+    Se llama en un hilo daemon antes de invocar OpenConnection().
+    """
+    if not _WIN32GUI_OK:
+        return
+
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        time.sleep(0.3)
+        try:
+            hwnd = win32gui.FindWindow("#32770", None)   # clase genérica de diálogos Win32
+            if hwnd:
+                title = win32gui.GetWindowText(hwnd)
+                if "SAP Logon" in title or "script" in title.lower() or "conexión" in title.lower():
+                    # Buscar el botón OK (control de clase Button con texto "OK")
+                    def _enum_child(child_hwnd, _):
+                        cls  = win32gui.GetClassName(child_hwnd)
+                        text = win32gui.GetWindowText(child_hwnd)
+                        if cls == "Button" and text in ("OK", "&OK"):
+                            win32gui.PostMessage(child_hwnd, win32con.WM_LBUTTONDOWN, 0, 0)
+                            win32gui.PostMessage(child_hwnd, win32con.WM_LBUTTONUP,   0, 0)
+                            return False   # detener la enumeración
+                    win32gui.EnumChildWindows(hwnd, _enum_child, None)
+                    print("[SAP-AUTO] Popup SAP Logon cerrado automáticamente (OK)")
+                    return
+        except Exception:
+            pass
 
 # ── Tiempos de espera (máximos por categoría) ────────────────────────────────
 T_RAPIDO = 0.5   # máx para clicks / campos simples
@@ -37,7 +77,25 @@ _T_MIN_LENTO  = 0.05
 # Intervalo de poll interno
 _T_POLL = 0.05
 
-_SAP_USER = os.environ.get("SAP_USER", "JPINZON") #PROGRAING
+_SAP_USER     = os.environ.get("SAP_USER",     "FESPITIA")
+_SAP_PASSWORD = os.environ.get("SAP_PASSWORD", "Agp2026*")
+_SAP_CLIENT   = os.environ.get("SAP_CLIENT",   "300")
+_SAP_SYSTEM   = os.environ.get("SAP_SYSTEM",   "AGP PRD")   # producción; "QAS" para pruebas
+
+# Parámetros reales extraídos de SAPUILandscape.xml
+# Router: /H/18.233.139.237  |  QAS sysnr=00  |  AGP PRD sysnr=02
+_SAP_CONEXIONES = {
+    "QAS":     {"appserver": "/H/18.233.139.237/H/10.0.3.38",  "systemnumber": "00"},
+    "AGP PRD": {"appserver": "/H/18.233.139.237/H/10.0.5.151", "systemnumber": "02"},
+}
+
+# Rutas típicas de sapshcut.exe en Windows
+_SAPSHCUT_PATHS = [
+    r"C:\Program Files\SAP\FrontEnd\SAPgui\sapshcut.exe",
+    r"C:\Program Files (x86)\SAP\FrontEnd\SAPgui\sapshcut.exe",
+    r"C:\Program Files\SAP\FrontEnd\SapGui\sapshcut.exe",
+    r"C:\Program Files (x86)\SAP\FrontEnd\SapGui\sapshcut.exe",
+]
 
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
@@ -160,6 +218,172 @@ class AutomatizadorSAP:
             return True
         except Exception as e:
             print(f"  [ERROR] Conexión SAP: {e}")
+            return False
+
+    # ── Arranque automático de SAP ────────────────────────────────────────────
+
+    def asegurar_sap_abierto(self) -> bool:
+        """
+        Garantiza que SAP GUI esté abierto y con sesión activa.
+        1. Si SAP ya está abierto y logueado  → OK directo.
+        2. Si SAP está abierto en login        → llena credenciales.
+        3. Si SAP está cerrado                 → lanza saplogon.exe,
+           espera que COM responda, abre la conexión vía API y loguea.
+        Retorna True si quedó listo para operar.
+        """
+        import subprocess as _sp
+
+        # ── Intento 1: ya está abierto con sesión ────────────────────────
+        if self.conectar():
+            if self._en_pantalla_login():
+                return self._hacer_login()
+            return True
+
+        # ── Intento 2: SAP Logon abierto pero sin sesión — abrir vía COM ─
+        # Intentar GetObject aunque no haya sesiones (SAP Logon corriendo)
+        try:
+            sap_gui_auto = win32com.client.GetObject("SAPGUI")
+            app_obj = sap_gui_auto.GetScriptingEngine
+            if app_obj.Children.Count == 0:
+                # SAP Logon está corriendo pero sin conexiones — abrir una
+                print(f"[SAP-AUTO] SAP Logon abierto sin sesión — abriendo {_SAP_SYSTEM}...")
+                threading.Thread(target=_aceptar_popup_saplogon, daemon=True).start()
+                conn = app_obj.OpenConnection(_SAP_SYSTEM, True)
+                time.sleep(3)
+                self.app      = app_obj
+                self.conn_sap = conn
+                self.session  = conn.Children(0)
+                self.session.findById("wnd[0]").maximize()
+                if self._en_pantalla_login():
+                    return self._hacer_login()
+                return True
+        except Exception:
+            pass  # SAP Logon no estaba corriendo → continuar al intento 3
+
+        # ── Intento 3: SAP completamente cerrado — lanzar saplogon.exe ───
+        saplogon_paths = [
+            r"C:\Program Files\SAP\FrontEnd\SAPgui\saplogon.exe",
+            r"C:\Program Files (x86)\SAP\FrontEnd\SAPgui\saplogon.exe",
+            r"C:\Program Files\SAP\FrontEnd\SapGui\saplogon.exe",
+            r"C:\Program Files (x86)\SAP\FrontEnd\SapGui\saplogon.exe",
+        ]
+        saplogon = next((p for p in saplogon_paths if os.path.isfile(p)), None)
+        if not saplogon:
+            print("[SAP-AUTO] saplogon.exe no encontrado")
+            return False
+
+        print(f"[SAP-AUTO] Lanzando SAP Logon...")
+        try:
+            _sp.Popen([saplogon])
+        except Exception as e:
+            print(f"[SAP-AUTO] Error lanzando SAP Logon: {e}")
+            return False
+
+        # Esperar a que SAP Logon esté disponible vía COM (máx 30s)
+        t0 = time.time()
+        app_obj = None
+        while time.time() - t0 < 30:
+            time.sleep(2)
+            try:
+                sap_gui_auto = win32com.client.GetObject("SAPGUI")
+                app_obj = sap_gui_auto.GetScriptingEngine
+                break
+            except Exception:
+                continue
+
+        if app_obj is None:
+            print("[SAP-AUTO] SAP Logon no respondió en 30s")
+            return False
+
+        # Abrir la conexión por nombre (doble clic programático en la entrada)
+        print(f"[SAP-AUTO] Abriendo conexión {_SAP_SYSTEM}...")
+        try:
+            time.sleep(2)   # dar tiempo a que SAP Logon cargue la lista
+            threading.Thread(target=_aceptar_popup_saplogon, daemon=True).start()
+            conn = app_obj.OpenConnection(_SAP_SYSTEM, True)
+            time.sleep(3)
+            self.app      = app_obj
+            self.conn_sap = conn
+            self.session  = conn.Children(0)
+            self.session.findById("wnd[0]").maximize()
+        except Exception as e:
+            print(f"[SAP-AUTO] Error abriendo conexión '{_SAP_SYSTEM}': {e}")
+            return False
+
+        if self._en_pantalla_login():
+            return self._hacer_login()
+        return True
+
+    def _en_pantalla_login(self) -> bool:
+        """True si la sesión activa está mostrando la pantalla de login SAP."""
+        try:
+            self.session.findById("wnd[0]/usr/txtRSYST-BNAME")
+            return True
+        except Exception:
+            return False
+
+    def _hacer_login(self) -> bool:
+        """Llena usuario, contraseña y mandante en la pantalla de login y hace Enter."""
+        print(f"[SAP-AUTO] Haciendo login como {_SAP_USER} / mandante {_SAP_CLIENT}...")
+        try:
+            self.session.findById("wnd[0]/usr/txtRSYST-MANDT").text = _SAP_CLIENT
+            self.session.findById("wnd[0]/usr/txtRSYST-BNAME").text = _SAP_USER
+            self.session.findById("wnd[0]/usr/pwdRSYST-BCODE").text = _SAP_PASSWORD
+            self.session.findById("wnd[0]").sendVKey(0)   # Enter
+            self._esperar(T_LENTO)
+
+            # ── Popup de login múltiple ("usuario ya entró al sistema") ──────
+            # Selecciona "Continuar con esta entrada y finalizar entradas existentes"
+            try:
+                wnd1 = self.session.findById("wnd[1]")
+                title = ""
+                try:
+                    title = wnd1.text.lower()
+                except Exception:
+                    pass
+                if "múltiple" in title or "multiple" in title or "entrad" in title or "logon" in title:
+                    print("[SAP-AUTO] Popup login múltiple detectado — seleccionando 'Continuar y finalizar entradas existentes'")
+                    # Intenta los IDs más comunes del radio "Continuar"
+                    for radio_id in (
+                        "wnd[1]/usr/radMULTI_LOGON_OPT1",
+                        "wnd[1]/usr/rad[0]",
+                    ):
+                        try:
+                            self.session.findById(radio_id).select()
+                            break
+                        except Exception:
+                            pass
+                    # Confirmar con el botón verde (Enter / btn[0])
+                    try:
+                        self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+                    except Exception:
+                        self.session.findById("wnd[1]").sendVKey(0)
+                    self._esperar(T_LENTO)
+            except Exception:
+                pass  # no hay popup de login múltiple
+
+            # Cerrar popup "último inicio de sesión" / avisos informativos
+            for _ in range(3):
+                try:
+                    wnd1 = self.session.findById("wnd[1]")
+                    try:
+                        wnd1.findById("tbar[0]/btn[0]").press()
+                    except Exception:
+                        wnd1.sendVKey(0)
+                    self._esperar(T_RAPIDO)
+                except Exception:
+                    break
+
+            # Verificar que salió del login
+            if self._en_pantalla_login():
+                print("[SAP-AUTO] Login fallido — credenciales incorrectas o popup bloqueante")
+                return False
+
+            print(f"[SAP-AUTO] Login exitoso — sesión activa como {_SAP_USER}")
+            return True
+
+        except Exception as e:
+            print(f"[SAP-AUTO] Error durante login: {e}")
             return False
 
     # ── Helpers ───────────────────────────────────────────────────────────────
@@ -365,7 +589,7 @@ class AutomatizadorSAP:
             except Exception as _ce:
                 col_names_real = []
                 print(f"    [DEBUG] No se pudieron leer columnas: {_ce}")
-
+                
             # Leer todos los ZPLAs que sugiere SAP (número + descripción)
             zplas_sap  = []
             descs_sap  = []
@@ -2473,10 +2697,20 @@ class AutomatizadorSAP:
         except Exception:
             return ""
 
-    def _ca02_scroll(self, tbl, pos: int):
+    def _ca02_scroll(self, tbl_or_path, pos: int):
+        """Scroll tabla CA02. Acepta objeto tbl O path string (re-fetch evita objeto stale)."""
         try:
+            if isinstance(tbl_or_path, str):
+                tbl = self.session.findById(tbl_or_path)
+            else:
+                # Re-fetch siempre para evitar objeto stale
+                try:
+                    tbl_or_path.verticalScrollbar.position  # test si sigue vivo
+                    tbl = tbl_or_path
+                except Exception:
+                    tbl = self.session.findById("wnd[1]/usr/tblSAPLCZDITCTRL_1010")
             tbl.verticalScrollbar.position = pos
-            time.sleep(0.02)
+            time.sleep(0.15)
         except Exception:
             pass
 
@@ -2520,24 +2754,22 @@ class AutomatizadorSAP:
                 except Exception: pass
                 return False
 
-            # Escanear via findById — saltar de vis_rows en vis_rows para no releer filas
+            # Scan lineal — re-fetch tabla en cada bloque para evitar objeto stale
+            print(f"    CA02 desasignar: buscando {zfer_nuevo} — max_scroll={max_scroll} vis_rows={vis_rows}")
             fila_scroll = None
             fila_vis    = None
-            sp = 0
-            while sp <= max_scroll:
-                self._ca02_scroll(tbl, sp)
-                found_in_page = False
+            for sp in range(0, max_scroll + 1, max(1, vis_rows)):
+                self._ca02_scroll(_TBL, sp)   # pasa path string → re-fetch interno
+                found_in_block = False
                 for vis in range(vis_rows):
                     val = self._ca02_leer_matnr_vis(_TBL, vis)
                     if val == zfer_nuevo:
                         fila_scroll = sp
                         fila_vis    = vis
-                        found_in_page = True
+                        found_in_block = True
                         break
-                if found_in_page:
+                if found_in_block:
                     break
-                # saltar al siguiente bloque de filas nuevas
-                sp += max(1, vis_rows - 1)
 
             if fila_scroll is None:
                 _warn(f"No se encontró asignación de HR para {zfer_nuevo} en CA02")
