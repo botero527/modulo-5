@@ -393,8 +393,8 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
   _todasHRs = res;
   document.getElementById("badge-n").textContent = res.length;
 
-  // Candidata: mayor MATERIALES sin superar 450
-  const elegibles = res.filter(r => r.materiales != null && r.materiales <= 450);
+  // Candidata: mayor MATERIALES sin superar 300
+  const elegibles = res.filter(r => r.materiales != null && r.materiales <= 300);
   const candidata = elegibles.length
     ? elegibles.reduce((a, b) => b.materiales > a.materiales ? b : a)
     : null;
@@ -426,12 +426,12 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
     document.getElementById("candidata-contenido").innerHTML = `
       <div class="hr-card" style="text-align:center; padding:2rem; color:var(--warn-txt); border-color:var(--warn-txt);">
         <i class="bi bi-exclamation-triangle" style="font-size:2rem; display:block; margin-bottom:.6rem;"></i>
-        Todas las hojas de ruta encontradas superan 450 materiales.<br>
+        Todas las hojas de ruta encontradas superan 300 materiales.<br>
         <span style="font-size:.78rem; color:var(--muted);">Revisa las "Otras opciones" para elegir manualmente.</span>
       </div>` + res.map(_hrCard).join("");
   } else {
     // Barra de capacidad
-    const pct     = Math.round((candidata.materiales / 450) * 100);
+    const pct     = Math.round((candidata.materiales / 300) * 100);
     const barColor = pct >= 90 ? "var(--err-bdr)" : pct >= 70 ? "var(--warn-txt)" : "var(--ok-bdr)";
     document.getElementById("candidata-contenido").innerHTML = `
       <div style="background:linear-gradient(135deg,var(--ok-bg),var(--bg)); border:2px solid var(--ok-bdr);
@@ -439,7 +439,7 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
         <div style="display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem;">
           <i class="bi bi-star-fill" style="color:var(--warn-txt); font-size:1.1rem;"></i>
           <span style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--ok-txt); font-weight:700;">Hoja de Ruta Candidata</span>
-          <span style="margin-left:auto; font-size:.72rem; color:var(--muted);">Mayor capacidad disponible ≤ 450</span>
+          <span style="margin-left:auto; font-size:.72rem; color:var(--muted);">Mayor capacidad disponible ≤ 300</span>
         </div>
         <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:.8rem;">
           <div>
@@ -449,14 +449,14 @@ function _renderResultado(d, zfer_base, zfer_nuevo) {
           <div style="text-align:right; min-width:140px;">
             <div style="font-size:2rem; font-weight:900; color:var(--ok-txt); line-height:1;">${candidata.materiales}</div>
             <div style="font-size:.72rem; color:var(--muted);">materiales actuales</div>
-            <div style="font-size:.72rem; color:var(--nav-meta);">máx. 450</div>
+            <div style="font-size:.72rem; color:var(--nav-meta);">máx. 300</div>
           </div>
         </div>
         <!-- Barra de capacidad -->
         <div style="background:var(--tag-neutral-bg); border-radius:20px; height:8px; overflow:hidden; margin-bottom:.4rem;">
           <div style="height:100%; width:${pct}%; background:${barColor}; border-radius:20px; transition:width .4s;"></div>
         </div>
-        <div style="font-size:.7rem; color:var(--muted); margin-bottom:1rem;">${pct}% de capacidad utilizada (${candidata.materiales}/450)</div>
+        <div style="font-size:.7rem; color:var(--muted); margin-bottom:1rem;">${pct}% de capacidad utilizada (${candidata.materiales}/300)</div>
         <div style="display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.8rem;">
           ${candidata.sub_ruta ? `<span class="res-badge">Sub-ruta: ${candidata.sub_ruta}</span>` : ""}
           ${candidata.tamano   ? `<span class="res-badge">${candidata.tamano}</span>` : ""}

@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block title %}Mantenimiento HR — AGP Intelligence{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h1 style="font-size:1.55rem; font-weight:900; color:var(--accent); margin:0; letter-spacing:.3px;">
+      <i class="bi bi-tools me-2"></i>Mantenimiento de Hojas de Ruta
+    </h1>
+    <div style="font-size:.82rem; color:var(--muted); margin-top:.25rem;">
+      ZFERs asignados a HRs con &ge;300 materiales vs. Calendario AGP
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <span id="mhr-last-update" style="font-size:.76rem; color:var(--muted);"></span>
+  </div>
+</div>
+
+<!-- Acciones -->
+<div class="card mb-4">
+  <div class="card-body d-flex align-items-center gap-3 flex-wrap">
+    <button id="btn-consultar" onclick="consultarHR()" class="tag t-color"
+            style="cursor:pointer; border:none; padding:.55rem 1.4rem; font-size:.9rem; font-weight:700; letter-spacing:.3px;">
+      <i class="bi bi-search me-2"></i>Consultar ahora
+    </button>
+    <button id="btn-exportar" onclick="exportarExcel()" class="tag t-neutral"
+            style="cursor:pointer; border:none; padding:.55rem 1.2rem; font-size:.85rem; display:none;">
+      <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+    </button>
+    <div id="mhr-spinner" style="display:none;">
+      <div class="spinner-border spinner-border-sm" role="status"
+           style="color:var(--accent); width:1.1rem; height:1.1rem; border-width:2px;"></div>
+      <span style="font-size:.82rem; color:var(--muted); margin-left:.5rem;">Consultando bases de datos...</span>
+    </div>
+  </div>
+</div>
+
+<!-- Error -->
+<div id="mhr-error" class="alert-err mb-4" style="display:none;">
+  <i class="bi bi-exclamation-triangle me-2"></i><span id="mhr-error-msg"></span>
+</div>
+
+<!-- Resultados -->
+<div id="mhr-results" style="display:none;">
+
+  <!-- Barra de resumen -->
+  <div class="d-flex gap-3 flex-wrap mb-4" id="mhr-summary-chips"></div>
+
+  <!-- Cards HRs -->
+  <div id="mhr-cards"></div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Cargar última consulta guardada si existe
+(function(){
+  fetch("/api/mantenimiento_hr/consultar", {method: "HEAD"});  // warmup ignorado
+})();
+
+// Intentar mostrar fecha de última consulta desde el servidor
+// (lo haremos implícitamente cuando cargue resultados guardados)
+
+async function consultarHR() {
+  const btnC  = document.getElementById("btn-consultar");
+  const btnE  = document.getElementById("btn-exportar");
+  const spin  = document.getElementById("mhr-spinner");
+  const errD  = document.getElementById("mhr-error");
+  const resD  = document.getElementById("mhr-results");
+
+  btnC.disabled = true;
+  btnE.style.display = "none";
+  spin.style.display  = "flex";
+  errD.style.display  = "none";
+  resD.style.display  = "none";
+
+  try {
+    const r = await fetch("/api/mantenimiento_hr/consultar");
+    const data = await r.json();
+
+    if (!data.ok) {
+      document.getElementById("mhr-error-msg").textContent = data.error || "Error desconocido";
+      errD.style.display = "block";
+      return;
+    }
+
+    renderResults(data);
+    btnE.style.display = "";
+  } catch(e) {
+    document.getElementById("mhr-error-msg").textContent = "Error de red: " + e.message;
+    errD.style.display = "block";
+  } finally {
+    btnC.disabled = false;
+    spin.style.display = "none";
+  }
+}
+
+function renderResults(data) {
+  const resD = document.getElementById("mhr-results");
+  const lastUpd = document.getElementById("mhr-last-update");
+
+  lastUpd.textContent = "Última consulta: " + data.fecha_consulta;
+
+  // Totales
+  let totalZfers = 0, totalFuera = 0;
+  for (const h of data.hojas_ruta) {
+    totalZfers += h.total_zfer;
+    totalFuera += h.fuera_calendario;
+  }
+
+  const chips = document.getElementById("mhr-summary-chips");
+  chips.innerHTML = `
+    <div class="stat-chip">
+      <div class="stat-num">${data.total_hrs}</div>
+      <div class="stat-lbl">HRs analizadas</div>
+    </div>
+    <div class="stat-chip">
+      <div class="stat-num">${totalZfers.toLocaleString("es-CO")}</div>
+      <div class="stat-lbl">ZFERs totales</div>
+    </div>
+    <div class="stat-chip" style="${totalFuera > 0 ? 'border-color:var(--err-bdr)' : 'border-color:var(--ok-bdr)'}">
+      <div class="stat-num" style="color:${totalFuera > 0 ? 'var(--err-txt)' : 'var(--ok-txt)'}">
+        ${totalFuera.toLocaleString("es-CO")}
+      </div>
+      <div class="stat-lbl">Fuera de calendario</div>
+    </div>
+  `;
+
+  // Cards
+  const cardsEl = document.getElementById("mhr-cards");
+  cardsEl.innerHTML = "";
+
+  for (const h of data.hojas_ruta) {
+    const badgeColor = h.fuera_calendario > 0 ? "var(--err-bdr)" : "var(--ok-bdr)";
+    const badgeTxt   = h.fuera_calendario > 0 ? "var(--err-txt)" : "var(--ok-txt)";
+    const badgeBg    = h.fuera_calendario > 0 ? "var(--err-bg)"  : "var(--ok-bg)";
+    const collapseId = "hr_" + h.id_hruta;
+
+    let zfersList = "";
+    if (h.zfers_fuera && h.zfers_fuera.length > 0) {
+      const shown = h.zfers_fuera.slice(0, 20);
+      const rest  = h.zfers_fuera.length - shown.length;
+      zfersList = shown.map(z =>
+        `<span class="tag t-neutral" style="font-family:monospace; font-size:.78rem;">${z}</span>`
+      ).join("");
+      if (rest > 0) {
+        zfersList += `<span class="tag t-formula" style="cursor:pointer;"
+          onclick="verTodos(this,'${h.id_hruta}', event)">
+          +${rest} más <i class="bi bi-chevron-down"></i></span>`;
+      }
+    } else {
+      zfersList = `<span style="color:var(--ok-txt); font-size:.82rem;">
+        <i class="bi bi-check-circle me-1"></i>Todos en calendario
+      </span>`;
+    }
+
+    cardsEl.insertAdjacentHTML("beforeend", `
+      <div class="card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between gap-3"
+             style="cursor:pointer;" onclick="toggleCard('${collapseId}', this)">
+          <div class="d-flex align-items-center gap-3 flex-wrap flex-grow-1">
+            <span style="font-family:monospace; font-weight:900; font-size:1rem; color:var(--accent);">${h.id_hruta}</span>
+            <span style="font-size:.85rem; color:var(--text); max-width:520px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+                  title="${h.descripcion}">${h.descripcion}</span>
+            <span class="tag t-neutral" style="font-size:.75rem;">
+              <i class="bi bi-layers me-1"></i>${h.materiales} materiales
+            </span>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-shrink-0">
+            <span style="background:${badgeBg}; color:${badgeTxt}; border:1px solid ${badgeColor};
+                         border-radius:20px; padding:.2rem .75rem; font-size:.8rem; font-weight:700;">
+              ${h.fuera_calendario > 0
+                ? `<i class="bi bi-exclamation-triangle me-1"></i>${h.fuera_calendario} fuera`
+                : `<i class="bi bi-check-circle me-1"></i>OK`}
+            </span>
+            <i class="bi bi-chevron-down" id="chev_${collapseId}"
+               style="color:var(--muted); transition:transform .2s;"></i>
+          </div>
+        </div>
+        <div id="${collapseId}" style="display:none;">
+          <div class="card-body">
+            <div class="d-flex gap-3 mb-3 flex-wrap" style="font-size:.8rem; color:var(--muted);">
+              <span><b style="color:var(--text);">${h.total_zfer}</b> ZFERs asignados</span>
+              <span><b style="color:var(--ok-txt);">${h.en_calendario}</b> en calendario</span>
+              <span><b style="color:${h.fuera_calendario > 0 ? 'var(--err-txt)' : 'var(--ok-txt)'};">${h.fuera_calendario}</b> fuera de calendario</span>
+            </div>
+            ${h.fuera_calendario > 0 ? `
+            <div class="section-label mb-2">ZFERs fuera de calendario</div>
+            <div id="zlist_${h.id_hruta}" style="display:flex; flex-wrap:wrap; gap:4px;">
+              ${zfersList}
+            </div>` : `<div>${zfersList}</div>`}
+          </div>
+        </div>
+      </div>
+    `);
+  }
+
+  // Guardar para "ver todos"
+  window._mhrData = data;
+
+  resD.style.display = "";
+}
+
+function toggleCard(id, hdr) {
+  const el = document.getElementById(id);
+  const chev = document.getElementById("chev_" + id);
+  if (el.style.display === "none") {
+    el.style.display = "";
+    if (chev) chev.style.transform = "rotate(180deg)";
+  } else {
+    el.style.display = "none";
+    if (chev) chev.style.transform = "";
+  }
+}
+
+function verTodos(btn, id_hruta, ev) {
+  ev.stopPropagation();
+  if (!window._mhrData) return;
+  const hr = window._mhrData.hojas_ruta.find(h => h.id_hruta === id_hruta);
+  if (!hr) return;
+  const container = document.getElementById("zlist_" + id_hruta);
+  container.innerHTML = hr.zfers_fuera.map(z =>
+    `<span class="tag t-neutral" style="font-family:monospace; font-size:.78rem;">${z}</span>`
+  ).join("");
+}
+
+function exportarExcel() {
+  window.location.href = "/api/mantenimiento_hr/exportar";
+}
+</script>
+{% endblock %}

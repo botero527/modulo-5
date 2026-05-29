@@ -83,6 +83,15 @@ def _conn_str():
         "Encrypt=yes;TrustServerCertificate=no;Connection Timeout=20;"
     )
 
+_CONN_CALENDARIO = (
+    "DRIVER={ODBC Driver 17 for SQL Server};"
+    "SERVER=agpcolcalendario.database.windows.net;"
+    "DATABASE=CalendarioAGP;"
+    "UID=Consulta;"
+    "PWD=@GPgl4$$2021;"
+    "Encrypt=yes;TrustServerCertificate=no;Connection Timeout=20;"
+)
+
 # ── Pool de conexiones (evita reconexión TCP en cada query) ───────────────────
 import queue as _queue
 
@@ -3868,9 +3877,9 @@ def _hr_buscar_candidata(zfer_base: str, zfer_nuevo: str) -> tuple:
         criterios = _hr_construir_criterios(attrs, area, bom_posiciones, metrologia_base, prueba_agua_base)
         resultados, _, _, _ = _hr_buscar(criterios)
 
-        elegibles = [r for r in resultados if r.get("MATERIALES") is not None and r["MATERIALES"] <= 450]
+        elegibles = [r for r in resultados if r.get("MATERIALES") is not None and r["MATERIALES"] <= 300]
         if not elegibles:
-            return None, "", "Sin HRs candidatas con materiales ≤ 450"
+            return None, "", "Sin HRs candidatas con materiales ≤ 300"
         candidata = max(elegibles, key=lambda r: r["MATERIALES"])
         return str(candidata["ID_HRUTA"]), candidata.get("DESCRIPCION",""), None
 
@@ -4087,6 +4096,186 @@ def api_hojas_ruta_buscar():
             "alertas": criterios.get("alertas", []),
         })
 
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+# ── Mantenimiento HR ──────────────────────────────────────────────────────────
+
+_MHR_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ultimo_mantenimiento_hr.json")
+
+
+@app.route("/mantenimiento_hr")
+@login_required
+def mantenimiento_hr():
+    return render_template("mantenimiento_hr.html")
+
+
+@app.route("/api/mantenimiento_hr/consultar")
+@login_required
+def api_mantenimiento_hr_consultar():
+    import json as _json
+    from datetime import datetime as _dt
+    try:
+        # 1. Query HRs con >= 300 materiales desde DB_SAP
+        with get_conn() as cn:
+            cur = cn.cursor()
+            cur.execute("""
+                SELECT ID_HRUTA, DESCRIPCION, MATERIALES
+                FROM dbo.ODATA_HR_CONSULTA
+                WHERE TIPO_HR = 'PRODUCCION' AND MATERIALES >= 300
+                ORDER BY MATERIALES DESC
+            """)
+            hrs = [{"id_hruta": str(r[0]), "descripcion": r[1], "materiales": int(r[2] or 0)}
+                   for r in cur.fetchall()]
+
+        if not hrs:
+            result = {"ok": True, "fecha_consulta": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+                      "total_hrs": 0, "hojas_ruta": []}
+            with open(_MHR_JSON, "w", encoding="utf-8") as f:
+                _json.dump(result, f, ensure_ascii=False)
+            return jsonify(result)
+
+        # 2. Batch query de materiales
+        ids = [h["id_hruta"] for h in hrs]
+        placeholders = ",".join(["?" for _ in ids])
+        with get_conn() as cn:
+            cur = cn.cursor()
+            cur.execute(
+                f"SELECT ID_HRUTA, MATERIAL FROM dbo.HR_MATERIALS WHERE ID_HRUTA IN ({placeholders})",
+                ids
+            )
+            from collections import defaultdict as _dd
+            zfers_by_hr = _dd(list)
+            for row in cur.fetchall():
+                zfers_by_hr[str(row[0])].append(str(row[1]))
+
+        all_zfers = list({z for zlist in zfers_by_hr.values() for z in zlist})
+
+        # 3. Consultar CalendarioAGP
+        en_calendario_set = set()
+        if all_zfers:
+            try:
+                cal_cn = pyodbc.connect(_CONN_CALENDARIO)
+                try:
+                    placeholders2 = ",".join(["?" for _ in all_zfers])
+                    cal_cur = cal_cn.cursor()
+                    cal_cur.execute(
+                        f"SELECT DISTINCT ZFERcode FROM dbo.TCAL_CALENDARIO_COLOMBIA WHERE ZFERcode IN ({placeholders2})",
+                        all_zfers
+                    )
+                    en_calendario_set = {str(r[0]) for r in cal_cur.fetchall()}
+                finally:
+                    cal_cn.close()
+            except Exception as cal_err:
+                # Si falla la conexión al calendario, devolvemos igual pero con advertencia
+                pass
+
+        # 4. Clasificar
+        hojas = []
+        for h in hrs:
+            zfers = zfers_by_hr.get(h["id_hruta"], [])
+            fuera = [z for z in zfers if z not in en_calendario_set]
+            hojas.append({
+                "id_hruta": h["id_hruta"],
+                "descripcion": h["descripcion"],
+                "materiales": h["materiales"],
+                "total_zfer": len(zfers),
+                "en_calendario": len(zfers) - len(fuera),
+                "fuera_calendario": len(fuera),
+                "zfers_fuera": fuera,
+            })
+
+        result = {
+            "ok": True,
+            "fecha_consulta": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "total_hrs": len(hojas),
+            "hojas_ruta": hojas,
+        }
+        with open(_MHR_JSON, "w", encoding="utf-8") as f:
+            _json.dump(result, f, ensure_ascii=False)
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/mantenimiento_hr/exportar")
+@login_required
+def api_mantenimiento_hr_exportar():
+    import json as _json
+    from datetime import datetime as _dt
+    try:
+        # Usar último resultado guardado o re-consultar
+        data = None
+        if os.path.exists(_MHR_JSON):
+            with open(_MHR_JSON, "r", encoding="utf-8") as f:
+                data = _json.load(f)
+        if not data or not data.get("ok"):
+            return jsonify({"ok": False, "error": "No hay datos. Ejecuta la consulta primero."}), 400
+
+        import openpyxl
+        from openpyxl.styles import PatternFill, Font, Alignment
+        from io import BytesIO
+
+        wb = openpyxl.Workbook()
+
+        # Hoja resumen
+        ws_res = wb.active
+        ws_res.title = "RESUMEN"
+        hdr_fill = PatternFill("solid", fgColor="1a4731")
+        hdr_font = Font(bold=True, color="FFFFFF")
+        headers = ["HR", "Descripción", "Total ZFERs", "En Calendario", "Fuera"]
+        for col, h in enumerate(headers, 1):
+            cell = ws_res.cell(row=1, column=col, value=h)
+            cell.fill = hdr_fill
+            cell.font = hdr_font
+            cell.alignment = Alignment(horizontal="center")
+        for i, hr in enumerate(data["hojas_ruta"], 2):
+            ws_res.cell(row=i, column=1, value=hr["id_hruta"])
+            ws_res.cell(row=i, column=2, value=hr["descripcion"])
+            ws_res.cell(row=i, column=3, value=hr["total_zfer"])
+            ws_res.cell(row=i, column=4, value=hr["en_calendario"])
+            ws_res.cell(row=i, column=5, value=hr["fuera_calendario"])
+        ws_res.column_dimensions["A"].width = 14
+        ws_res.column_dimensions["B"].width = 45
+        ws_res.column_dimensions["C"].width = 14
+        ws_res.column_dimensions["D"].width = 16
+        ws_res.column_dimensions["E"].width = 10
+
+        fill_ok  = PatternFill("solid", fgColor="c6efce")
+        fill_err = PatternFill("solid", fgColor="ffc7ce")
+
+        for hr in data["hojas_ruta"]:
+            safe_name = str(hr["id_hruta"])[:31]
+            ws = wb.create_sheet(title=safe_name)
+            ws.cell(row=1, column=1, value=f"{hr['id_hruta']} — {hr['descripcion']}")
+            ws.merge_cells("A1:B1")
+            ws.cell(row=1, column=1).font = Font(bold=True, size=12)
+            ws.cell(row=2, column=1, value="ZFER").fill = hdr_fill
+            ws.cell(row=2, column=1).font = hdr_font
+            ws.cell(row=2, column=2, value="EN_CALENDARIO").fill = hdr_fill
+            ws.cell(row=2, column=2).font = hdr_font
+
+            fuera_set = set(hr["zfers_fuera"])
+            # Reconstruir lista completa desde fuera + en (no tenemos la lista completa aquí,
+            # así que listamos: fuera primero, luego indicamos cuántos están en calendario)
+            row = 3
+            for z in hr["zfers_fuera"]:
+                ws.cell(row=row, column=1, value=z).fill = fill_err
+                ws.cell(row=row, column=2, value="No").fill = fill_err
+                row += 1
+            ws.column_dimensions["A"].width = 16
+            ws.column_dimensions["B"].width = 16
+
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        from flask import send_file
+        filename = f"mantenimiento_hr_{_dt.now().strftime('%Y%m%d')}.xlsx"
+        return send_file(buf, as_attachment=True, download_name=filename,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
