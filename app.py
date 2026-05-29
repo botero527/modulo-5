@@ -2352,7 +2352,8 @@ def _migracion_bd_local():
         ("dbo.M5_Cola", "cambiar_hr",  "ALTER TABLE dbo.M5_Cola ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
         ("dbo.M5_Cola", "zhal",        "ALTER TABLE dbo.M5_Cola ADD zhal NVARCHAR(20) NULL"),
         ("dbo.M5_Cola", "acero_dir",   "ALTER TABLE dbo.M5_Cola ADD acero_dir NVARCHAR(10) NULL"),
-        ("dbo.M5_Cola", "subproducto", "ALTER TABLE dbo.M5_Cola ADD subproducto NVARCHAR(20) NULL"),
+        ("dbo.M5_Cola", "subproducto",   "ALTER TABLE dbo.M5_Cola ADD subproducto NVARCHAR(20) NULL"),
+        ("dbo.M5_Cola", "plano_manual",  "ALTER TABLE dbo.M5_Cola ADD plano_manual NVARCHAR(100) NULL"),
     ]
     try:
         cn  = _get_conn_local()
@@ -2527,7 +2528,7 @@ def api_simetria_buscar(zfer: str):
             "Z_COMMERCIAL_THICKNESS":   attrs.get("Z_COMMERCIAL_THICKNESS",   ""),
             "Z_AGP_VERSION":            attrs.get("Z_AGP_VERSION",            ""),
         }
-
+        
         intersects, params_i = [], []
         for atnam, val in criterios.items():
             if not val:
@@ -2710,13 +2711,15 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                         else:
                             usar_sin = _tiene_diferencial_06(item["zfer"])
                         print(f"[COLA] {item['zfer']} acero_dir={acero_dir or 'auto'} → {'con→sin' if usar_sin else 'sin→con'}")
+                        _pm = item.get("plano_manual","") or ""
                         if usar_sin and _proc_formula_sin:
                             res = _proc_formula_sin(
                                 item["zfer"], item.get("formula_nueva",""),
                                 item["color"], item.get("color_nombre",""),
                                 item.get("franja","00"), item.get("pn_base",""),
                                 item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza",""),
-                                subproducto=item.get("subproducto","")
+                                subproducto=item.get("subproducto",""),
+                                plano_manual=_pm
                             )
                         elif not usar_sin and _proc_formula_con:
                             res = _proc_formula_con(
@@ -2725,7 +2728,8 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                                 item.get("franja","00"), item.get("pn_base",""),
                                 item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza",""),
                                 zhal=item.get("zhal",""),
-                                subproducto=item.get("subproducto","")
+                                subproducto=item.get("subproducto",""),
+                                plano_manual=_pm
                             )
                         else:
                             raise RuntimeError("No se encontró función de procesamiento de fórmula en sap_auto")
@@ -2738,7 +2742,8 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                                 item.get("franja","00"), item.get("pn_base",""),
                                 item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza",""),
                                 cambio_hr=item.get("cambiar_hr", True),
-                                subproducto=item.get("subproducto","")
+                                subproducto=item.get("subproducto",""),
+                                plano_manual=item.get("plano_manual","") or ""
                             )
                         else:
                             raise RuntimeError("No se encontró función procesar_combinacion_formula_mismo_acero en sap_auto")
@@ -2751,7 +2756,8 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                                 item.get("franja","00"), item.get("pn_base",""),
                                 item.get("zpla",""), item.get("nivel",""), item.get("tipo_pieza",""),
                                 zhal=item.get("zhal",""),
-                                subproducto=item.get("subproducto","")
+                                subproducto=item.get("subproducto",""),
+                                plano_manual=item.get("plano_manual","") or ""
                             )
                         else:
                             raise RuntimeError("No se encontró función de procesamiento en sap_auto")
@@ -3031,11 +3037,12 @@ def api_cola_agregar():
                 # cambiar_hr: fórmulas siempre True, colores según elección del usuario
                 cambiar_hr = True if tipo_item.startswith("FORMULA") else bool(it.get("cambiar_hr", False))
                 zhal_val = str(it.get("zhal",""))[:20] or None if tipo_item.startswith("FORMULA") else None
+                plano_manual_val = str(it.get("plano_manual","")).strip()[:100] or None
                 cur.execute("""
                     INSERT INTO dbo.M5_Cola
                     (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
-                     pn_base, nivel, tipo_pieza, formula_nueva, descripcion, acero_dir, cambiar_hr, zhal, subproducto)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     pn_base, nivel, tipo_pieza, formula_nueva, descripcion, acero_dir, cambiar_hr, zhal, subproducto, plano_manual)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, bloque_id,
                     str(it.get("zfer",""))[:20], tipo_item[:20],
                     str(it.get("color",""))[:10], str(it.get("color_nombre",""))[:100],
@@ -3044,7 +3051,7 @@ def api_cola_agregar():
                     str(it.get("tipo_pieza",""))[:10], str(it.get("formula_nueva",""))[:30],
                     desc[:200], str(it.get("acero_dir",""))[:10] or None,
                     1 if cambiar_hr else 0, zhal_val,
-                    str(it.get("subproducto",""))[:20] or None)
+                    str(it.get("subproducto",""))[:20] or None, plano_manual_val)
 
         hora_str = hora_prog.strftime("%d/%m/%Y %H:%M") if hora_prog else ""
         return jsonify({"ok": True, "bloque_id": bloque_id, "bloque_num": bloque_num,
@@ -3220,6 +3227,138 @@ def api_cola_vaciar_bloque(bloque_id: int):
                 AND NOT EXISTS (SELECT 1 FROM dbo.M5_Cola WHERE bloque_id=?)
             """, bloque_id, bloque_id)
         return jsonify({"ok": True, "deleted": deleted})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/indicadores")
+@login_required
+def indicadores():
+    return render_template("indicadores.html")
+
+
+@app.route("/api/indicadores/data")
+@login_required
+def api_indicadores_data():
+    """KPIs y series temporales desde M5_LogEjecuciones."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+
+            # ── Totales globales ────────────────────────────────────────────
+            cur.execute("""
+                SELECT
+                    SUM(CASE WHEN estado='OK'    THEN 1 ELSE 0 END) AS total_ok,
+                    SUM(CASE WHEN estado='ERROR' THEN 1 ELSE 0 END) AS total_error,
+                    SUM(CASE WHEN tipo='COLOR' AND estado='OK'    THEN 1 ELSE 0 END) AS colores_ok,
+                    SUM(CASE WHEN tipo='COLOR' AND estado='ERROR' THEN 1 ELSE 0 END) AS colores_error,
+                    SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='OK'    THEN 1 ELSE 0 END) AS formulas_ok,
+                    SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='ERROR' THEN 1 ELSE 0 END) AS formulas_error
+                FROM dbo.M5_LogEjecuciones
+            """)
+            row = cur.fetchone()
+            total_ok       = row[0] or 0
+            total_error    = row[1] or 0
+            colores_ok     = row[2] or 0
+            colores_error  = row[3] or 0
+            formulas_ok    = row[4] or 0
+            formulas_error = row[5] or 0
+
+            # ── Por día — últimos 30 días ───────────────────────────────────
+            cur.execute("""
+                SELECT
+                    CAST(ejecutado_el AS DATE) AS fecha,
+                    SUM(CASE WHEN tipo='COLOR'        AND estado='OK'    THEN 1 ELSE 0 END) AS colores_ok,
+                    SUM(CASE WHEN tipo='COLOR'        AND estado='ERROR' THEN 1 ELSE 0 END) AS colores_error,
+                    SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='OK'   THEN 1 ELSE 0 END) AS formulas_ok,
+                    SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='ERROR' THEN 1 ELSE 0 END) AS formulas_error
+                FROM dbo.M5_LogEjecuciones
+                WHERE ejecutado_el >= DATEADD(day, -30, GETDATE())
+                GROUP BY CAST(ejecutado_el AS DATE)
+                ORDER BY fecha
+            """)
+            por_dia = [
+                {
+                    "fecha": str(r[0]),
+                    "colores_ok": r[1] or 0,
+                    "colores_error": r[2] or 0,
+                    "formulas_ok": r[3] or 0,
+                    "formulas_error": r[4] or 0,
+                }
+                for r in cur.fetchall()
+            ]
+
+            # ── Por semana — últimas 12 semanas ────────────────────────────
+            cur.execute("""
+                SELECT
+                    DATEPART(year,  ejecutado_el)*100 + DATEPART(week, ejecutado_el) AS semana,
+                    MIN(CAST(ejecutado_el AS DATE)) AS fecha_inicio,
+                    SUM(CASE WHEN tipo='COLOR'        AND estado='OK'    THEN 1 ELSE 0 END) AS colores_ok,
+                    SUM(CASE WHEN tipo='COLOR'        AND estado='ERROR' THEN 1 ELSE 0 END) AS colores_error,
+                    SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='OK'   THEN 1 ELSE 0 END) AS formulas_ok,
+                    SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='ERROR' THEN 1 ELSE 0 END) AS formulas_error
+                FROM dbo.M5_LogEjecuciones
+                WHERE ejecutado_el >= DATEADD(week, -12, GETDATE())
+                GROUP BY DATEPART(year, ejecutado_el)*100 + DATEPART(week, ejecutado_el)
+                ORDER BY semana
+            """)
+            por_semana = [
+                {
+                    "semana": r[0],
+                    "fecha_inicio": str(r[1]),
+                    "colores_ok": r[2] or 0,
+                    "colores_error": r[3] or 0,
+                    "formulas_ok": r[4] or 0,
+                    "formulas_error": r[5] or 0,
+                }
+                for r in cur.fetchall()
+            ]
+
+            # ── Top 10 ZFERs base por ejecuciones OK ───────────────────────
+            cur.execute("""
+                SELECT TOP 10
+                    zfer_base,
+                    COUNT(*) AS total
+                FROM dbo.M5_LogEjecuciones
+                WHERE estado='OK' AND zfer_base IS NOT NULL AND zfer_base <> ''
+                GROUP BY zfer_base
+                ORDER BY total DESC
+            """)
+            top_zfer = [{"zfer_base": r[0], "total": r[1]} for r in cur.fetchall()]
+
+            # ── Últimas 10 ejecuciones ──────────────────────────────────────
+            cur.execute("""
+                SELECT TOP 10
+                    zfer_nuevo, tipo, estado, ejecutado_el, formula_nueva, color_nombre, zfer_base
+                FROM dbo.M5_LogEjecuciones
+                ORDER BY ejecutado_el DESC
+            """)
+            recientes = [
+                {
+                    "zfer_nuevo":    r[0] or "",
+                    "tipo":          r[1] or "",
+                    "estado":        r[2] or "",
+                    "ejecutado_el":  r[3].strftime("%d/%m/%Y %H:%M") if r[3] else "",
+                    "formula_nueva": r[4] or "",
+                    "color_nombre":  r[5] or "",
+                    "zfer_base":     r[6] or "",
+                }
+                for r in cur.fetchall()
+            ]
+
+        return jsonify({
+            "ok": True,
+            "total_ok": total_ok,
+            "total_error": total_error,
+            "colores_ok": colores_ok,
+            "colores_error": colores_error,
+            "formulas_ok": formulas_ok,
+            "formulas_error": formulas_error,
+            "por_dia": por_dia,
+            "por_semana": por_semana,
+            "top_zfer": top_zfer,
+            "recientes": recientes,
+        })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -3729,10 +3868,10 @@ def _hr_buscar_candidata(zfer_base: str, zfer_nuevo: str) -> tuple:
         criterios = _hr_construir_criterios(attrs, area, bom_posiciones, metrologia_base, prueba_agua_base)
         resultados, _, _, _ = _hr_buscar(criterios)
 
-        elegibles = [r for r in resultados if r.get("TOTAL_MATERIALES") is not None and r["TOTAL_MATERIALES"] <= 450]
+        elegibles = [r for r in resultados if r.get("MATERIALES") is not None and r["MATERIALES"] <= 450]
         if not elegibles:
             return None, "", "Sin HRs candidatas con materiales ≤ 450"
-        candidata = max(elegibles, key=lambda r: r["TOTAL_MATERIALES"])
+        candidata = max(elegibles, key=lambda r: r["MATERIALES"])
         return str(candidata["ID_HRUTA"]), candidata.get("DESCRIPCION",""), None
 
     except Exception as e:
@@ -3819,8 +3958,8 @@ def _hr_buscar(crit: dict) -> list:
         cols = [c[0] for c in cur.description]
         rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
-    # Contar HRs con todos los campos idénticos (excepto ID_HRUTA y TOTAL_MATERIALES)
-    _excluir = {"ID_HRUTA", "TOTAL_MATERIALES"}
+    # Contar HRs con todos los campos idénticos (excepto ID_HRUTA, MATERIALES y TOTAL_MATERIALES)
+    _excluir = {"ID_HRUTA", "TOTAL_MATERIALES", "MATERIALES"}
     _cmp_cols = [c for c in cols if c not in _excluir]
     from collections import Counter
     _grupos = Counter(tuple(r.get(c) for c in _cmp_cols) for r in rows)
@@ -3926,7 +4065,7 @@ def api_hojas_ruta_buscar():
             "criterios": criterios,
             "resultados": [
                 {"id_hruta": r["ID_HRUTA"], "descripcion": r["DESCRIPCION"],
-                 "sub_ruta": r["SUB_RUTA"], "materiales": r.get("TOTAL_MATERIALES"),
+                 "sub_ruta": r["SUB_RUTA"], "materiales": r.get("MATERIALES"),
                  "tamano": r["TAMANO"], "nivel": r["NIVEL"], "geometria": r["GEOMETRIA"],
                  "formula": r["FORMULA"], "txt_formula": r["TXT_FORMULA"],
                  "base": r["BASE"], "txt_base": r["TXT_BASE"],

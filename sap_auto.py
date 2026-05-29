@@ -76,8 +76,9 @@ _T_MIN_LENTO  = 0.05
 
 # Intervalo de poll interno
 _T_POLL = 0.05
+#700176997
 
-_SAP_USER     = os.environ.get("SAP_USER",     "FESPITIA")
+_SAP_USER     = os.environ.get("SAP_USER",     "JPINZON")
 _SAP_PASSWORD = os.environ.get("SAP_PASSWORD", "Agp2026*")
 _SAP_CLIENT   = os.environ.get("SAP_CLIENT",   "300")
 _SAP_SYSTEM   = os.environ.get("SAP_SYSTEM",   "AGP PRD")   # producción; "QAS" para pruebas
@@ -88,7 +89,6 @@ _SAP_CONEXIONES = {
     "QAS":     {"appserver": "/H/18.233.139.237/H/10.0.3.38",  "systemnumber": "00"},
     "AGP PRD": {"appserver": "/H/18.233.139.237/H/10.0.5.151", "systemnumber": "02"},
 }
-
 # Rutas típicas de sapshcut.exe en Windows
 _SAPSHCUT_PATHS = [
     r"C:\Program Files\SAP\FrontEnd\SAPgui\sapshcut.exe",
@@ -689,7 +689,8 @@ class AutomatizadorSAP:
 
     def zppr0020_esperar_fases(self, zfer_nuevo: str,
                                 intervalo_seg: int = 5,
-                                max_espera_seg: int = 300) -> dict:
+                                max_espera_seg: int = 300,
+                                min_fases_s: int = 8) -> dict:
         """
         Abre sesión auxiliar SAP para ZPPR0020 (deja ZMME0001 intacta en sesión
         principal). Polling hasta > 7 fases con 'S', o error 'E', o timeout.
@@ -750,8 +751,8 @@ class AutomatizadorSAP:
                                     "fases": fases}
 
                     n_s = sum(1 for v in fases.values() if str(v).strip().upper() == "S")
-                    if n_s > 7:
-                        print(f"    ZPPR0020 OK: {n_s} fases S | ZPLA={zpla}")
+                    if n_s >= min_fases_s:
+                        print(f"    ZPPR0020 OK: {n_s} fases S (min={min_fases_s}) | ZPLA={zpla}")
                         return {"ok": True, "zpla": zpla, "fase_error": "",
                                 "detalle": f"{n_s} fases completadas", "fases": fases}
 
@@ -2022,7 +2023,7 @@ class AutomatizadorSAP:
         return str(row[0]).strip(), f"DOKNR BD ({('con SP' if con_sp else 'sin SP')}): '{row[0].strip()}'"
 
     def mm02_cambiar_plano(self, zfer: str, res: "ResultadoItem" = None,
-                           zfer_base: str = None) -> bool:
+                           zfer_base: str = None, plano_manual: str = "") -> bool:
         """
         Lee el DOKNR del ZFER BASE en MM02 (que sí tiene ZU04 extendido),
         busca en BD el plano sin SP con ese nombre, y lo escribe en el ZFER nuevo.
@@ -2083,7 +2084,14 @@ class AutomatizadorSAP:
             if res:
                 res._log(f"  [PLANO] {msg_bd}")
             if not nuevo_plano:
-                return False
+                # Fallback manual: si el usuario ingresó un plano y BD no tiene nada
+                if plano_manual:
+                    nuevo_plano = plano_manual.strip()
+                    print(f"    MM02 plano: usando plano_manual ingresado por usuario: '{nuevo_plano}'")
+                    if res:
+                        res._log(f"  [PLANO] Usando plano manual: '{nuevo_plano}' (BD sin resultado)")
+                else:
+                    return False
 
             # ── 3. Navegar al ZFER NUEVO y escribir el plano ──────────────────
             self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
@@ -2568,7 +2576,7 @@ class AutomatizadorSAP:
         return doc_elegido, f"Plano con SP: DOKNR ← '{doc_elegido}'"
 
     def mm02_cambiar_plano_con_sp(self, zfer: str, res: "ResultadoItem" = None,
-                                  zfer_base: str = None) -> bool:
+                                  zfer_base: str = None, plano_manual: str = "") -> bool:
         """
         Lee el DOKNR del ZFER BASE en MM02, busca en BD el plano CON SP con ese nombre,
         y lo escribe en el ZFER nuevo. Para flujo sin acero → con acero.
@@ -2628,7 +2636,13 @@ class AutomatizadorSAP:
             if res:
                 res._log(f"  [PLANO-SP] {msg_bd}")
             if not nuevo_plano:
-                return False
+                if plano_manual:
+                    nuevo_plano = plano_manual.strip()
+                    print(f"    MM02 plano (con SP): usando plano_manual ingresado por usuario: '{nuevo_plano}'")
+                    if res:
+                        res._log(f"  [PLANO-SP] Usando plano manual: '{nuevo_plano}' (BD sin resultado)")
+                else:
+                    return False
 
             # ── 3. Navegar al ZFER NUEVO y escribir el plano ──────────────────
             self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
@@ -3155,7 +3169,7 @@ class AutomatizadorSAP:
 
             # PASO 3 — ZPPR0020 esperar fases
             _cb(3, f"Esperando aprobación del proceso SAP (ZPPR0020) — {zfer_nuevo}")
-            fase_res = self.zppr0020_esperar_fases(zfer_nuevo)
+            fase_res = self.zppr0020_esperar_fases(zfer_nuevo)  # color: min_fases_s=8
             if not fase_res["ok"]:
                 raise RuntimeError(
                     f"ZPPR0020 falló — {fase_res['fase_error']}: {fase_res['detalle']}"
@@ -3242,7 +3256,7 @@ class AutomatizadorSAP:
             color_codigo: str, color_nombre: str,
             franja: str = "00", pn_base: str = "", zpla: str = "",
             nivel: str = "", tipo_pieza: str = "",
-            subproducto: str = "",
+            subproducto: str = "", plano_manual: str = "",
             step_callback=None) -> ResultadoItem:
         """
         Flujo completo: cambio de fórmula con acero → sin acero.
@@ -3316,7 +3330,7 @@ class AutomatizadorSAP:
 
             # PASO 3 — ZPPR0020
             _cb(3, f"Esperando aprobación del proceso SAP (ZPPR0020) — {zfer_nuevo}")
-            fase_res = self.zppr0020_esperar_fases(zfer_nuevo)
+            fase_res = self.zppr0020_esperar_fases(zfer_nuevo, min_fases_s=7)
             if not fase_res["ok"]:
                 raise RuntimeError(f"ZPPR0020 falló — {fase_res['fase_error']}: {fase_res['detalle']}")
             if not zpla_usado and fase_res.get("zpla"):
@@ -3379,7 +3393,7 @@ class AutomatizadorSAP:
                 self.mm02_actualizar_diferenciales_zpla(mat, zpla_base, res)
 
             # 5d — Plano: solo para ZFER nuevo (no ZFOR)
-            self.mm02_cambiar_plano(zfer_nuevo, res, zfer_base=zfer_base)
+            self.mm02_cambiar_plano(zfer_nuevo, res, zfer_base=zfer_base, plano_manual=plano_manual)
 
             # PASO 6 — CEWB: eliminar posición acero del ZFER nuevo
             _cb(6, f"Eliminando posición acero {pos_acero} en CEWB (ZFER={zfer_nuevo})")
@@ -3492,7 +3506,7 @@ class AutomatizadorSAP:
 
             # PASO 2 — ZPPR0020
             _cb(2, f"Esperando aprobación del proceso SAP (ZPPR0020) — {zfer_nuevo}")
-            fase_res = self.zppr0020_esperar_fases(zfer_nuevo)
+            fase_res = self.zppr0020_esperar_fases(zfer_nuevo, min_fases_s=7)
             if not fase_res["ok"]:
                 raise RuntimeError(f"ZPPR0020 falló — {fase_res['fase_error']}: {fase_res['detalle']}")
             if not zpla_usado and fase_res.get("zpla"):
@@ -3808,7 +3822,7 @@ class AutomatizadorSAP:
             color_codigo: str, color_nombre: str,
             franja: str = "00", pn_base: str = "", zpla: str = "",
             nivel: str = "", tipo_pieza: str = "",
-            zhal: str = "", subproducto: str = "",
+            zhal: str = "", subproducto: str = "", plano_manual: str = "",
             step_callback=None) -> ResultadoItem:
         """
         Flujo completo: cambio de fórmula sin acero → con acero.
@@ -3889,7 +3903,7 @@ class AutomatizadorSAP:
 
             # PASO 3 — ZPPR0020
             _cb(3, f"Esperando aprobación del proceso SAP (ZPPR0020) — {zfer_nuevo}")
-            fase_res = self.zppr0020_esperar_fases(zfer_nuevo)
+            fase_res = self.zppr0020_esperar_fases(zfer_nuevo, min_fases_s=7)
             if not fase_res["ok"]:
                 raise RuntimeError(f"ZPPR0020 falló — {fase_res['fase_error']}: {fase_res['detalle']}")
             if not zpla_usado and fase_res.get("zpla"):
@@ -3954,7 +3968,7 @@ class AutomatizadorSAP:
                 self.mm02_actualizar_diferenciales_zpla(mat, zpla_base_c, res)
 
             # 5d — Plano con SP: solo para ZFER nuevo
-            self.mm02_cambiar_plano_con_sp(zfer_nuevo, res, zfer_base=zfer_base)
+            self.mm02_cambiar_plano_con_sp(zfer_nuevo, res, zfer_base=zfer_base, plano_manual=plano_manual)
 
             # PASO 6 — CS02: agregar posición acero en BOM del ZFOR
             _cb(6, f"Agregando posición acero {pos_acero} en CS02 (ZFOR={zfor_nuevo})")
@@ -4033,7 +4047,7 @@ def procesar_combinacion_formula_con_acero(
         color_codigo: str, color_nombre: str,
         franja: str = "00", pn_base: str = "", zpla: str = "",
         nivel: str = "", tipo_pieza: str = "",
-        zhal: str = "", subproducto: str = "",
+        zhal: str = "", subproducto: str = "", plano_manual: str = "",
         step_callback=None) -> "ResultadoItem":
     """Entrada pública para flujo sin acero → con acero."""
     auto = AutomatizadorSAP()
@@ -4048,7 +4062,8 @@ def procesar_combinacion_formula_con_acero(
     return auto.procesar_formula_con_acero(
         zfer_base, formula_nueva, color_codigo, color_nombre,
         franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
-        zhal=zhal, subproducto=subproducto, step_callback=step_callback,
+        zhal=zhal, subproducto=subproducto, plano_manual=plano_manual,
+        step_callback=step_callback,
     )
 
 
@@ -4057,7 +4072,7 @@ def procesar_combinacion_formula_mismo_acero(
         color_codigo: str, color_nombre: str,
         franja: str = "00", pn_base: str = "", zpla: str = "",
         nivel: str = "", tipo_pieza: str = "",
-        cambio_hr: bool = False, subproducto: str = "",
+        cambio_hr: bool = False, subproducto: str = "", plano_manual: str = "",
         step_callback=None) -> "ResultadoItem":
     """Entrada pública para flujo mismo acero (sin→sin o con→con)."""
     auto = AutomatizadorSAP()
@@ -4072,7 +4087,8 @@ def procesar_combinacion_formula_mismo_acero(
     return auto.procesar_formula_mismo_acero(
         zfer_base, formula_nueva, color_codigo, color_nombre,
         franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
-        cambio_hr=cambio_hr, subproducto=subproducto, step_callback=step_callback,
+        cambio_hr=cambio_hr, subproducto=subproducto, plano_manual=plano_manual,
+        step_callback=step_callback,
     )
 
 
@@ -4081,7 +4097,7 @@ def procesar_combinacion_formula_sin_acero(
         color_codigo: str, color_nombre: str,
         franja: str = "00", pn_base: str = "", zpla: str = "",
         nivel: str = "", tipo_pieza: str = "",
-        subproducto: str = "",
+        subproducto: str = "", plano_manual: str = "",
         step_callback=None) -> ResultadoItem:
     auto = AutomatizadorSAP()
     if not auto.conectar():
@@ -4095,7 +4111,7 @@ def procesar_combinacion_formula_sin_acero(
     return auto.procesar_formula_sin_acero(
         zfer_base, formula_nueva, color_codigo, color_nombre,
         franja, pn_base, zpla, nivel=nivel, tipo_pieza=tipo_pieza,
-        subproducto=subproducto, step_callback=step_callback,
+        subproducto=subproducto, plano_manual=plano_manual, step_callback=step_callback,
     )
 
 

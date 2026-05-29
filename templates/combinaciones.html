@@ -1488,7 +1488,24 @@ function _wizardConfigCola(items) {
               ${o.label}
             </button>`).join("")}
         </div>
-        ${zhalHtml}`;
+        ${zhalHtml}
+        ${(cfg.acero_dir === "con_sin" || cfg.acero_dir === "sin_con") ? `
+        <div style="margin-top:.9rem; padding:.75rem; background:var(--bg);
+             border:1px solid var(--border); border-radius:8px;">
+          <div style="color:var(--muted); font-size:.78rem; margin-bottom:.4rem; font-weight:600;">
+            <i class="bi bi-file-earmark-text me-1"></i>Plano manual
+            <span style="font-weight:400; font-size:.75rem;">(opcional — solo si BD no tiene plano)</span>
+          </div>
+          <input id="wiz-plano-manual-input" type="text"
+            placeholder="ej: M1108 008 001 SP"
+            value="${cfg.plano_manual || ''}"
+            style="width:100%; background:var(--card-bg); border:1px solid var(--border); color:var(--text);
+                   border-radius:6px; padding:.38rem .6rem; font-size:.85rem; box-sizing:border-box;"
+            autocomplete="off" maxlength="100">
+          <div style="color:var(--muted); font-size:.72rem; margin-top:.3rem;">
+            Si la BD tiene plano, se usará ese y se ignorará este campo.
+          </div>
+        </div>` : ""}`;
 
       // Bind botones de dirección
       elPreg.querySelectorAll(".wiz-ac-btn").forEach(btn => {
@@ -1601,6 +1618,11 @@ function _wizardConfigCola(items) {
         const inp = document.getElementById("wiz-zhal-input");
         if (inp && inp.value.trim()) config[idx].zhal = inp.value.trim();
       }
+      // Leer plano manual si aplica (fórmulas)
+      if (items[idx].tipo === "formula") {
+        const inp = document.getElementById("wiz-plano-manual-input");
+        if (inp) config[idx].plano_manual = inp.value.trim();
+      }
       if (chkAp.checked) _aplicarASiguientes();
 
       if (idx === items.length - 1) {
@@ -1614,6 +1636,7 @@ function _wizardConfigCola(items) {
               acero_dir: cfg.acero_dir || "con_sin",
               cambiar_hr: true,
               zhal: (cfg.acero_dir === "sin_con" ? (cfg.zhal || "") : ""),
+              plano_manual: cfg.plano_manual || "",
             };
           }
         });
@@ -2678,7 +2701,7 @@ buscarFormulasAlt();
              style="flex:1; background:var(--bg); border:1px solid var(--border); border-radius:8px;
                     color:var(--text); padding:.5rem .8rem; font-size:.8rem; font-family:monospace;">
     </div>
-    <input id="ruta-desc-input" type="text" placeholder="Descripción opcional (ej: Planos técnicos AUDI Q4)"
+    <input id="ruta-desc-input" type="text" placeholder="Carpeta Destino"
            style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px;
                   color:var(--text); padding:.45rem .8rem; font-size:.76rem; margin-bottom:1rem;
                   box-sizing:border-box;">

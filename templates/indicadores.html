@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% block title %}Indicadores — AGP Intelligence{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h1 style="font-size:1.55rem; font-weight:900; color:var(--accent); margin:0; letter-spacing:.3px;">
+      <i class="bi bi-bar-chart-line-fill me-2"></i>Indicadores de Homologación
+    </h1>
+    <div style="font-size:.82rem; color:var(--muted); margin-top:.25rem;">
+      Colombia — CO01 &nbsp;·&nbsp; Actualización automática cada 60 s
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <span id="ind-last-update" style="font-size:.76rem; color:var(--muted);"></span>
+    <button onclick="cargarIndicadores()" class="tag t-neutral" style="cursor:pointer; border:none; padding:.32rem .75rem; font-size:.8rem;">
+      <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+    </button>
+  </div>
+</div>
+
+<!-- ── KPI Cards ──────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+
+  <div class="col-6 col-md-3">
+    <div class="card h-100" style="border-color:var(--ok-bdr);">
+      <div class="card-body p-3 d-flex flex-column align-items-start gap-1">
+        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--ok-txt); font-weight:700;">
+          <i class="bi bi-check-circle-fill me-1"></i>Total OK
+        </div>
+        <div id="kpi-total-ok" style="font-size:2.4rem; font-weight:900; color:var(--ok-txt); line-height:1;">—</div>
+        <div style="font-size:.75rem; color:var(--muted);">Ejecuciones exitosas (histórico)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <div class="card h-100" style="border-color:var(--err-bdr);">
+      <div class="card-body p-3 d-flex flex-column align-items-start gap-1">
+        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--err-txt); font-weight:700;">
+          <i class="bi bi-x-circle-fill me-1"></i>Total Error
+        </div>
+        <div id="kpi-total-error" style="font-size:2.4rem; font-weight:900; color:var(--err-txt); line-height:1;">—</div>
+        <div style="font-size:.75rem; color:var(--muted);">Ejecuciones con error (histórico)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <div class="card h-100" style="border-color:var(--info-bdr);">
+      <div class="card-body p-3 d-flex flex-column align-items-start gap-1">
+        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--info-txt); font-weight:700;">
+          <i class="bi bi-palette-fill me-1"></i>Colores OK
+        </div>
+        <div id="kpi-colores-ok" style="font-size:2.4rem; font-weight:900; color:var(--info-txt); line-height:1;">—</div>
+        <div style="font-size:.75rem; color:var(--muted);">Cambios de color exitosos</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-3">
+    <div class="card h-100" style="border-color:var(--pur-bdr);">
+      <div class="card-body p-3 d-flex flex-column align-items-start gap-1">
+        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--pur-txt); font-weight:700;">
+          <i class="bi bi-diagram-3-fill me-1"></i>Fórmulas OK
+        </div>
+        <div id="kpi-formulas-ok" style="font-size:2.4rem; font-weight:900; color:var(--pur-txt); line-height:1;">—</div>
+        <div style="font-size:.75rem; color:var(--muted);">Cambios de fórmula exitosos</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Gráficas ───────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+
+  <!-- Barras por día -->
+  <div class="col-12 col-lg-8">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-calendar3 me-2" style="color:var(--accent);"></i>ZFERs por día — últimos 30 días</span>
+        <div class="d-flex gap-2">
+          <button onclick="setVista('dia')" id="btn-vista-dia"
+                  class="tag t-neutral" style="cursor:pointer; border:none; font-size:.74rem; padding:.22rem .6rem;">Días</button>
+          <button onclick="setVista('semana')" id="btn-vista-sem"
+                  class="tag t-neutral" style="cursor:pointer; border:none; font-size:.74rem; padding:.22rem .6rem;">Semanas</button>
+        </div>
+      </div>
+      <div class="card-body" style="position:relative; height:280px;">
+        <canvas id="chart-barras"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Donut distribución -->
+  <div class="col-12 col-lg-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-pie-chart-fill me-2" style="color:var(--accent);"></i>Distribución OK
+      </div>
+      <div class="card-body d-flex flex-column align-items-center justify-content-center gap-3" style="min-height:280px;">
+        <div style="position:relative; width:190px; height:190px;">
+          <canvas id="chart-donut"></canvas>
+          <div id="donut-center" style="position:absolute; inset:0; display:flex; flex-direction:column;
+               align-items:center; justify-content:center; pointer-events:none;">
+            <div id="donut-total" style="font-size:1.7rem; font-weight:900; color:var(--text); line-height:1;">—</div>
+            <div style="font-size:.7rem; color:var(--muted); letter-spacing:.5px; text-transform:uppercase;">Total OK</div>
+          </div>
+        </div>
+        <div class="d-flex gap-3">
+          <div class="d-flex align-items-center gap-1" style="font-size:.8rem; color:var(--muted);">
+            <div style="width:12px; height:12px; border-radius:3px; background:#1f6feb; flex-shrink:0;"></div>
+            Color
+          </div>
+          <div class="d-flex align-items-center gap-1" style="font-size:.8rem; color:var(--muted);">
+            <div style="width:12px; height:12px; border-radius:3px; background:#8957e5; flex-shrink:0;"></div>
+            Fórmula
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Top ZFERs + Últimas ejecuciones ───────────────────────────────────── -->
+<div class="row g-3 mb-2">
+
+  <!-- Top 10 ZFERs -->
+  <div class="col-12 col-lg-5">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-trophy-fill me-2" style="color:var(--accent);"></i>Top 10 ZFERs base (por OK)
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0" style="font-size:.84rem;">
+          <thead>
+            <tr style="background:var(--card-hdr-bg);">
+              <th class="ps-3" style="color:var(--muted); font-weight:600; border-color:var(--border);">#</th>
+              <th style="color:var(--muted); font-weight:600; border-color:var(--border);">ZFER Base</th>
+              <th class="text-end pe-3" style="color:var(--muted); font-weight:600; border-color:var(--border);">Ejecuciones OK</th>
+            </tr>
+          </thead>
+          <tbody id="top-zfer-body">
+            <tr><td colspan="3" class="text-center py-4" style="color:var(--muted); font-size:.82rem;">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Últimas 10 ejecuciones -->
+  <div class="col-12 col-lg-7">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-clock-history me-2" style="color:var(--accent);"></i>Últimas 10 ejecuciones
+      </div>
+      <div class="card-body p-0" style="overflow-x:auto;">
+        <table class="table table-sm mb-0" style="font-size:.82rem; min-width:520px;">
+          <thead>
+            <tr style="background:var(--card-hdr-bg);">
+              <th class="ps-3" style="color:var(--muted); font-weight:600; border-color:var(--border);">ZFER Base</th>
+              <th style="color:var(--muted); font-weight:600; border-color:var(--border);">ZFER Nuevo</th>
+              <th style="color:var(--muted); font-weight:600; border-color:var(--border);">Tipo</th>
+              <th style="color:var(--muted); font-weight:600; border-color:var(--border);">Estado</th>
+              <th class="pe-3" style="color:var(--muted); font-weight:600; border-color:var(--border);">Fecha</th>
+            </tr>
+          </thead>
+          <tbody id="recientes-body">
+            <tr><td colspan="5" class="text-center py-4" style="color:var(--muted); font-size:.82rem;">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Error banner ───────────────────────────────────────────────────────── -->
+<div id="ind-error-banner" class="alert-err mt-3" style="display:none;">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+  <span id="ind-error-msg"></span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Estado global ────────────────────────────────────────────────────────────
+let _indData       = null;
+let _chartBarras   = null;
+let _chartDonut    = null;
+let _vistaActual   = 'dia';
+let _refreshTimer  = null;
+
+// ── Paleta de colores consistente con la app ─────────────────────────────────
+const C = {
+  colorOk:     'rgba(31,111,235,0.85)',
+  colorErr:    'rgba(248,81,73,0.75)',
+  formulaOk:   'rgba(137,87,229,0.85)',
+  formulaErr:  'rgba(248,81,73,0.55)',
+  border:      getComputedStyle(document.documentElement).getPropertyValue('--border').trim(),
+  text:        getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
+  muted:       getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(),
+};
+
+function _cssVar(v) {
+  return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+}
+
+// ── Carga principal ──────────────────────────────────────────────────────────
+async function cargarIndicadores() {
+  try {
+    const res  = await fetch('/api/indicadores/data');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Error desconocido');
+    _indData = data;
+    document.getElementById('ind-error-banner').style.display = 'none';
+    renderKpis(data);
+    renderDonut(data);
+    renderBarras(data, _vistaActual);
+    renderTopZfer(data.top_zfer);
+    renderRecientes(data.recientes);
+    document.getElementById('ind-last-update').textContent =
+      'Actualizado: ' + new Date().toLocaleTimeString('es-CO');
+  } catch (err) {
+    document.getElementById('ind-error-msg').textContent = err.message;
+    document.getElementById('ind-error-banner').style.display = 'block';
+  }
+}
+
+// ── KPI cards ────────────────────────────────────────────────────────────────
+function renderKpis(d) {
+  document.getElementById('kpi-total-ok').textContent     = d.total_ok.toLocaleString('es-CO');
+  document.getElementById('kpi-total-error').textContent  = d.total_error.toLocaleString('es-CO');
+  document.getElementById('kpi-colores-ok').textContent   = d.colores_ok.toLocaleString('es-CO');
+  document.getElementById('kpi-formulas-ok').textContent  = d.formulas_ok.toLocaleString('es-CO');
+}
+
+// ── Donut ────────────────────────────────────────────────────────────────────
+function renderDonut(d) {
+  document.getElementById('donut-total').textContent = d.total_ok.toLocaleString('es-CO');
+  const ctx = document.getElementById('chart-donut').getContext('2d');
+  const datasets = [{
+    data: [d.colores_ok, d.formulas_ok],
+    backgroundColor: ['#1f6feb', '#8957e5'],
+    borderColor: _cssVar('--card-bg'),
+    borderWidth: 3,
+    hoverOffset: 6,
+  }];
+  if (_chartDonut) {
+    _chartDonut.data.datasets[0].data = [d.colores_ok, d.formulas_ok];
+    _chartDonut.update();
+    return;
+  }
+  _chartDonut = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: ['Color', 'Fórmula'], datasets },
+    options: {
+      cutout: '70%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString('es-CO')}`,
+          },
+        },
+      },
+      animation: { animateRotate: true, duration: 600 },
+    },
+  });
+}
+
+// ── Barras apiladas ──────────────────────────────────────────────────────────
+function setVista(v) {
+  _vistaActual = v;
+  document.getElementById('btn-vista-dia').style.opacity  = v === 'dia' ? '1' : '.5';
+  document.getElementById('btn-vista-sem').style.opacity  = v === 'semana' ? '1' : '.5';
+  if (_indData) renderBarras(_indData, v);
+}
+
+function renderBarras(d, vista) {
+  const serie    = vista === 'dia' ? d.por_dia : d.por_semana;
+  const labels   = serie.map(r => r.fecha_inicio || r.fecha || '');
+  const cOk      = serie.map(r => r.colores_ok);
+  const cErr     = serie.map(r => r.colores_error);
+  const fOk      = serie.map(r => r.formulas_ok);
+  const fErr     = serie.map(r => r.formulas_error);
+  const gridColor = 'rgba(128,128,128,0.12)';
+  const tickColor = _cssVar('--muted');
+
+  const datasets = [
+    { label: 'Color OK',      data: cOk,  backgroundColor: C.colorOk,   stack: 'ok' },
+    { label: 'Fórmula OK',    data: fOk,  backgroundColor: C.formulaOk, stack: 'ok' },
+    { label: 'Color Error',   data: cErr, backgroundColor: C.colorErr,  stack: 'err', borderRadius: 2 },
+    { label: 'Fórmula Error', data: fErr, backgroundColor: C.formulaErr,stack: 'err' },
+  ];
+
+  if (_chartBarras) {
+    _chartBarras.data.labels   = labels;
+    _chartBarras.data.datasets = datasets;
+    _chartBarras.update();
+    return;
+  }
+
+  const ctx = document.getElementById('chart-barras').getContext('2d');
+  _chartBarras = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: { color: tickColor, font: { size: 11 }, padding: 14 },
+          position: 'top',
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          stacked: true,
+          ticks: { color: tickColor, font: { size: 10 }, maxRotation: 45 },
+          grid: { color: gridColor },
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: { color: tickColor, font: { size: 11 }, precision: 0 },
+          grid: { color: gridColor },
+        },
+      },
+    },
+  });
+}
+
+// ── Top ZFERs ────────────────────────────────────────────────────────────────
+function renderTopZfer(rows) {
+  const tbody = document.getElementById('top-zfer-body');
+  if (!rows || !rows.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4" style="color:var(--muted); font-size:.82rem;">Sin datos</td></tr>';
+    return;
+  }
+  const maxVal = rows[0].total || 1;
+  tbody.innerHTML = rows.map((r, i) => `
+    <tr style="border-color:var(--border);">
+      <td class="ps-3" style="color:var(--muted); vertical-align:middle;">${i + 1}</td>
+      <td style="vertical-align:middle;">
+        <span style="font-family:monospace; font-weight:700; color:var(--zfer-txt);">${r.zfer_base}</span>
+        <div class="pct-bar-wrap ms-1" style="width:60px;">
+          <div class="pct-bar" style="width:${Math.round(r.total/maxVal*100)}%;"></div>
+        </div>
+      </td>
+      <td class="text-end pe-3" style="font-weight:700; color:var(--ok-txt); vertical-align:middle;">
+        ${r.total.toLocaleString('es-CO')}
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ── Recientes ────────────────────────────────────────────────────────────────
+function renderRecientes(rows) {
+  const tbody = document.getElementById('recientes-body');
+  if (!rows || !rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4" style="color:var(--muted); font-size:.82rem;">Sin datos</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const esOk   = r.estado === 'OK';
+    const estadoBadge = esOk
+      ? `<span class="tag t-color" style="font-size:.75rem; padding:.15rem .5rem;"><i class="bi bi-check2 me-1"></i>OK</span>`
+      : `<span class="tag" style="background:var(--err-bg); color:var(--err-txt); border:1px solid var(--err-bdr); font-size:.75rem; padding:.15rem .5rem;"><i class="bi bi-x me-1"></i>ERROR</span>`;
+    const tipoTag = r.tipo === 'COLOR'
+      ? `<span class="tag t-color" style="font-size:.74rem; padding:.12rem .45rem;">${r.tipo}</span>`
+      : `<span class="tag t-formula" style="font-size:.74rem; padding:.12rem .45rem;">${r.tipo || '—'}</span>`;
+    const detalle = r.tipo === 'COLOR'
+      ? (r.color_nombre ? `<div style="font-size:.73rem; color:var(--muted);">${r.color_nombre}</div>` : '')
+      : (r.formula_nueva ? `<div style="font-size:.73rem; color:var(--muted);">→ ${r.formula_nueva}</div>` : '');
+    return `
+      <tr style="border-color:var(--border); ${esOk ? 'background:var(--row-bg-ok)' : 'background:var(--row-bg-err)'}">
+        <td class="ps-3" style="vertical-align:middle; font-family:monospace; font-size:.8rem; color:var(--zfer-txt);">${r.zfer_base}</td>
+        <td style="vertical-align:middle; font-family:monospace; font-size:.8rem; color:var(--text);">${r.zfer_nuevo || '—'}${detalle}</td>
+        <td style="vertical-align:middle;">${tipoTag}</td>
+        <td style="vertical-align:middle;">${estadoBadge}</td>
+        <td class="pe-3" style="vertical-align:middle; color:var(--muted); white-space:nowrap; font-size:.79rem;">${r.ejecutado_el}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  setVista('dia');
+  cargarIndicadores();
+  _refreshTimer = setInterval(cargarIndicadores, 60_000);
+});
+
+// Re-colorear charts al cambiar tema
+const _origToggle = window._toggleTheme;
+window._toggleTheme = function () {
+  if (_origToggle) _origToggle();
+  // Destruir y recrear las gráficas con los nuevos colores del tema
+  setTimeout(() => {
+    if (_chartBarras) { _chartBarras.destroy(); _chartBarras = null; }
+    if (_chartDonut)  { _chartDonut.destroy();  _chartDonut  = null; }
+    if (_indData) {
+      renderBarras(_indData, _vistaActual);
+      renderDonut(_indData);
+    }
+  }, 250);
+};
+</script>
+{% endblock %}
