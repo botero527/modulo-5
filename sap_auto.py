@@ -420,7 +420,7 @@ class AutomatizadorSAP:
         try:
             return self.session.findById(self._ID_STATUSBAR).text.strip()
         except Exception:
-            return ""
+            return ""   
 
     def _sbar(self) -> tuple:
         """Retorna (tipo, texto) del statusbar. tipo: 'E','W','S','I','' """

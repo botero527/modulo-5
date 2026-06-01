@@ -4200,13 +4200,14 @@ def api_mantenimiento_hr_consultar():
         return jsonify({"ok": False, "error": str(e)})
 
 
-@app.route("/api/mantenimiento_hr/exportar")
+@app.route("/api/mantenimiento_hr/exportar/<id_hruta>")
 @login_required
-def api_mantenimiento_hr_exportar():
+def api_mantenimiento_hr_exportar(id_hruta: str):
+    """Descarga Excel de ZFERs fuera de calendario para una HR específica.
+    2 columnas: ZFER | Hoja de Ruta (descripción). Solo los fuera de calendario."""
     import json as _json
     from datetime import datetime as _dt
     try:
-        # Usar último resultado guardado o re-consultar
         data = None
         if os.path.exists(_MHR_JSON):
             with open(_MHR_JSON, "r", encoding="utf-8") as f:
@@ -4214,68 +4215,88 @@ def api_mantenimiento_hr_exportar():
         if not data or not data.get("ok"):
             return jsonify({"ok": False, "error": "No hay datos. Ejecuta la consulta primero."}), 400
 
+        hr = next((h for h in data["hojas_ruta"] if str(h["id_hruta"]) == str(id_hruta)), None)
+        if not hr:
+            return jsonify({"ok": False, "error": f"HR {id_hruta} no encontrada en el último resultado."}), 404
+
         import openpyxl
         from openpyxl.styles import PatternFill, Font, Alignment
         from io import BytesIO
 
         wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = str(id_hruta)[:31]
 
-        # Hoja resumen
-        ws_res = wb.active
-        ws_res.title = "RESUMEN"
         hdr_fill = PatternFill("solid", fgColor="1a4731")
-        hdr_font = Font(bold=True, color="FFFFFF")
-        headers = ["HR", "Descripción", "Total ZFERs", "En Calendario", "Fuera"]
-        for col, h in enumerate(headers, 1):
-            cell = ws_res.cell(row=1, column=col, value=h)
-            cell.fill = hdr_fill
-            cell.font = hdr_font
-            cell.alignment = Alignment(horizontal="center")
-        for i, hr in enumerate(data["hojas_ruta"], 2):
-            ws_res.cell(row=i, column=1, value=hr["id_hruta"])
-            ws_res.cell(row=i, column=2, value=hr["descripcion"])
-            ws_res.cell(row=i, column=3, value=hr["total_zfer"])
-            ws_res.cell(row=i, column=4, value=hr["en_calendario"])
-            ws_res.cell(row=i, column=5, value=hr["fuera_calendario"])
-        ws_res.column_dimensions["A"].width = 14
-        ws_res.column_dimensions["B"].width = 45
-        ws_res.column_dimensions["C"].width = 14
-        ws_res.column_dimensions["D"].width = 16
-        ws_res.column_dimensions["E"].width = 10
+        hdr_font = Font(bold=True, color="FFFFFF", size=11)
+        fill_err  = PatternFill("solid", fgColor="ffc7ce")
 
-        fill_ok  = PatternFill("solid", fgColor="c6efce")
-        fill_err = PatternFill("solid", fgColor="ffc7ce")
+        # Cabeceras
+        for col, txt in enumerate(["ZFER", "ID Hoja de Ruta"], 1):
+            c = ws.cell(row=1, column=col, value=txt)
+            c.fill = hdr_fill
+            c.font = hdr_font
+            c.alignment = Alignment(horizontal="center")
 
-        for hr in data["hojas_ruta"]:
-            safe_name = str(hr["id_hruta"])[:31]
-            ws = wb.create_sheet(title=safe_name)
-            ws.cell(row=1, column=1, value=f"{hr['id_hruta']} — {hr['descripcion']}")
-            ws.merge_cells("A1:B1")
-            ws.cell(row=1, column=1).font = Font(bold=True, size=12)
-            ws.cell(row=2, column=1, value="ZFER").fill = hdr_fill
-            ws.cell(row=2, column=1).font = hdr_font
-            ws.cell(row=2, column=2, value="EN_CALENDARIO").fill = hdr_fill
-            ws.cell(row=2, column=2).font = hdr_font
+        for row_i, zfer in enumerate(hr["zfers_fuera"], 2):
+            ws.cell(row=row_i, column=1, value=zfer).fill = fill_err
+            ws.cell(row=row_i, column=2, value=str(id_hruta)).fill = fill_err
 
-            fuera_set = set(hr["zfers_fuera"])
-            # Reconstruir lista completa desde fuera + en (no tenemos la lista completa aquí,
-            # así que listamos: fuera primero, luego indicamos cuántos están en calendario)
-            row = 3
-            for z in hr["zfers_fuera"]:
-                ws.cell(row=row, column=1, value=z).fill = fill_err
-                ws.cell(row=row, column=2, value="No").fill = fill_err
-                row += 1
-            ws.column_dimensions["A"].width = 16
-            ws.column_dimensions["B"].width = 16
+        ws.column_dimensions["A"].width = 18
+        ws.column_dimensions["B"].width = 20
 
         buf = BytesIO()
         wb.save(buf)
         buf.seek(0)
 
-        from flask import send_file
-        filename = f"mantenimiento_hr_{_dt.now().strftime('%Y%m%d')}.xlsx"
+        safe_desc = "".join(c for c in desc[:30] if c.isalnum() or c in " _-") .strip().replace(" ", "_")
+        filename = f"mhr_{id_hruta}_{safe_desc}_{_dt.now().strftime('%Y%m%d')}.xlsx"
         return send_file(buf, as_attachment=True, download_name=filename,
                          mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/mantenimiento_hr/buscar_zfer")
+@login_required
+def api_mantenimiento_hr_buscar_zfer():
+    """Busca un ZFER en el último resultado: indica si está fuera o en calendario y en qué HR."""
+    import json as _json
+    zfer = request.args.get("zfer", "").strip()
+    if not zfer:
+        return jsonify({"ok": False, "error": "Falta parámetro zfer"})
+    try:
+        if not os.path.exists(_MHR_JSON):
+            return jsonify({"ok": False, "error": "No hay datos. Ejecuta la consulta primero."})
+        with open(_MHR_JSON, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        if not data.get("ok"):
+            return jsonify({"ok": False, "error": "Datos inválidos. Vuelve a consultar."})
+
+        resultados = []
+        for hr in data["hojas_ruta"]:
+            fuera = set(hr.get("zfers_fuera", []))
+            en_cal = hr.get("en_calendario", 0)
+            total  = hr.get("total_zfer", 0)
+            if zfer in fuera:
+                resultados.append({"id_hruta": hr["id_hruta"], "descripcion": hr["descripcion"],
+                                    "estado": "fuera"})
+            elif total - en_cal < total:  # puede estar en calendario en esta HR
+                # No tenemos lista de los que SÍ están, pero si no está en fuera y total > 0
+                # significa que puede estar. Marcamos como "en_calendario" tentativamente
+                # Solo lo reportamos si el ZFER efectivamente pertenece a esta HR
+                # (no tenemos la lista completa de en_calendario, solo la de fuera)
+                pass  # no podemos confirmar sin lista completa
+
+        if resultados:
+            return jsonify({"ok": True, "zfer": zfer, "encontrado": True,
+                            "estado": "fuera", "hrs": resultados,
+                            "fecha_consulta": data.get("fecha_consulta","")})
+        else:
+            return jsonify({"ok": True, "zfer": zfer, "encontrado": False,
+                            "estado": "en_calendario_o_no_asignado",
+                            "mensaje": "No aparece como FUERA en ninguna HR analizada.",
+                            "fecha_consulta": data.get("fecha_consulta","")})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 

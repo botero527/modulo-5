@@ -23,10 +23,6 @@
             style="cursor:pointer; border:none; padding:.55rem 1.4rem; font-size:.9rem; font-weight:700; letter-spacing:.3px;">
       <i class="bi bi-search me-2"></i>Consultar ahora
     </button>
-    <button id="btn-exportar" onclick="exportarExcel()" class="tag t-neutral"
-            style="cursor:pointer; border:none; padding:.55rem 1.2rem; font-size:.85rem; display:none;">
-      <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
-    </button>
     <div id="mhr-spinner" style="display:none;">
       <div class="spinner-border spinner-border-sm" role="status"
            style="color:var(--accent); width:1.1rem; height:1.1rem; border-width:2px;"></div>
@@ -38,6 +34,28 @@
 <!-- Error -->
 <div id="mhr-error" class="alert-err mb-4" style="display:none;">
   <i class="bi bi-exclamation-triangle me-2"></i><span id="mhr-error-msg"></span>
+</div>
+
+<!-- Buscador de ZFER -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div style="font-size:.82rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:.6rem;">
+      <i class="bi bi-search me-1"></i>Buscar ZFER
+    </div>
+    <div style="display:flex; gap:.6rem; align-items:center; flex-wrap:wrap;">
+      <input id="inp-buscar-zfer" type="text" placeholder="ej: 700180030" maxlength="20"
+        style="background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px;
+               padding:.42rem .8rem; font-size:.9rem; font-family:monospace; width:200px;"
+        autocomplete="off"
+        onkeydown="if(event.key==='Enter') buscarZfer()">
+      <button onclick="buscarZfer()"
+        style="background:var(--accent); color:#fff; border:none; border-radius:8px;
+               padding:.42rem 1rem; font-size:.85rem; font-weight:700; cursor:pointer;">
+        Buscar
+      </button>
+      <div id="buscar-resultado" style="font-size:.85rem; display:none;"></div>
+    </div>
+  </div>
 </div>
 
 <!-- Resultados -->
@@ -64,13 +82,11 @@
 
 async function consultarHR() {
   const btnC  = document.getElementById("btn-consultar");
-  const btnE  = document.getElementById("btn-exportar");
   const spin  = document.getElementById("mhr-spinner");
   const errD  = document.getElementById("mhr-error");
   const resD  = document.getElementById("mhr-results");
 
   btnC.disabled = true;
-  btnE.style.display = "none";
   spin.style.display  = "flex";
   errD.style.display  = "none";
   resD.style.display  = "none";
@@ -86,7 +102,6 @@ async function consultarHR() {
     }
 
     renderResults(data);
-    btnE.style.display = "";
   } catch(e) {
     document.getElementById("mhr-error-msg").textContent = "Error de red: " + e.message;
     errD.style.display = "block";
@@ -174,6 +189,10 @@ function renderResults(data) {
                 ? `<i class="bi bi-exclamation-triangle me-1"></i>${h.fuera_calendario} fuera`
                 : `<i class="bi bi-check-circle me-1"></i>OK`}
             </span>
+            ${h.fuera_calendario > 0 ? `<button onclick="event.stopPropagation();descargarHR('${h.id_hruta}')"
+               style="background:var(--accent);color:#fff;border:none;border-radius:8px;
+                      padding:.28rem .85rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
+               <i class="bi bi-download me-1"></i>Excel</button>` : ""}
             <i class="bi bi-chevron-down" id="chev_${collapseId}"
                style="color:var(--muted); transition:transform .2s;"></i>
           </div>
@@ -225,8 +244,37 @@ function verTodos(btn, id_hruta, ev) {
   ).join("");
 }
 
-function exportarExcel() {
-  window.location.href = "/api/mantenimiento_hr/exportar";
+function descargarHR(id_hruta) {
+  window.location.href = "/api/mantenimiento_hr/exportar/" + id_hruta;
+}
+
+async function buscarZfer() {
+  const zfer = document.getElementById("inp-buscar-zfer").value.trim();
+  const div  = document.getElementById("buscar-resultado");
+  if (!zfer) return;
+  div.style.display = "none";
+  try {
+    const r = await fetch("/api/mantenimiento_hr/buscar_zfer?zfer=" + encodeURIComponent(zfer));
+    const d = await r.json();
+    div.style.display = "inline-flex";
+    div.style.alignItems = "center";
+    div.style.gap = ".4rem";
+    if (!d.ok) {
+      div.innerHTML = `<span style="color:var(--muted);">${d.error}</span>`;
+    } else if (d.encontrado) {
+      const hrs = d.hrs.map(h => `<b>${h.id_hruta}</b>`).join(", ");
+      div.innerHTML = `<span style="color:var(--err-txt); font-weight:700;">
+        <i class="bi bi-exclamation-triangle me-1"></i>FUERA de calendario</span>
+        <span style="color:var(--muted); font-size:.78rem;">en HR: ${hrs}</span>`;
+    } else {
+      div.innerHTML = `<span style="color:var(--ok-txt); font-weight:700;">
+        <i class="bi bi-check-circle me-1"></i>No aparece fuera de calendario</span>
+        <span style="color:var(--muted); font-size:.78rem;">(en ninguna HR analizada)</span>`;
+    }
+  } catch(e) {
+    div.style.display = "inline";
+    div.innerHTML = `<span style="color:var(--muted);">Error: ${e.message}</span>`;
+  }
 }
 </script>
 {% endblock %}
