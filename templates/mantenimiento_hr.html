@@ -208,7 +208,15 @@ function renderResults(data) {
             <div class="section-label mb-2">ZFERs fuera de calendario</div>
             <div id="zlist_${h.id_hruta}" style="display:flex; flex-wrap:wrap; gap:4px;">
               ${zfersList}
-            </div>` : `<div>${zfersList}</div>`}
+            </div>
+            ${h.sin_zfor && h.sin_zfor.length > 0 ? `
+            <div style="margin-top:.8rem; padding:.5rem .75rem; background:rgba(234,179,8,.08);
+                 border:1px solid rgba(234,179,8,.3); border-radius:8px; font-size:.78rem; color:#ca8a04;">
+              <i class="bi bi-info-circle me-1"></i>
+              <b>${h.sin_zfor.length} ZFER${h.sin_zfor.length>1?'s':''} sin ZFOR</b> en BD:
+              ${h.sin_zfor.slice(0,10).map(z=>`<span style="font-family:monospace;">${z}</span>`).join(', ')}
+              ${h.sin_zfor.length>10 ? `y ${h.sin_zfor.length-10} más` : ''}
+            </div>` : ''}` : `<div>${zfersList}</div>`}
           </div>
         </div>
       </div>

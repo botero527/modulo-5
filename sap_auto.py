@@ -78,8 +78,8 @@ _T_MIN_LENTO  = 0.05
 _T_POLL = 0.05
 #700176997
 
-_SAP_USER     = os.environ.get("SAP_USER",     "JPINZON")
-_SAP_PASSWORD = os.environ.get("SAP_PASSWORD", "Agp2026*")
+_SAP_USER     = os.environ.get("SAP_USER",     "AGUANUMEN")
+_SAP_PASSWORD = os.environ.get("SAP_PASSWORD", "America1995*")
 _SAP_CLIENT   = os.environ.get("SAP_CLIENT",   "300")
 _SAP_SYSTEM   = os.environ.get("SAP_SYSTEM",   "AGP PRD")   # producción; "QAS" para pruebas
 
@@ -782,13 +782,17 @@ class AutomatizadorSAP:
                     ses2.findById("wnd[0]").close()
                 except Exception:
                     pass
-            self._esperar(T_MEDIO)
-            # Re-adquirir sesión principal
-            try:
-                self.session = self.conn_sap.Children(0)
-                self.session.findById("wnd[0]").maximize()
-            except Exception as e:
-                print(f"     [WARN] Re-adquirir sesión: {e}")
+            time.sleep(2.0)   # dar tiempo a SAP para cerrar sesión auxiliar completamente
+            # Re-adquirir sesión principal con retry
+            for _intento in range(8):
+                try:
+                    self.session = self.conn_sap.Children(0)
+                    self.session.findById("wnd[0]").maximize()
+                    break
+                except Exception as e:
+                    if _intento == 7:
+                        print(f"     [WARN] Re-adquirir sesión tras 8 intentos: {e}")
+                    time.sleep(0.8)
             print("     Sesión auxiliar ZPPR0020 cerrada.")
 
     # ── ZPPR0020 — Leer grid ──────────────────────────────────────────────────
@@ -3438,7 +3442,7 @@ class AutomatizadorSAP:
             color_codigo: str, color_nombre: str,
             franja: str = "00", pn_base: str = "", zpla: str = "",
             nivel: str = "", tipo_pieza: str = "",
-            cambio_hr: bool = False, subproducto: str = "",
+            cambio_hr: bool = False, subproducto: str = "", plano_manual: str = "",
             step_callback=None) -> ResultadoItem:
         """
         Flujo cambio de fórmula sin cambio de acero (sin→sin o con→con).

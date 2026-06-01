@@ -4148,12 +4148,13 @@ def api_mantenimiento_hr_consultar():
             from collections import defaultdict as _dd
             zfers_by_hr = _dd(list)
             for row in cur.fetchall():
-                zfers_by_hr[str(row[0])].append(str(row[1]))
+                zfers_by_hr[str(row[0]).strip()].append(str(row[1]).strip())
 
         all_zfers = list({z for zlist in zfers_by_hr.values() for z in zlist})
 
         # 3. Consultar CalendarioAGP
         en_calendario_set = set()
+        calendario_error = None
         if all_zfers:
             try:
                 cal_cn = pyodbc.connect(_CONN_CALENDARIO)
@@ -4164,12 +4165,14 @@ def api_mantenimiento_hr_consultar():
                         f"SELECT DISTINCT ZFERcode FROM dbo.TCAL_CALENDARIO_COLOMBIA WHERE ZFERcode IN ({placeholders2})",
                         all_zfers
                     )
-                    en_calendario_set = {str(r[0]) for r in cal_cur.fetchall()}
+                    # Normalizar: strip() para evitar falsos negativos por espacios
+                    en_calendario_set = {str(r[0]).strip() for r in cal_cur.fetchall() if r[0]}
                 finally:
                     cal_cn.close()
             except Exception as cal_err:
-                # Si falla la conexión al calendario, devolvemos igual pero con advertencia
-                pass
+                calendario_error = str(cal_err)
+                # Si falla calendario NO podemos clasificar — devolver error explícito
+                return jsonify({"ok": False, "error": f"Error conectando a CalendarioAGP: {cal_err}"})
 
         # 4. Clasificar
         hojas = []
@@ -4185,6 +4188,31 @@ def api_mantenimiento_hr_consultar():
                 "fuera_calendario": len(fuera),
                 "zfers_fuera": fuera,
             })
+
+        # 5. Buscar ZFOR para cada ZFER fuera (batch desde ODATA_ZFER_BOM)
+        all_fuera = list({z for h in hojas for z in h["zfers_fuera"]})
+        zfor_map = {}   # {zfer: zfor_o_None}
+        if all_fuera:
+            try:
+                with get_conn() as cn:
+                    cur = cn.cursor()
+                    ph = ",".join(["?" for _ in all_fuera])
+                    cur.execute(
+                        f"SELECT MATERIAL, MAT_CONFIG FROM dbo.ODATA_ZFER_BOM WHERE MATERIAL IN ({ph})",
+                        all_fuera
+                    )
+                    for row in cur.fetchall():
+                        mat = str(row[0]).strip()
+                        mat_cfg = str(row[1]).strip() if row[1] else ""
+                        if mat not in zfor_map and mat_cfg:
+                            zfor_map[mat] = mat_cfg
+            except Exception as e_bom:
+                print(f"[MHR] WARN: no se pudo cargar ZFOR desde ODATA_ZFER_BOM: {e_bom}")
+
+        # Enriquecer hojas con zfor_map y lista de ZFERs sin ZFOR (para la UI)
+        for h in hojas:
+            h["zfor_map"]  = {z: zfor_map.get(z, "") for z in h["zfers_fuera"]}
+            h["sin_zfor"]  = [z for z in h["zfers_fuera"] if not zfor_map.get(z, "")]
 
         result = {
             "ok": True,
@@ -4231,26 +4259,38 @@ def api_mantenimiento_hr_exportar(id_hruta: str):
         hdr_font = Font(bold=True, color="FFFFFF", size=11)
         fill_err  = PatternFill("solid", fgColor="ffc7ce")
 
-        # Cabeceras
-        for col, txt in enumerate(["ZFER", "ID Hoja de Ruta"], 1):
+        # Cabeceras: Grupo HR | Contador | Material
+        for col, txt in enumerate(["Grupo de hoja de ruta", "Contador HR", "Material"], 1):
             c = ws.cell(row=1, column=col, value=txt)
             c.fill = hdr_fill
             c.font = hdr_font
             c.alignment = Alignment(horizontal="center")
 
-        for row_i, zfer in enumerate(hr["zfers_fuera"], 2):
-            ws.cell(row=row_i, column=1, value=zfer).fill = fill_err
-            ws.cell(row=row_i, column=2, value=str(id_hruta)).fill = fill_err
+        zfor_map = hr.get("zfor_map", {})
+        row_i = 2
+        for zfer in hr["zfers_fuera"]:
+            # Fila ZFER
+            ws.cell(row=row_i, column=1, value=str(id_hruta)).fill = fill_err
+            ws.cell(row=row_i, column=2, value="01").fill = fill_err
+            ws.cell(row=row_i, column=3, value=zfer).fill = fill_err
+            row_i += 1
+            # Fila ZFOR (si existe)
+            zfor = zfor_map.get(zfer, "")
+            if zfor:
+                ws.cell(row=row_i, column=1, value=str(id_hruta)).fill = fill_err
+                ws.cell(row=row_i, column=2, value="01").fill = fill_err
+                ws.cell(row=row_i, column=3, value=zfor).fill = fill_err
+                row_i += 1
 
-        ws.column_dimensions["A"].width = 18
-        ws.column_dimensions["B"].width = 20
+        ws.column_dimensions["A"].width = 24
+        ws.column_dimensions["B"].width = 14
+        ws.column_dimensions["C"].width = 18
 
         buf = BytesIO()
         wb.save(buf)
         buf.seek(0)
 
-        safe_desc = "".join(c for c in desc[:30] if c.isalnum() or c in " _-") .strip().replace(" ", "_")
-        filename = f"mhr_{id_hruta}_{safe_desc}_{_dt.now().strftime('%Y%m%d')}.xlsx"
+        filename = f"mhr_{id_hruta}_{_dt.now().strftime('%Y%m%d')}.xlsx"
         return send_file(buf, as_attachment=True, download_name=filename,
                          mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     except Exception as e:
