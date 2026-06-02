@@ -4104,7 +4104,29 @@ def api_hojas_ruta_buscar():
 
 _MHR_JSON     = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ultimo_mantenimiento_hr.json")
 _MHR_TEMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_mhr")
+_MHR_QAS_LOG  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_mhr", "qas_desasignados.json")
 os.makedirs(_MHR_TEMP_DIR, exist_ok=True)
+
+
+def _qas_leer_desasignados() -> set:
+    """Lee el set de ZFERs ya desasignados en pruebas QAS."""
+    import json as _j
+    try:
+        if os.path.exists(_MHR_QAS_LOG):
+            return set(_j.load(open(_MHR_QAS_LOG, encoding='utf-8')))
+    except Exception:
+        pass
+    return set()
+
+
+def _qas_guardar_desasignados(zfers_nuevos: list):
+    """Agrega ZFERs al log QAS acumulativo."""
+    import json as _j
+    actual = _qas_leer_desasignados()
+    actual.update(zfers_nuevos)
+    with open(_MHR_QAS_LOG, 'w', encoding='utf-8') as f:
+        _j.dump(sorted(actual), f)
+    print(f"[QAS-LOG] {len(actual)} ZFERs desasignados acumulados")
 
 
 def _mhr_generar_excel_disco(hr: dict, limite: int = None) -> str:
@@ -4136,8 +4158,29 @@ def _mhr_generar_excel_disco(hr: dict, limite: int = None) -> str:
         c.fill = hdr_fill; c.font = hdr_font
         c.alignment = Alignment(horizontal="center")
 
-    zfor_map  = hr.get("zfor_map", {})
-    zfers_list = hr["zfers_fuera"][:limite] if limite else hr["zfers_fuera"]
+    # Filtrar QAS primero, luego aplicar límite — así toma los siguientes disponibles
+    ya_desasignados = _qas_leer_desasignados()
+    todos_disponibles = [z for z in hr["zfers_fuera"] if z not in ya_desasignados]
+    filtrados = len(hr["zfers_fuera"]) - len(todos_disponibles)
+    if filtrados:
+        print(f"[QAS-FILTER] {filtrados} ZFERs omitidos (ya desasignados en pruebas)")
+    zfers_list = todos_disponibles[:limite] if limite else todos_disponibles
+    if not zfers_list:
+        raise RuntimeError("Todos los ZFERs de esta HR ya fueron desasignados en pruebas. Limpia el log QAS para repetir.")
+    # Buscar ZFORs ahora (solo para los ZFERs de este Excel, no para todos)
+    zfor_map = hr.get("zfor_map") or {}
+    if not zfor_map and zfers_list:
+        try:
+            with get_conn() as cn:
+                ph = ",".join(["?"] * len(zfers_list))
+                cur = cn.cursor()
+                cur.execute(f"SELECT MATERIAL, MAT_CONFIG FROM dbo.ODATA_ZFER_BOM WHERE MATERIAL IN ({ph})", zfers_list)
+                for row in cur.fetchall():
+                    mat = str(row[0]).strip(); cfg = str(row[1]).strip() if row[1] else ""
+                    if mat not in zfor_map and cfg:
+                        zfor_map[mat] = cfg
+        except Exception:
+            pass
     row_i = 2
     for zfer in zfers_list:
         ws.cell(row=row_i, column=1, value=str(id_hruta)).fill = fill_err
@@ -4250,22 +4293,9 @@ def api_mantenimiento_hr_consultar():
             })
         hojas.sort(key=lambda h: h["materiales"], reverse=True)
 
-        # 5. ZFOR desde ODATA_ZFER_BOM — chunked para evitar límite 2100 params
-        all_fuera = list({z for h in hojas for z in h["zfers_fuera"]})
-        zfor_map = {}
-        if all_fuera:
-            try:
-                with get_conn() as cn:
-                    rows_bom = _chunk_in(cn,
-                        "SELECT MATERIAL, MAT_CONFIG FROM dbo.ODATA_ZFER_BOM WHERE MATERIAL IN",
-                        "", all_fuera)
-                    for row in rows_bom:
-                        mat = str(row[0]).strip()
-                        cfg = str(row[1]).strip() if row[1] else ""
-                        if mat not in zfor_map and cfg:
-                            zfor_map[mat] = cfg
-            except Exception as e_bom:
-                print(f"[MHR] WARN ZFOR: {e_bom}")
+        # 5. ZFOR se carga SOLO cuando se necesita (Excel/SAP), no en la consulta inicial
+        # Esto evita la query lenta de ODATA_ZFER_BOM (era el cuello de 100+ segundos)
+        zfor_map = {}   # vacio — se llena en _mhr_generar_excel_disco y en plan_asignacion
 
         for h in hojas:
             h["zfor_map"] = {z: zfor_map.get(z, "") for z in h["zfers_fuera"]}
@@ -4387,9 +4417,36 @@ def api_mantenimiento_hr_desasignar(id_hruta: str):
             return jsonify({"ok": False, "error": "sap_mantenimiento.py no encontrado o función faltante."})
 
         resultado = fn(excel_path)
+        # Guardar en log QAS los ZFERs desasignados (solo si SAP OK)
+        if resultado.get("ok"):
+            zfers_enviados = hr["zfers_fuera"][:limite] if limite else hr["zfers_fuera"]
+            ya = _qas_leer_desasignados()
+            zfers_reales = [z for z in zfers_enviados if z not in ya]
+            if zfers_reales:
+                _qas_guardar_desasignados(zfers_reales)
         return jsonify({**resultado, "excel_path": excel_path,
                         "id_hruta": id_hruta, "n_enviados": n_enviados})
 
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/mantenimiento_hr/qas_log")
+@login_required
+def api_mhr_qas_log():
+    """Info del log QAS: cuántos ZFERs acumulados."""
+    zfers = sorted(_qas_leer_desasignados())
+    return jsonify({"total": len(zfers), "zfers": zfers})
+
+
+@app.route("/api/mantenimiento_hr/qas_limpiar", methods=["POST"])
+@login_required
+def api_mhr_qas_limpiar():
+    """Limpia el log QAS de ZFERs desasignados en pruebas."""
+    try:
+        if os.path.exists(_MHR_QAS_LOG):
+            os.remove(_MHR_QAS_LOG)
+        return jsonify({"ok": True, "mensaje": "Log QAS limpiado."})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -4694,6 +4751,41 @@ def api_mhr_ejecutar_asignacion():
                         "n_zfers": total_zfers,
                         "n_batches": len(batches),
                         "excel_path": excel_path})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/mantenimiento_hr/ejecutar_c223", methods=["POST"])
+@login_required
+def api_mhr_ejecutar_c223():
+    """Ejecuta C223 para un batch: lista de ZFERs + HR destino."""
+    body    = request.get_json() or {}
+    zfers   = body.get("zfers", [])
+    hr_id   = str(body.get("hr_id", ""))
+    if not zfers or not hr_id:
+        return jsonify({"ok": False, "error": "Faltan zfers o hr_id."})
+    try:
+        import importlib
+        fn = getattr(importlib.import_module("sap_mantenimiento"), "c223_mantenimiento", None)
+        if not fn:
+            return jsonify({"ok": False, "error": "c223_mantenimiento no encontrada."})
+        return jsonify(fn(zfers, hr_id))
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/mantenimiento_hr/ejecutar_zinpg0004", methods=["POST"])
+@login_required
+def api_mhr_ejecutar_zinpg0004():
+    """Ejecuta ZINPG0004. Body opcional: {zfers: [...]} — si vacío ejecuta para todos."""
+    body  = request.get_json() or {}
+    zfers = body.get("zfers") or None
+    try:
+        import importlib
+        fn = getattr(importlib.import_module("sap_mantenimiento"), "zinpg0004_actualizar", None)
+        if not fn:
+            return jsonify({"ok": False, "error": "zinpg0004_actualizar no encontrada."})
+        return jsonify(fn(zfers))
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 

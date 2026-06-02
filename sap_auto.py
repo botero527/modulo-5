@@ -78,8 +78,8 @@ _T_MIN_LENTO  = 0.05
 _T_POLL = 0.05
 #700176997
 
-_SAP_USER     = os.environ.get("SAP_USER",     "AGUANUMEN")
-_SAP_PASSWORD = os.environ.get("SAP_PASSWORD", "America1995*")
+_SAP_USER     = os.environ.get("SAP_USER",     "JPINZON")
+_SAP_PASSWORD = os.environ.get("SAP_PASSWORD", "Agp2026*")
 _SAP_CLIENT   = os.environ.get("SAP_CLIENT",   "300")
 _SAP_SYSTEM   = os.environ.get("SAP_SYSTEM",   "AGP PRD")   # producción; "QAS" para pruebas
 
