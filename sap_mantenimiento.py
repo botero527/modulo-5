@@ -432,193 +432,177 @@ def _conectar_sap_nueva_sesion():
 
 
 def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
-    """C223 en sesion auxiliar: fecha hoy + PLNNR=hr_id para lista de ZFERs."""
-    import datetime as _dt
+    """
+    C223 sesion auxiliar — flujo VBS correcto:
+    Por cada ZFER:
+      1. WERKS=CO01, MATNR=zfer, Enter
+      2. Si error SAP (material no existe) -> skip, reportar, continuar
+      3. ADATU[10,0] = hoy, Enter -> popup btnSPOP-OPTION1
+      4. PLNNR[16,0] = hr_id, Enter
+    Al final: MAAL -> PRUEFEN -> guardar btn[11]
+    """
+    import datetime as _dt2
     ses0, ses2, conn, err = _conectar_sap_nueva_sesion()
     if ses2 is None:
         return {"ok": False, "error": f"No se pudo crear sesion auxiliar SAP: {err}", "detalles": []}
 
     detalles = []
+    errores_zfer = []
+
     def _log(msg):
         print(f"[C223-MANT] {msg}")
         detalles.append(msg)
 
-    hoy = _dt.datetime.today().strftime("%d.%m.%Y")
-    _log(f"C223 sesion auxiliar: {len(zfers)} ZFERs | HR={hr_id} | fecha={hoy}")
+    hoy    = _dt2.datetime.today().strftime("%d.%m.%Y")
+    _TBL   = "wnd[0]/usr/ssubSUBSCR_1200:SAPLCMFV:1200/tblSAPLCMFVT_MKAL"
+    _MATNR = "wnd[0]/usr/subSUBSCR_1100:SAPLCMFV:1100/ctxtMKAL-MATNR"
+    _WERKS = "wnd[0]/usr/subSUBSCR_1100:SAPLCMFV:1100/ctxtMKAL-WERKS"
 
-    _TBL    = "wnd[0]/usr/ssubSUBSCR_1200:SAPLCMFV:1200/tblSAPLCMFVT_MKAL"
-    _TBL_MV = "wnd[2]/usr/tabsTAB_STRIP/tabpSINGLE/ssubSCREEN:SAPLALDB:3010/tblSAPLALDBSINGLE"
+    _log(f"C223: {len(zfers)} ZFERs | HR={hr_id} | fecha={hoy}")
 
     try:
-        # Navegar a C223 con reintentos — sesion nueva puede tardar en estabilizarse
+        # Navegar a C223 con reintentos
         nav_ok = False
         for _n in range(15):
             try:
-                # Cerrar popups que puedan bloquear
                 try: ses2.findById("wnd[1]").sendVKey(0)
                 except Exception: pass
                 ses2.findById("wnd[0]/tbar[0]/okcd").text = "C223"
                 ses2.findById("wnd[0]").sendVKey(0)
                 _esperar_ocupado(ses2, T_MEDIO)
                 nav_ok = True
-                _log(f"Navegacion C223 OK (intento {_n+1})")
+                _log(f"Nav C223 OK (intento {_n+1})")
                 break
             except Exception as e_nav:
-                _log(f"[WAIT] Nav C223 intento {_n+1}: {e_nav}")
+                _log(f"[WAIT] {_n+1}: {e_nav}")
                 time.sleep(1.0)
         if not nav_ok:
-            return {"ok": False, "error": "No se pudo navegar a C223 tras 15 intentos", "detalles": detalles}
+            return {"ok": False, "error": "No se pudo navegar a C223", "detalles": detalles}
 
-        # Cerrar popups post-navegacion
         for _ in range(3):
-            try:
-                ses2.findById("wnd[1]").sendVKey(0)
-                time.sleep(0.3)
-            except Exception:
-                break
+            try: ses2.findById("wnd[1]").sendVKey(0); time.sleep(0.3)
+            except Exception: break
 
-        _log(">> Paso: btnG_ICON_SELECTION_FV")
-        ses2.findById("wnd[0]/usr/subSUBSCR_1100:SAPLCMFV:1100/btnG_ICON_SELECTION_FV").press()
-        _esperar_ocupado(ses2, T_MEDIO)
+        # WERKS una sola vez
+        ses2.findById(_WERKS).text = "CO01"
 
-        _log(">> Paso: btn RANG_MAT multi-value")
-        ses2.findById("wnd[1]/usr/btn%_RANG_MAT_%_APP_%-VALU_PUSH").press()
-        _esperar_ocupado(ses2, T_MEDIO)
-
-        _log(">> Paso: btn[24] limpiar")
-        try:
-            ses2.findById("wnd[2]/tbar[0]/btn[24]").press()
-            _esperar_ocupado(ses2, T_RAPIDO)
-        except Exception as e24:
-            _log(f"[INFO] btn24: {e24}")
-
-        try:
-            vis_mv = ses2.findById(_TBL_MV).VisibleRowCount
-        except Exception:
-            vis_mv = 20
-
-        _log(f">> Paso: entrar ZFERs en multi-value (vis={vis_mv})")
+        # Procesar cada ZFER
         for i, zfer in enumerate(zfers):
-            vis_row = i % vis_mv
-            if vis_row == 0 and i > 0:
+            _log(f"[{i+1}/{len(zfers)}] Procesando {zfer}...")
+
+            # Entrar MATNR + Enter
+            try:
+                ses2.findById(_MATNR).text = zfer.strip()
+                ses2.findById(_MATNR).setFocus()
+                ses2.findById(_MATNR).caretPosition = len(zfer.strip())
+                ses2.findById("wnd[0]").sendVKey(0)
+                _esperar_ocupado(ses2, 2.0)
+            except Exception as e_matnr:
+                _log(f"  [ERROR] MATNR: {e_matnr}")
+                errores_zfer.append(f"{zfer}: error al entrar MATNR")
+                continue
+
+            # Verificar si SAP mostro error (material no existe)
+            sbar_txt, sbar_tipo = _leer_sbar(ses2)
+            if sbar_tipo == "E" or "no existe" in sbar_txt.lower() or "no está activado" in sbar_txt.lower():
+                _log(f"  [SKIP] SAP error para {zfer}: {sbar_txt}")
+                errores_zfer.append(f"{zfer}: {sbar_txt}")
+                # Limpiar campo para el siguiente
                 try:
-                    ses2.findById(_TBL_MV).verticalScrollbar.position = i
-                    time.sleep(0.1)
-                except Exception:
-                    pass
+                    ses2.findById(_MATNR).text = ""
+                except Exception: pass
+                continue
+
+            # ADATU[10,0] = fecha hoy, Enter
             try:
-                ses2.findById(f"{_TBL_MV}/ctxtRSCSEL_255-SLOW_I[1,{vis_row}]").text = zfer
-                _log(f"  ZFER [{i}]: {zfer} OK")
-            except Exception as e_mv:
-                _log(f"[WARN] mv fila {i} ({zfer}): {e_mv}")
+                adatu = ses2.findById(f"{_TBL}/ctxtMKAL_EXPAND-ADATU[10,0]")
+                adatu.text = hoy
+                adatu.setFocus()
+                adatu.caretPosition = 2
+                ses2.findById("wnd[0]").sendVKey(0)
+                _esperar_ocupado(ses2, 1.5)
+                _log(f"  ADATU={hoy} OK")
+            except Exception as e_adatu:
+                _log(f"  [WARN] ADATU: {e_adatu}")
 
-        _log(">> Paso: confirmar wnd[2] btn[8]")
-        ses2.findById("wnd[2]/tbar[0]/btn[8]").press()
-        _esperar_ocupado(ses2, T_MEDIO)
-
-        _log(">> Paso: confirmar wnd[1] btn[8]")
-        _esperar_ocupado(ses2, T_MEDIO)
-        ses2.findById("wnd[1]/tbar[0]/btn[8]").press()
-        _esperar_ocupado(ses2, T_LENTO)
-
-        # Tabla principal
-        try:
-            tbl      = ses2.findById(_TBL)
-            vis_rows = tbl.VisibleRowCount
-            max_sb   = tbl.verticalScrollbar.maximum
-        except Exception as e_tbl:
-            return {"ok": False, "error": f"Tabla C223 no encontrada: {e_tbl}", "detalles": detalles}
-
-        _log(f"Tabla C223: vis={vis_rows} max_scroll={max_sb}")
-
-        # Ajustar columna 16
-        try:
-            ses2.findById(_TBL).columns.elementAt(16).width = 15
-        except Exception:
-            pass
-
-        # Llenar fecha y HR en todas las filas
-        for sp in range(0, max_sb + 1, max(1, vis_rows)):
+            # Popup confirm (btnSPOP-OPTION1) si aparece
             try:
-                ses2.findById(_TBL).verticalScrollbar.position = sp
-                time.sleep(0.15)
+                ses2.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+                time.sleep(0.5)
+                _log(f"  Popup SPOP confirmado")
             except Exception:
-                pass
-            for vis in range(vis_rows):
-                try:
-                    ses2.findById(f"{_TBL}/ctxtMKAL_EXPAND-ADATU[10,{vis}]").text = hoy
-                except Exception:
-                    pass
-                try:
-                    ses2.findById(f"{_TBL}/ctxtMKAL_EXPAND-PLNNR[16,{vis}]").text = hr_id
-                except Exception:
-                    pass
+                pass  # No siempre aparece
 
-        # Foco en ultima celda
-        try:
-            ses2.findById(f"{_TBL}/ctxtMKAL_EXPAND-ADATU[10,0]").setFocus()
-            ses2.findById(f"{_TBL}/ctxtMKAL_EXPAND-ADATU[10,0]").caretPosition = 10
-        except Exception:
-            pass
+            # PLNNR[16,0] = HR, Enter
+            try:
+                plnnr = ses2.findById(f"{_TBL}/ctxtMKAL_EXPAND-PLNNR[16,0]")
+                plnnr.text = hr_id
+                plnnr.setFocus()
+                plnnr.caretPosition = len(hr_id)
+                ses2.findById("wnd[0]").sendVKey(0)
+                _esperar_ocupado(ses2, 1.5)
+                _log(f"  PLNNR={hr_id} OK")
+            except Exception as e_plnnr:
+                _log(f"  [WARN] PLNNR: {e_plnnr}")
+
+            # Cerrar cualquier popup post-PLNNR
+            for _ in range(2):
+                try: ses2.findById("wnd[1]").sendVKey(0); time.sleep(0.3)
+                except Exception: break
 
         # MAAL
         _log("MAAL...")
         ses2.findById("wnd[0]/usr/ssubSUBSCR_1200:SAPLCMFV:1200/btnMAAL").press()
         _esperar_ocupado(ses2, T_MEDIO)
-        try:
-            ses2.findById("wnd[1]").sendVKey(0)
-        except Exception:
-            pass
+        try: ses2.findById("wnd[1]").sendVKey(0)
+        except Exception: pass
 
         # PRUEFEN
         _log("PRUEFEN...")
         ses2.findById("wnd[0]/usr/ssubSUBSCR_1200:SAPLCMFV:1200/btnPRUEFEN").press()
         _esperar_ocupado(ses2, T_MEDIO)
 
-        # btn[3]
         try:
             ses2.findById("wnd[0]/tbar[0]/btn[3]").press()
             _esperar_ocupado(ses2, T_RAPIDO)
-        except Exception:
-            pass
+        except Exception: pass
 
         sbar_txt, sbar_tipo = _leer_sbar(ses2)
         _log(f"Pre-guardado: '{sbar_txt}' tipo={sbar_tipo}")
         if sbar_tipo == "E":
-            return {"ok": False, "error": f"Error C223: {sbar_txt}", "detalles": detalles}
+            return {"ok": False, "error": f"Error C223: {sbar_txt}",
+                    "errores_zfer": errores_zfer, "detalles": detalles}
 
-        # Guardar btn[11]
-        _log("Guardando...")
+        _log("Guardando btn[11]...")
         ses2.findById("wnd[0]/tbar[0]/btn[11]").press()
         _esperar_ocupado(ses2, T_LENTO)
 
         msg_final, tipo_final = _leer_sbar(ses2)
         _log(f"Guardado: '{msg_final}' tipo={tipo_final}")
-
-        try:
-            ses2.findById("wnd[1]").sendVKey(0)
-        except Exception:
-            pass
+        try: ses2.findById("wnd[1]").sendVKey(0)
+        except Exception: pass
 
         if tipo_final == "E":
-            return {"ok": False, "error": f"Error guardando C223: {msg_final}", "detalles": detalles}
+            return {"ok": False, "error": f"Error guardando: {msg_final}",
+                    "errores_zfer": errores_zfer, "detalles": detalles}
 
-        return {"ok": True, "mensaje": msg_final or "C223 OK", "error": "", "detalles": detalles}
+        msg_ok = msg_final or "C223 OK"
+        if errores_zfer:
+            msg_ok += f" | {len(errores_zfer)} ZFERs omitidos: " + "; ".join(errores_zfer[:3])
+        return {"ok": True, "mensaje": msg_ok, "error": "",
+                "errores_zfer": errores_zfer, "detalles": detalles}
 
     except Exception as e:
         _log(f"Excepcion: {e}")
-        return {"ok": False, "error": str(e), "detalles": detalles}
+        return {"ok": False, "error": str(e), "errores_zfer": errores_zfer, "detalles": detalles}
 
     finally:
-        # Cerrar sesion auxiliar
         try:
             ses2.findById("wnd[0]/tbar[0]/okcd").text = "/i"
             ses2.findById("wnd[0]").sendVKey(0)
         except Exception:
-            try:
-                ses2.findById("wnd[0]").close()
-            except Exception:
-                pass
+            try: ses2.findById("wnd[0]").close()
+            except Exception: pass
         _log("Sesion auxiliar C223 cerrada.")
 
 
