@@ -601,12 +601,15 @@ async function ejecutarC223() {
   let okC = 0, errC = 0;
   for (const b of _planAsignacion.batches) {
     try {
+      const zLabel = b.zfers.slice(0,3).join(", ") + (b.zfers.length>3?" ...":"");
+      if (resDiv) resDiv.innerHTML += '<div style="color:var(--muted);font-size:.75rem;">&#x27F3; ' + zLabel + '</div>';
       const r = await fetch("/api/mantenimiento_hr/ejecutar_c223", {
         method: "POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({zfers: b.zfers, hr_id: b.hr_destino})
       });
       const d = await r.json();
+      const omit = (d.errores_zfer && d.errores_zfer.length) ? " (" + d.errores_zfer.length + " omitidos)" : "";
       if (d.ok) {
         okC++;
         resDiv.innerHTML += '<div style="color:var(--ok-txt);"><i class="bi bi-check-circle me-1"></i>C223 HR ' + b.hr_destino + ': ' + (d.mensaje||"OK") + '</div>';
@@ -630,7 +633,7 @@ async function ejecutarZinpg() {
   const btn = document.getElementById("btn-zinpg");
   const resDiv = document.getElementById("resultado-pasos-post");
   btn.disabled = true;
-  btn.innerHTML = '<span style="animation:spin 1s linear infinite;display:inline-block;">&#x27F3;</span> ZINPG0004...';
+  btn.innerHTML = '<span style="animation:spin 1s linear infinite;display:inline-block;">&#x27F3;</span> ZINGP0004...';
 
   // Pasar todos los ZFERs del plan
   const todosZfers = _planAsignacion
@@ -638,7 +641,7 @@ async function ejecutarZinpg() {
     : [];
 
   try {
-    const r = await fetch("/api/mantenimiento_hr/ejecutar_zinpg0004", {
+    const r = await fetch("/api/mantenimiento_hr/ejecutar_zingp0004", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({zfers: todosZfers.length ? todosZfers : null})
@@ -646,15 +649,15 @@ async function ejecutarZinpg() {
     const d = await r.json();
     const log = (d.detalles && d.detalles.length) ? " | " + d.detalles.slice(-2).join(" | ") : "";
     if (d.ok) {
-      resDiv.innerHTML += '<div style="color:var(--ok-txt);"><i class="bi bi-check-circle me-1"></i>ZINPG0004: ' + (d.mensaje||"OK") + '</div>';
-      btn.innerHTML = '<i class="bi bi-check me-1"></i>ZINPG0004 OK';
+      resDiv.innerHTML += '<div style="color:var(--ok-txt);"><i class="bi bi-check-circle me-1"></i>ZINGP0004: ' + (d.mensaje||"OK") + '</div>';
+      btn.innerHTML = '<i class="bi bi-check me-1"></i>ZINGP0004 OK';
     } else {
-      resDiv.innerHTML += '<div style="color:var(--err-txt);"><i class="bi bi-x-circle me-1"></i>ZINPG0004: ' + (d.error||"Error") + log + '</div>';
-      btn.innerHTML = '<i class="bi bi-exclamation me-1"></i>ZINPG0004 Error';
+      resDiv.innerHTML += '<div style="color:var(--err-txt);"><i class="bi bi-x-circle me-1"></i>ZINGP0004: ' + (d.error||"Error") + log + '</div>';
+      btn.innerHTML = '<i class="bi bi-exclamation me-1"></i>ZINGP0004 Error';
     }
   } catch(e) {
-    resDiv.innerHTML += '<div style="color:var(--err-txt);">ZINPG0004 Error red: ' + e.message + '</div>';
-    btn.innerHTML = 'ZINPG0004 Error';
+    resDiv.innerHTML += '<div style="color:var(--err-txt);">ZINGP0004 Error red: ' + e.message + '</div>';
+    btn.innerHTML = 'ZINGP0004 Error';
   }
   btn.disabled = false;
 }
@@ -712,7 +715,7 @@ async function ejecutarFlujoCompleto(limite) {
   _flujoLog("&#x27F3;", "<b>Paso 2/5</b> — Calculando plan de asignación...", "var(--accent)");
   let plan = null;
   try {
-    const r2 = await fetch("/api/mantenimiento_hr/plan_asignacion/" + hrId);
+    const r2 = await fetch("/api/mantenimiento_hr/plan_asignacion/" + hrId + (limite ? "?limite=" + limite : ""));
     const d2 = await r2.json();
     if (!d2.ok || !d2.batches.length) {
       _flujoLog("&#x2716;", "Plan fallido: " + (d2.error||"sin batches"), "var(--err-txt)");
@@ -721,6 +724,7 @@ async function ejecutarFlujoCompleto(limite) {
     plan = d2;
     const batchesLimitados = _aplicarLimiteAlPlan(d2.batches, limite);
     plan = {...d2, batches: batchesLimitados};
+    _planAsignacion = plan;  // actualizar para que _flujoFin use los batches reales
     _flujoLog("&#x2713;", "Plan: " + batchesLimitados.length + " HR(s) destino | " +
       batchesLimitados.reduce((s,b)=>s+b.n_zfers,0) + " ZFERs asignables" +
       (d2.sin_hr.length ? " | " + d2.sin_hr.length + " sin HR disponible" : ""), "var(--ok-txt)");
@@ -769,26 +773,43 @@ async function ejecutarFlujoCompleto(limite) {
     }
   }
 
-  // ── PASO 5: ZINPG0004 (solo si C223 OK) ─────────────────────────────────
+  // ── PASO 5: ZINGP0004 (solo si C223 OK) ─────────────────────────────────
+  // Armar resultados para reporte
+  if (_planAsignacion && _planAsignacion.batches) {
+    _flujoResultados = [];
+    for (const b of _planAsignacion.batches) {
+      for (const z of b.zfers) {
+        const zfor = b.zfor_map ? (b.zfor_map[z] || "") : "";
+        _flujoResultados.push({
+          zfer: z, zfor: zfor,
+          hr_origen: hrId, hr_destino: b.hr_destino,
+          desasignar: "OK", asignar: "OK",
+          c223: c223Err > 0 ? "ERROR" : "OK",
+          zingp: "", estado: c223Err > 0 ? "ADVERTENCIA" : "OK"
+        });
+      }
+    }
+  }
+
   if (c223Err > 0 && _planAsignacion.batches.length > 0) {
-    _flujoLog("&#x26A0;", "<b>Paso 5/5</b> — ZINPG0004 omitido (C223 tuvo errores)", "#ca8a04");
+    _flujoLog("&#x26A0;", "<b>Paso 5/5</b> — ZINGP0004 omitido (C223 tuvo errores)", "#ca8a04");
     _flujoFin(false); return;
   }
-  _flujoLog("&#x27F3;", "<b>Paso 5/5</b> — ZINPG0004...", "var(--accent)");
+  _flujoLog("&#x27F3;", "<b>Paso 5/5</b> — ZINGP0004...", "var(--accent)");
   const todosZfers = plan.batches.flatMap(b => b.zfers);
   try {
-    const r5 = await fetch("/api/mantenimiento_hr/ejecutar_zinpg0004", {
+    const r5 = await fetch("/api/mantenimiento_hr/ejecutar_zingp0004", {
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({zfers: todosZfers})
     });
     const d5 = await r5.json();
     if (d5.ok) {
-      _flujoLog("&#x2713;", "ZINPG0004 OK — " + (d5.mensaje||""), "var(--ok-txt)");
+      _flujoLog("&#x2713;", "ZINGP0004 OK — " + (d5.mensaje||""), "var(--ok-txt)");
     } else {
-      _flujoLog("&#x26A0;", "ZINPG0004 error: " + (d5.error||""), "#ca8a04");
+      _flujoLog("&#x26A0;", "ZINGP0004 error: " + (d5.error||""), "#ca8a04");
     }
   } catch(e) {
-    _flujoLog("&#x26A0;", "ZINPG0004 error red: " + e.message, "#ca8a04");
+    _flujoLog("&#x26A0;", "ZINGP0004 error red: " + e.message, "#ca8a04");
   }
 
   _flujoFin(c223Err === 0);
@@ -797,12 +818,68 @@ async function ejecutarFlujoCompleto(limite) {
 function _flujoFin(ok) {
   const color = ok ? "var(--ok-txt)" : "#ca8a04";
   const ico   = ok ? "&#x2713;" : "&#x26A0;";
-  _flujoLog(ico, ok ? "<b>Flujo completado exitosamente</b>" : "<b>Flujo completado con advertencias — revisa el log</b>", color);
-  const btnCerrar = document.createElement("button");
-  btnCerrar.innerHTML = "Cerrar";
-  btnCerrar.onclick = cerrarFlujo;
-  btnCerrar.style.cssText = "margin-top:.8rem;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:.4rem 1rem;font-size:.85rem;cursor:pointer;";
-  document.getElementById("flujo-progress").appendChild(btnCerrar);
+  _flujoLog(ico, ok ? "<b>Flujo completado exitosamente</b>" : "<b>Flujo completado con advertencias</b>", color);
+
+  // Mostrar reporte y boton de descarga en zona fija debajo del log
+  const zona = document.getElementById("flujo-zona-reporte");
+  if (!zona) return;
+  zona.style.display = "";
+
+  // Armar tabla simple: ZFER | Nueva HR
+  const filasPlan = [];
+  if (_planAsignacion && _planAsignacion.batches) {
+    for (const b of _planAsignacion.batches) {
+      for (const z of b.zfers) {
+        filasPlan.push({zfer: z, hr_nueva: b.hr_destino});
+        // Update _flujoResultados zfor
+        const f = _flujoResultados.find(r => r.zfer === z);
+        if (f && b.zfor_map) f.zfor = b.zfor_map[z] || "";
+      }
+    }
+  }
+  if (filasPlan.length) {
+    let html = '<div style="font-size:.75rem;color:var(--muted);margin-bottom:.3rem;font-weight:600;">ZFERs procesados (' + filasPlan.length + ')</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:.78rem;">' +
+      '<tr style="background:var(--tag-neutral-bg);font-weight:700;">' +
+      '<td style="padding:.3rem .6rem;border:1px solid var(--border);">ZFER</td>' +
+      '<td style="padding:.3rem .6rem;border:1px solid var(--border);">Nueva Hoja de Ruta</td>' +
+      '</tr>';
+    for (const f of filasPlan) {
+      html += '<tr><td style="padding:.25rem .6rem;border:1px solid var(--border);font-family:monospace;color:var(--accent);">' + f.zfer + '</td>' +
+        '<td style="padding:.25rem .6rem;border:1px solid var(--border);font-family:monospace;">' + f.hr_nueva + '</td></tr>';
+    }
+    html += '</table>';
+    document.getElementById("flujo-tabla-reporte").innerHTML = html;
+  } else {
+    document.getElementById("flujo-tabla-reporte").innerHTML = '<div style="color:var(--muted);font-size:.8rem;">Sin datos de plan disponibles.</div>';
+  }
+
+  // Tabla resumen inline
+  if (_flujoResultados && _flujoResultados.length) {
+    const div = document.getElementById("flujo-progress");
+    const tbl = document.createElement("div");
+    tbl.style.cssText = "margin-top:.8rem;overflow-x:auto;";
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:.75rem;">' +
+      '<tr style="background:var(--tag-neutral-bg);font-weight:700;">' +
+      ['ZFER','ZFOR','HR Origen','HR Nueva','Estado'].map(h =>
+        '<td style="padding:.3rem .5rem;border:1px solid var(--border);">'+h+'</td>').join('') +
+      '</tr>';
+    for (const f of _flujoResultados) {
+      const bg  = f.estado==="OK" ? "rgba(34,197,94,.08)" : "rgba(239,68,68,.08)";
+      const col = f.estado==="OK" ? "var(--ok-txt)" : "var(--err-txt)";
+      html += '<tr style="background:'+bg+';">' +
+        ['zfer','zfor','hr_origen','hr_destino','estado'].map((k,i) =>
+          '<td style="padding:.25rem .5rem;border:1px solid var(--border);' +
+          (i<2?'font-family:monospace;':'') +
+          (i===4?'font-weight:700;color:'+col+';':'') +
+          '">'+(f[k]||"-")+'</td>').join('') +
+        '</tr>';
+    }
+    html += '</table>';
+    tbl.innerHTML = html;
+    div.appendChild(tbl);
+  }
+
 }
 
 // Sync flujo-total-btn
@@ -933,7 +1010,7 @@ cargarQASLog();
         </button>
         <button id="btn-zinpg" onclick="ejecutarZinpg()"
           style="background:#0369a1;color:#fff;border:none;border-radius:8px;padding:.45rem 1rem;font-size:.82rem;font-weight:700;cursor:pointer;">
-          <i class="bi bi-arrow-clockwise me-1"></i>ZINPG0004
+          <i class="bi bi-arrow-clockwise me-1"></i>ZINGP0004
         </button>
       </div>
       <div id="resultado-pasos-post" style="margin-top:.5rem; font-size:.78rem;"></div>
@@ -947,11 +1024,14 @@ cargarQASLog();
      z-index:9999; align-items:center; justify-content:center;">
   <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:16px;
               padding:1.8rem; max-width:480px; width:94%; max-height:85vh; display:flex; flex-direction:column;">
-    <h5 style="margin:0 0 .3rem; font-weight:800; font-size:1rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem;">
+    <h5 style="margin:0; font-weight:800; font-size:1rem;">
       <i class="bi bi-lightning-charge me-2" style="color:#f59e0b;"></i>Flujo Completo SAP
     </h5>
+    <button onclick="cerrarFlujo()" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;">&#x2715;</button>
+    </div>
     <div style="color:var(--muted); font-size:.82rem; margin-bottom:1rem;">
-      Desasignar &rarr; Asignar &rarr; C223 &rarr; ZINPG0004
+      Desasignar &rarr; Asignar &rarr; C223 &rarr; ZINGP0004
       &nbsp;|&nbsp; <b id="flujo-total"></b> ZFERs fuera
     </div>
 
@@ -985,7 +1065,24 @@ cargarQASLog();
 
     <!-- Log de progreso -->
     <div id="flujo-progress" style="display:none; flex:1; overflow-y:auto; margin-top:.5rem;
-         padding:.5rem; background:var(--bg); border-radius:8px; min-height:120px;"></div>
+         padding:.5rem; background:var(--bg); border-radius:8px; min-height:80px; max-height:220px;"></div>
+
+    <!-- Zona fija de reporte (siempre visible al fondo) -->
+    <div id="flujo-zona-reporte" style="display:none; border-top:1px solid var(--border); padding-top:.6rem; margin-top:.5rem;">
+      <div id="flujo-tabla-reporte" style="overflow-x:auto; max-height:180px; overflow-y:auto;"></div>
+      <div style="display:flex; gap:.5rem; margin-top:.5rem;">
+        <button onclick="_flujoDescargarReporte()"
+          style="flex:1;background:var(--accent);color:#fff;border:none;border-radius:8px;
+                 padding:.45rem;font-size:.8rem;font-weight:700;cursor:pointer;">
+          Descargar Excel
+        </button>
+        <button onclick="cerrarFlujo()"
+          style="flex:1;background:none;border:1px solid var(--border);color:var(--text);
+                 border-radius:8px;padding:.45rem;font-size:.8rem;cursor:pointer;">
+          Cerrar
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 

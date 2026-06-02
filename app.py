@@ -4469,11 +4469,31 @@ def api_mhr_plan_asignacion(id_hruta: str):
         if not hr_origen:
             return jsonify({"ok": False, "error": f"HR {id_hruta} no encontrada."})
 
-        zfers_fuera = hr_origen.get("zfers_fuera", [])
-        if not zfers_fuera:
-            return jsonify({"ok": False, "error": "No hay ZFERs fuera de calendario para esta HR."})
+        # Aplicar limite si viene (para flujo completo con 1/10 ZFERs)
+        # Filtrar QAS primero para tomar los realmente pendientes
+        _limite_plan = request.args.get("limite", type=int)
+        ya_desasig = _qas_leer_desasignados()
+        zfers_fuera_all = hr_origen.get("zfers_fuera", [])
+        zfers_disponibles = [z for z in zfers_fuera_all if z not in ya_desasig]
+        zfers_fuera = zfers_disponibles[:_limite_plan] if _limite_plan else zfers_disponibles
 
-        zfor_map = hr_origen.get("zfor_map", {})
+        if not zfers_fuera:
+            return jsonify({"ok": False, "error": "No hay ZFERs disponibles para asignar (todos en log QAS o ninguno fuera de calendario)."})
+
+        # ZFOR: buscar ahora para los ZFERs del plan (no viene en el JSON cacheado)
+        zfor_map = hr_origen.get("zfor_map") or {}
+        if not zfor_map and zfers_fuera:
+            try:
+                with get_conn() as cn:
+                    ph = ",".join(["?"] * len(zfers_fuera))
+                    cur = cn.cursor()
+                    cur.execute(f"SELECT MATERIAL, MAT_CONFIG FROM dbo.ODATA_ZFER_BOM WHERE MATERIAL IN ({ph})", zfers_fuera)
+                    for row in cur.fetchall():
+                        mat = str(row[0]).strip(); cfg = str(row[1]).strip() if row[1] else ""
+                        if mat not in zfor_map and cfg:
+                            zfor_map[mat] = cfg
+            except Exception as e_z:
+                print(f"[PLAN] WARN ZFOR: {e_z}")
 
         # ── Obtener atributos de todos los ZFERs en batch ────────────────────
         attrs_map = {}   # {zfer: {nivel, geometria, tamano, bom_posiciones}}
@@ -4774,10 +4794,10 @@ def api_mhr_ejecutar_c223():
         return jsonify({"ok": False, "error": str(e)})
 
 
-@app.route("/api/mantenimiento_hr/ejecutar_zinpg0004", methods=["POST"])
+@app.route("/api/mantenimiento_hr/ejecutar_zingp0004", methods=["POST"])
 @login_required
-def api_mhr_ejecutar_zinpg0004():
-    """Ejecuta ZINPG0004. Body opcional: {zfers: [...]} — si vacío ejecuta para todos."""
+def api_mhr_ejecutar_zingp0004():
+    """Ejecuta ZINGP0004. Body opcional: {zfers: [...]} — si vacío ejecuta para todos."""
     body  = request.get_json() or {}
     zfers = body.get("zfers") or None
     try:
@@ -4786,6 +4806,56 @@ def api_mhr_ejecutar_zinpg0004():
         if not fn:
             return jsonify({"ok": False, "error": "zinpg0004_actualizar no encontrada."})
         return jsonify(fn(zfers))
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/mantenimiento_hr/reporte_flujo", methods=["POST"])
+@login_required
+def api_mhr_reporte_flujo():
+    """Genera Excel con el reporte del flujo completo de mantenimiento."""
+    import openpyxl, json as _json
+    from openpyxl.styles import PatternFill, Font, Alignment
+    from io import BytesIO
+    from datetime import datetime as _dt
+    body = request.get_json() or {}
+    filas = body.get("filas", [])   # [{zfer, hr_origen, hr_destino, desasignar, asignar, c223, zingp, estado}]
+    if not filas:
+        return jsonify({"ok": False, "error": "Sin datos para reporte."})
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Reporte Mantenimiento HR"
+
+        hdrs = ["ZFER", "ZFOR", "HR Origen", "HR Destino", "Desasignar", "Asignar", "C223", "ZINGP0004", "Estado"]
+        hdr_fill = PatternFill("solid", fgColor="1a4731")
+        hdr_font = Font(bold=True, color="FFFFFF", size=11)
+        fill_ok  = PatternFill("solid", fgColor="c6efce")
+        fill_err = PatternFill("solid", fgColor="ffc7ce")
+        fill_warn= PatternFill("solid", fgColor="fff2cc")
+
+        for ci, h in enumerate(hdrs, 1):
+            c = ws.cell(row=1, column=ci, value=h)
+            c.fill = hdr_fill; c.font = hdr_font
+            c.alignment = Alignment(horizontal="center")
+
+        for ri, f in enumerate(filas, 2):
+            estado = f.get("estado", "")
+            fill   = fill_ok if estado == "OK" else (fill_err if estado == "ERROR" else fill_warn)
+            vals   = [f.get("zfer",""), f.get("zfor",""), f.get("hr_origen",""), f.get("hr_destino",""),
+                      f.get("desasignar",""), f.get("asignar",""),
+                      f.get("c223",""), f.get("zingp",""), estado]
+            for ci, v in enumerate(vals, 1):
+                ws.cell(row=ri, column=ci, value=v).fill = fill
+
+        widths = [18,18,14,14,12,12,12,12,10]
+        for ci, w in enumerate(widths, 1):
+            ws.column_dimensions[ws.cell(1,ci).column_letter].width = w
+
+        buf = BytesIO(); wb.save(buf); buf.seek(0)
+        fname = f"reporte_mant_hr_{_dt.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        return send_file(buf, as_attachment=True, download_name=fname,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 

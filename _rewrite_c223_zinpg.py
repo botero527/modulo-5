@@ -1,7 +1,7 @@
 
 content = open('sap_mantenimiento.py', encoding='utf-8').read()
 
-# Find and replace c223_mantenimiento + zinpg0004_actualizar completely
+# Find and replace c223_mantenimiento + zingp0004_actualizar completely
 import re
 
 # Find start of c223_mantenimiento

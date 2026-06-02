@@ -340,7 +340,8 @@ def zppp0084_asignar(excel_path: str) -> dict:
             _esperar_ocupado(ses, T_MEDIO)
             sbar5, tipo5 = _leer_sbar(ses)
             _log(f"Post-btn5: '{sbar5}' tipo={tipo5}")
-            if tipo5 == "E":
+            _MENSAJES_OK = ("procesados", "pendientes", "completado", "grabado", "correcto", "exitoso")
+            if tipo5 == "E" and not any(w in sbar5.lower() for w in _MENSAJES_OK):
                 return {"ok": False, "error": f"Error tras btn[5]: {sbar5}", "mensaje": sbar5, "detalles": detalles}
         except Exception as e5:
             _log(f"btn[5] no disponible: {e5}")
@@ -371,10 +372,7 @@ def zppp0084_asignar(excel_path: str) -> dict:
 
     except Exception as e:
         _log(f"Excepcion inesperada: {e}")
-        return {"ok": False, "error": str(e), "mensaje": "", "detalles": detalles}
-
-
-
+        return {"ok": False, "error": str(e), "mensaje": "", "detalles": detalles} 
 def _conectar_sap_nueva_sesion():
     """
     Abre una sesion auxiliar nueva en SAP.
@@ -497,6 +495,13 @@ def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
                 ses2.findById(_MATNR).caretPosition = len(zfer.strip())
                 ses2.findById("wnd[0]").sendVKey(0)
                 _esperar_ocupado(ses2, 2.0)
+                # Popup "¿Crear nueva versión?" → OPTION1 = Sí
+                try:
+                    ses2.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+                    time.sleep(0.5)
+                    _log(f"  Popup post-MATNR OPTION1 confirmado")
+                except Exception:
+                    pass
             except Exception as e_matnr:
                 _log(f"  [ERROR] MATNR: {e_matnr}")
                 errores_zfer.append(f"{zfer}: error al entrar MATNR")
@@ -545,10 +550,22 @@ def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
             except Exception as e_plnnr:
                 _log(f"  [WARN] PLNNR: {e_plnnr}")
 
-            # Cerrar cualquier popup post-PLNNR
-            for _ in range(2):
-                try: ses2.findById("wnd[1]").sendVKey(0); time.sleep(0.3)
-                except Exception: break
+            # Popup post-PLNNR: "¿Guardar cambios de hoja de ruta?" → OPTION1=Sí
+            for _ in range(3):
+                try:
+                    wnd1 = ses2.findById("wnd[1]")
+                    txt_p = ""
+                    try: txt_p = str(wnd1.text or "").strip()
+                    except Exception: pass
+                    if txt_p:
+                        _log(f"  Popup post-PLNNR: '{txt_p}'")
+                    try:
+                        ses2.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+                    except Exception:
+                        wnd1.sendVKey(0)
+                    time.sleep(0.4)
+                except Exception:
+                    break
 
         # MAAL
         _log("MAAL...")
@@ -576,11 +593,26 @@ def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
         _log("Guardando btn[11]...")
         ses2.findById("wnd[0]/tbar[0]/btn[11]").press()
         _esperar_ocupado(ses2, T_LENTO)
+        
+        # Manejar popup de confirmacion de guardado si aparece
+        for _ in range(3):
+            try:
+                wnd1 = ses2.findById("wnd[1]")
+                txt_pop = ""
+                try: txt_pop = str(wnd1.text or "").strip()
+                except Exception: pass
+                _log(f"Popup post-guardado: '{txt_pop}'")
+                # Intentar btnSPOP-OPTION1 primero (Si/confirmar), si no Enter
+                try:
+                    ses2.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+                except Exception:
+                    wnd1.sendVKey(0)
+                time.sleep(0.5)
+            except Exception:
+                break  # no hay popup
 
         msg_final, tipo_final = _leer_sbar(ses2)
         _log(f"Guardado: '{msg_final}' tipo={tipo_final}")
-        try: ses2.findById("wnd[1]").sendVKey(0)
-        except Exception: pass
 
         if tipo_final == "E":
             return {"ok": False, "error": f"Error guardando: {msg_final}",
@@ -607,72 +639,145 @@ def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
 
 
 def zinpg0004_actualizar(zfers: list = None) -> dict:
-    """ZINPG0004 en sesion auxiliar. zfers=None ejecuta para todos."""
-    ses0, ses2, conn, err = _conectar_sap_nueva_sesion()
-    if ses2 is None:
-        return {"ok": False, "error": f"No se pudo crear sesion auxiliar SAP: {err}", "detalles": []}
-
+    """
+    ZINGP0004 sesion auxiliar — flujo VBS:
+    WERKS=CO01, VERID=5000
+    Abre multi-value (btn%_SO_MATNR_%_APP_%-VALU_PUSH)
+    Llena ZFERs en tabla tabpSIVA (ctxtRSCSEL_255-SLOW_I[1,vis_row])
+    btn[0] -> btn[8] (confirmar) -> F8 -> btn[20] (actualizar)
+    """
     detalles = []
     def _log(msg):
-        print(f"[ZINPG0004] {msg}")
+        print(f"[ZINGP0004] {msg}")
         detalles.append(msg)
 
-    _TBL_MV = "wnd[1]/usr/tabsTAB_STRIP/tabpSINGLE/ssubSCREEN:SAPLALDB:3010/tblSAPLALDBSINGLE"
+    _log(f"Iniciando | {len(zfers) if zfers else 'todos'} ZFERs")
+    ses0, ses2, conn, err = _conectar_sap_nueva_sesion()
+    if ses2 is None:
+        _log(f"ERROR sesion auxiliar: {err}")
+        return {"ok": False, "error": f"No se pudo crear sesion auxiliar: {err}", "detalles": detalles}
+
+    _TBL_MV = ("wnd[1]/usr/tabsTAB_STRIP/tabpSIVA/"
+               "ssubSCREEN_HEADER:SAPLALDB:3010/tblSAPLALDBSINGLE")
+
+    _log(f"ZINGP0004: {len(zfers) if zfers else 'todos'} ZFERs | CO01 / 5000")
 
     try:
-        _log("Navegando a ZINPG0004 en sesion auxiliar...")
-        ses2.findById("wnd[0]/tbar[0]/okcd").text = "ZINPG0004"
-        ses2.findById("wnd[0]").sendVKey(0)
-        _esperar_ocupado(ses2, T_MEDIO)
+        # Navegar a ZINGP0004
+        nav_ok = False
+        for _n in range(15):
+            try:
+                try: ses2.findById("wnd[1]").sendVKey(0)
+                except Exception: pass
+                ses2.findById("wnd[0]/tbar[0]/okcd").text = "ZINGP0004"
+                ses2.findById("wnd[0]").sendVKey(0)
+                _esperar_ocupado(ses2, T_MEDIO)
+                nav_ok = True
+                _log(f"Nav OK (intento {_n+1})")
+                break
+            except Exception as e_nav:
+                _log(f"[WAIT] {_n+1}: {e_nav}")
+                time.sleep(1.0)
+        if not nav_ok:
+            return {"ok": False, "error": "No se pudo navegar a ZINGP0004", "detalles": detalles}
 
         for _ in range(3):
+            try: ses2.findById("wnd[1]").sendVKey(0); time.sleep(0.3)
+            except Exception: break
+
+        # Campos fijos — retry con espera porque ZINGP0004 puede tardar en cargar
+        _log(">> Esperando que ZINGP0004 cargue...")
+        werks_ok = False
+        for _w in range(20):
             try:
-                ses2.findById("wnd[1]").sendVKey(0)
-                time.sleep(0.3)
-            except Exception:
+                ses2.findById("wnd[0]/usr/ctxtPA_WERKS").text = "CO01"
+                werks_ok = True
+                _log(f">> ctxtPA_WERKS OK (intento {_w+1})")
                 break
-
-        ses2.findById("wnd[0]/usr/ctxtPA_WERKS").text = "CO01"
+            except Exception as e_w:
+                try: ses2.findById("wnd[1]").sendVKey(0)
+                except Exception: pass
+                time.sleep(0.8)
+        if not werks_ok:
+            return {"ok": False, "error": "ctxtPA_WERKS no accesible en ZINGP0004", "detalles": detalles}
+        _log(">> ctxtPA_VERID...")
         ses2.findById("wnd[0]/usr/ctxtPA_VERID").text = "5000"
-        ses2.findById("wnd[0]/usr/ctxtPA_VERID").setFocus()
-        ses2.findById("wnd[0]/usr/ctxtPA_VERID").caretPosition = 4
+        _log(">> ctxtSO_MATNR-HIGH focus...")
+        ses2.findById("wnd[0]/usr/ctxtSO_MATNR-HIGH").setFocus()
+        ses2.findById("wnd[0]/usr/ctxtSO_MATNR-HIGH").caretPosition = 0
+        _log(">> Abriendo multi-value...")
 
+        # Abrir multi-value
         ses2.findById("wnd[0]/usr/btn%_SO_MATNR_%_APP_%-VALU_PUSH").press()
         _esperar_ocupado(ses2, T_MEDIO)
 
         if zfers:
-            _log(f"Entrando {len(zfers)} ZFERs...")
+            # Leer filas visibles de la tabla
             try:
                 vis_mv = ses2.findById(_TBL_MV).VisibleRowCount
             except Exception:
-                vis_mv = 20
+                vis_mv = 8
+            _log(f"Tabla multi-value: vis={vis_mv}, ZFERs={len(zfers)}")
+
+            # Llenar ZFERs uno a uno con scroll
             for i, zfer in enumerate(zfers):
                 vis_row = i % vis_mv
-                if vis_row == 0 and i > 0:
+                # Scroll cuando se llena la pagina visible
+                if i > 0 and vis_row == 0:
                     try:
                         ses2.findById(_TBL_MV).verticalScrollbar.position = i
                         time.sleep(0.1)
-                    except Exception:
-                        pass
+                    except Exception as e_sc:
+                        _log(f"[WARN] scroll {i}: {e_sc}")
                 try:
-                    ses2.findById(f"{_TBL_MV}/ctxtRSCSEL_255-SLOW_I[1,{vis_row}]").text = zfer
-                except Exception:
-                    pass
+                    ses2.findById(f"{_TBL_MV}/ctxtRSCSEL_255-SLOW_I[1,{vis_row}]").text = zfer.strip()
+                except Exception as e_cell:
+                    _log(f"[WARN] celda {i} ({zfer}): {e_cell}")
+
+            _log(f"{len(zfers)} ZFERs escritos")
         else:
-            _log("Limpiando filtro (todos los materiales)...")
+            # Sin filtro = todos (limpiar con btn[24] si existe)
+            _log("Sin filtro de material — ejecutando para todos")
             try:
                 ses2.findById("wnd[1]/tbar[0]/btn[24]").press()
                 _esperar_ocupado(ses2, T_RAPIDO)
             except Exception:
                 pass
 
+        # btn[0] (confirmar seleccion verde) → btn[8] (ejecutar popup)
+        _log(">> btn[0] confirmar seleccion...")
+        ses2.findById("wnd[1]/tbar[0]/btn[0]").press()
+        _esperar_ocupado(ses2, T_RAPIDO)
+
+        _log(">> btn[8] ejecutar seleccion...")
         ses2.findById("wnd[1]/tbar[0]/btn[8]").press()
         _esperar_ocupado(ses2, T_MEDIO)
 
-        _log("F8 Ejecutar...")
-        ses2.findById("wnd[0]/tbar[1]/btn[8]").press()
-        _esperar_con_polling(ses2, max_seg=300, intervalo=2.0)
+        # Verificar que wnd[1] ya se cerro
+        try:
+            ses2.findById("wnd[1]")
+            # Si sigue abierto, cerrarlo
+            ses2.findById("wnd[1]").sendVKey(0)
+            _esperar_ocupado(ses2, T_RAPIDO)
+        except Exception:
+            pass  # ya cerro = correcto
 
+        # F8 Ejecutar (en pantalla principal)
+        _log(">> F8 Ejecutar...")
+        ses2.findById("wnd[0]/tbar[1]/btn[8]").press()
+
+        # Esperar procesamiento (puede tardar)
+        resultado = _esperar_con_polling(ses2, max_seg=300, intervalo=2.0)
+        _log(f"Post-F8: {resultado}")
+
+        if resultado.startswith("POPUP_ERROR"):
+            msg_err = resultado.replace("POPUP_ERROR: ", "")
+            try: ses2.findById("wnd[1]").sendVKey(12)
+            except Exception: pass
+            return {"ok": False, "error": f"Error ZINGP0004: {msg_err}", "detalles": detalles}
+
+        # btn[20] Actualizar
+        _log(">> btn[20] Actualizar...")
         try:
             ses2.findById("wnd[0]/tbar[1]/btn[20]").press()
             _esperar_ocupado(ses2, T_MEDIO)
@@ -683,9 +788,9 @@ def zinpg0004_actualizar(zfers: list = None) -> dict:
         _log(f"Resultado: '{msg_final}' tipo={tipo_final}")
 
         if tipo_final == "E":
-            return {"ok": False, "error": f"Error ZINPG0004: {msg_final}", "detalles": detalles}
+            return {"ok": False, "error": f"Error ZINGP0004: {msg_final}", "detalles": detalles}
 
-        return {"ok": True, "mensaje": msg_final or "ZINPG0004 OK", "error": "", "detalles": detalles}
+        return {"ok": True, "mensaje": msg_final or "ZINGP0004 OK", "error": "", "detalles": detalles}
 
     except Exception as e:
         _log(f"Excepcion: {e}")
@@ -696,8 +801,7 @@ def zinpg0004_actualizar(zfers: list = None) -> dict:
             ses2.findById("wnd[0]/tbar[0]/okcd").text = "/i"
             ses2.findById("wnd[0]").sendVKey(0)
         except Exception:
-            try:
-                ses2.findById("wnd[0]").close()
-            except Exception:
-                pass
-        _log("Sesion auxiliar ZINPG0004 cerrada.")
+            try: ses2.findById("wnd[0]").close()
+            except Exception: pass
+        _log("Sesion auxiliar ZINGP0004 cerrada.")
+
