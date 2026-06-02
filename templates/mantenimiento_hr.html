@@ -72,14 +72,6 @@
 
 {% block scripts %}
 <script>
-// Cargar última consulta guardada si existe
-(function(){
-  fetch("/api/mantenimiento_hr/consultar", {method: "HEAD"});  // warmup ignorado
-})();
-
-// Intentar mostrar fecha de última consulta desde el servidor
-// (lo haremos implícitamente cuando cargue resultados guardados)
-
 async function consultarHR() {
   const btnC  = document.getElementById("btn-consultar");
   const spin  = document.getElementById("mhr-spinner");
@@ -189,10 +181,24 @@ function renderResults(data) {
                 ? `<i class="bi bi-exclamation-triangle me-1"></i>${h.fuera_calendario} fuera`
                 : `<i class="bi bi-check-circle me-1"></i>OK`}
             </span>
-            ${h.fuera_calendario > 0 ? `<button onclick="event.stopPropagation();descargarHR('${h.id_hruta}')"
-               style="background:var(--accent);color:#fff;border:none;border-radius:8px;
-                      padding:.28rem .85rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
-               <i class="bi bi-download me-1"></i>Excel</button>` : ""}
+            ${h.fuera_calendario > 0 ? `
+               <button onclick="event.stopPropagation();descargarHR('${h.id_hruta}')"
+                 style="background:var(--accent);color:#fff;border:none;border-radius:8px;
+                        padding:.28rem .85rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
+                 <i class="bi bi-download me-1"></i>Excel
+               </button>
+               <button onclick="event.stopPropagation();abrirModalDesasignar('${h.id_hruta}', ${h.fuera_calendario})"
+                 id="btn-desasignar-${h.id_hruta}"
+                 style="background:#dc2626;color:#fff;border:none;border-radius:8px;
+                        padding:.28rem .85rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
+                 <i class="bi bi-arrow-left-right me-1"></i>Desasignar SAP
+               </button>
+               <button onclick="event.stopPropagation();abrirPlanAsignacion('${h.id_hruta}')"
+                 id="btn-asignar-${h.id_hruta}"
+                 style="background:#16a34a;color:#fff;border:none;border-radius:8px;
+                        padding:.28rem .85rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
+                 <i class="bi bi-plus-circle me-1"></i>Asignar SAP
+               </button>` : ""}
             <i class="bi bi-chevron-down" id="chev_${collapseId}"
                style="color:var(--muted); transition:transform .2s;"></i>
           </div>
@@ -256,6 +262,101 @@ function descargarHR(id_hruta) {
   window.location.href = "/api/mantenimiento_hr/exportar/" + id_hruta;
 }
 
+async function desasignarSAP(id_hruta, btn) {
+  if (!confirm(`¿Ejecutar desasignación en SAP para HR ${id_hruta}?\n\nSe generará el Excel y se enviará a ZPPP0084 automáticamente.`)) return;
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span style="animation:spin 1s linear infinite;display:inline-block;">⟳</span> Ejecutando...';
+  try {
+    const r = await fetch("/api/mantenimiento_hr/desasignar/" + id_hruta, {method: "POST"});
+    const d = await r.json();
+    if (d.ok) {
+      btn.style.background = "var(--ok-bdr)";
+      btn.innerHTML = '<i class="bi bi-check me-1"></i>Desasignado';
+      if (d.mensaje) {
+        alert("SAP: " + d.mensaje);
+      }
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+      alert("Error: " + (d.error || "desconocido"));
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+    alert("Error de red: " + e.message);
+  }
+}
+
+// ── Modal desasignar ──────────────────────────────────────────────────────────
+let _desasignarHR = null;
+let _desasignarTotal = 0;
+
+function abrirModalDesasignar(id_hruta, total) {
+  _desasignarHR = id_hruta;
+  _desasignarTotal = total;
+  document.getElementById("modal-desi-hr").textContent = id_hruta;
+  document.getElementById("modal-desi-total").textContent = total;
+  // Mostrar opciones de prueba solo si hay más de 10
+  const opcPrueba = document.getElementById("modal-desi-prueba");
+  opcPrueba.style.display = total > 10 ? "" : "none";
+  document.getElementById("modal-desasignar").style.display = "flex";
+}
+
+function cerrarModalDesasignar() {
+  document.getElementById("modal-desasignar").style.display = "none";
+}
+
+async function confirmarDesasignar(limite) {
+  cerrarModalDesasignar();
+  const hrId = _desasignarHR;
+  const btn  = document.getElementById("btn-desasignar-" + hrId);
+  const orig = btn ? btn.innerHTML : "";
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span style="animation:spin 1s linear infinite;display:inline-block;">&#x27F3;</span> Ejecutando...'; }
+
+  // Panel de resultado inline debajo de la card
+  const panelId = "resultado-desi-" + hrId;
+  let panel = document.getElementById(panelId);
+  if (!panel) {
+    const card = btn ? btn.closest(".card") : null;
+    if (card) {
+      panel = document.createElement("div");
+      panel.id = panelId;
+      panel.style.cssText = "margin-top:.5rem; padding:.6rem 1rem; border-radius:8px; font-size:.82rem; display:none;";
+      card.appendChild(panel);
+    }
+  }
+
+  function _mostrarResultado(ok, texto, log) {
+    if (!panel) return;
+    const bg  = ok ? "rgba(34,197,94,.1)"  : "rgba(239,68,68,.1)";
+    const bdr = ok ? "var(--ok-bdr)"       : "var(--err-bdr)";
+    const col = ok ? "var(--ok-txt)"       : "var(--err-txt)";
+    const ico = ok ? "bi-check-circle"     : "bi-x-circle";
+    const logHtml = (!ok && log && log.length)
+      ? "<div style=\"margin-top:.4rem; font-size:.75rem; color:var(--muted); font-family:monospace;\">" + log.slice(-4).join("<br>") + "</div>"
+      : "";
+    panel.style.cssText += ";background:" + bg + ";border:1px solid " + bdr + ";color:" + col + ";display:block;";
+    panel.innerHTML = "<i class=\"bi " + ico + " me-1\"></i><b>" + texto + "</b>" + logHtml;
+  }
+
+  const url = "/api/mantenimiento_hr/desasignar/" + hrId + (limite ? "?limite=" + limite : "");
+  try {
+    const r = await fetch(url, {method: "POST"});
+    const d = await r.json();
+    if (d.ok) {
+      if (btn) { btn.style.background = "var(--ok-bdr)"; btn.innerHTML = "<i class=\"bi bi-check me-1\"></i>" + (d.n_enviados || "") + " desasignados"; }
+      _mostrarResultado(true, d.mensaje || "Proceso completado correctamente", []);
+    } else {
+      if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+      _mostrarResultado(false, d.error || "Error desconocido", d.detalles || []);
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+    _mostrarResultado(false, "Error de red: " + e.message, []);
+  }
+}
+
 async function buscarZfer() {
   const zfer = document.getElementById("inp-buscar-zfer").value.trim();
   const div  = document.getElementById("buscar-resultado");
@@ -284,5 +385,233 @@ async function buscarZfer() {
     div.innerHTML = `<span style="color:var(--muted);">Error: ${e.message}</span>`;
   }
 }
+
+// ── Asignar SAP ───────────────────────────────────────────────────────────────
+let _planAsignacion = null;
+let _planHrOrigen   = null;
+
+async function abrirPlanAsignacion(id_hruta) {
+  _planHrOrigen = id_hruta;
+  const modal = document.getElementById("modal-asignar");
+  const body  = document.getElementById("modal-asignar-body");
+  modal.style.display = "flex";
+  let _planTimer = 0;
+  const _planInterval = setInterval(() => {
+    _planTimer++;
+    const el = document.getElementById("plan-timer");
+    if (el) el.textContent = _planTimer + "s";
+  }, 1000);
+  body.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);">' +
+    '<span style="animation:spin 1s linear infinite;display:inline-block;font-size:1.5rem;">&#x27F3;</span>' +
+    '<br><br>Calculando plan de asignacion...<br>' +
+    '<span id="plan-timer" style="font-size:.75rem;font-family:monospace;">0s</span>' +
+    '<br><span style="font-size:.72rem;">(puede tardar hasta 30-60s segun la cantidad de ZFERs)</span></div>';
+  try {
+    const r = await fetch("/api/mantenimiento_hr/plan_asignacion/" + id_hruta);
+    const d = await r.json();
+    if (!d.ok) { body.innerHTML = '<div style="color:var(--err-txt);padding:1rem;">' + (d.error||"Error") + '</div>'; return; }
+    clearInterval(_planInterval);
+    _planAsignacion = d;
+    _renderPlan(d);
+  } catch(e) {
+    body.innerHTML = '<div style="color:var(--err-txt);padding:1rem;">Error: ' + e.message + '</div>';
+  }
+}
+
+function _renderPlan(d) {
+  const body = document.getElementById("modal-asignar-body");
+  const sinHrHtml = (d.sin_hr && d.sin_hr.length)
+    ? '<div style="margin-top:.8rem;padding:.5rem .75rem;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:8px;font-size:.78rem;color:#ca8a04;"><i class="bi bi-exclamation-triangle me-1"></i><b>' + d.sin_hr.length + ' ZFERs sin HR disponible</b>: ' + d.sin_hr.slice(0,5).join(", ") + (d.sin_hr.length>5?" ...":"") + '</div>'
+    : '';
+  const sinBomHtml = (d.sin_bom && d.sin_bom.length)
+    ? '<div style="margin-top:.5rem;padding:.5rem .75rem;background:rgba(239,68,68,.08);border:1px solid var(--err-bdr);border-radius:8px;font-size:.78rem;color:var(--err-txt);"><i class="bi bi-exclamation-circle me-1"></i><b>' + d.sin_bom.length + ' ZFERs sin BOM en BD</b> — no se usarán para buscar HR: ' + d.sin_bom.slice(0,5).join(", ") + (d.sin_bom.length>5?" ...":"") + '</div>'
+    : '';
+  const batchesHtml = d.batches.map((b,i) =>
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.7rem .9rem;margin-bottom:.5rem;">' +
+    '<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">' +
+    '<span style="font-family:monospace;font-weight:700;color:var(--accent);">' + b.hr_destino + '</span>' +
+    '<span style="font-size:.82rem;color:var(--text);flex:1;">' + (b.hr_desc||"") + '</span>' +
+    '<span style="font-size:.75rem;color:var(--muted);">' + b.materiales_actuales + ' actuales</span>' +
+    '<span style="background:rgba(34,197,94,.12);color:var(--ok-txt);border:1px solid var(--ok-bdr);border-radius:6px;padding:.15rem .55rem;font-size:.75rem;font-weight:700;">+' + b.n_zfers + ' ZFERs</span></div>' +
+    '<div id="res-batch-' + i + '" style="margin-top:.3rem;font-size:.78rem;display:none;"></div></div>'
+  ).join("");
+  // Calcular rangos de filas para el reporte
+  let rowStart = 2;  // fila 1 = cabecera
+  const batchesConRango = d.batches.map(b => {
+    const rowEnd = rowStart + b.n_zfers - 1;
+    const obj = {...b, row_from: rowStart, row_to: rowEnd};
+    rowStart = rowEnd + 1;
+    return obj;
+  });
+
+  const reporteHtml = batchesConRango.map((b,i) =>
+    '<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.5rem .7rem;' +
+    'background:var(--bg);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;margin-bottom:.4rem;">' +
+    '<span style="font-size:.72rem;color:var(--muted);white-space:nowrap;">Fila ' + b.row_from + ' – ' + b.row_to + '</span>' +
+    '<span style="font-family:monospace;font-weight:700;color:var(--accent);">' + b.hr_destino + '</span>' +
+    '<span style="font-size:.82rem;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (b.hr_desc||"") + '</span>' +
+    '<span style="font-size:.75rem;color:var(--muted);">' + b.materiales_actuales + ' actuales</span>' +
+    '<span style="background:rgba(34,197,94,.12);color:var(--ok-txt);border:1px solid var(--ok-bdr);' +
+    'border-radius:6px;padding:.15rem .55rem;font-size:.75rem;font-weight:700;">+' + b.n_zfers + ' ZFERs</span>' +
+    '<div id="res-batch-' + i + '" style="display:none;font-size:.75rem;"></div>' +
+    '</div>'
+  ).join("");
+
+  body.innerHTML =
+    '<div style="font-size:.82rem;color:var(--muted);margin-bottom:.8rem;">' +
+    d.total_zfers + ' ZFERs fuera &rarr; <b>' + d.asignables + '</b> asignables en <b>' + d.batches.length + '</b> HR(s)</div>' +
+    reporteHtml + sinHrHtml + sinBomHtml +
+    '<div style="margin-top:.8rem;padding:.5rem .7rem;background:var(--bg);border:1px dashed var(--border);' +
+    'border-radius:8px;font-size:.78rem;color:var(--muted);">Cada color en el Excel corresponde a una HR diferente.</div>';
+  window._planBatchesConRango = batchesConRango;
+}
+
+async function ejecutarPlanAsignacion() {
+  if (!_planAsignacion || !_planAsignacion.batches.length) return;
+  const btnEj = document.getElementById("btn-ejecutar-asignacion");
+  btnEj.disabled = true;
+  btnEj.innerHTML = '<span style="animation:spin 1s linear infinite;display:inline-block;">&#x27F3;</span> Ejecutando...';
+  let okCount = 0, errCount = 0;
+
+  // Enviar todos los batches en un solo Excel y una sola llamada SAP
+  for (let i = 0; i < _planAsignacion.batches.length; i++) {
+    const resDiv = document.getElementById("res-batch-" + i);
+    if (resDiv) { resDiv.style.display="block"; resDiv.innerHTML='<span style="color:var(--muted);">&#x27F3; Preparando...</span>'; }
+  }
+  try {
+    const r = await fetch("/api/mantenimiento_hr/ejecutar_asignacion", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        batches: _planAsignacion.batches,
+        id_hruta_origen: _planHrOrigen
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      okCount = _planAsignacion.batches.length;
+      _planAsignacion.batches.forEach((_,i) => {
+        const resDiv = document.getElementById("res-batch-" + i);
+        if (resDiv) resDiv.innerHTML = '<span style="color:var(--ok-txt);"><i class="bi bi-check-circle me-1"></i>' + (d.mensaje||"OK") + '</span>';
+      });
+    } else {
+      errCount = 1;
+      const log = (d.detalles && d.detalles.length) ? " | " + d.detalles.slice(-2).join(" | ") : "";
+      document.getElementById("res-batch-0").style.display="block";
+      document.getElementById("res-batch-0").innerHTML = '<span style="color:var(--err-txt);"><i class="bi bi-x-circle me-1"></i>' + (d.error||"Error") + log + '</span>';
+    }
+  } catch(e) {
+    errCount = 1;
+    const first = document.getElementById("res-batch-0");
+    if (first) { first.style.display="block"; first.innerHTML='<span style="color:var(--err-txt);">Error: '+e.message+'</span>'; }
+  }
+
+  btnEj.disabled = false;
+  btnEj.innerHTML = okCount + ' OK' + (errCount ? ' | ' + errCount + ' errores' : '') + ' — cerrar';
+  btnEj.onclick = () => document.getElementById("modal-asignar").style.display="none";
+
+  // Panel inline en la card
+  const panelId = "resultado-asig-" + _planHrOrigen;
+  let panel = document.getElementById(panelId);
+  if (!panel) {
+    const card = document.getElementById("btn-asignar-" + _planHrOrigen);
+    if (card) {
+      panel = document.createElement("div");
+      panel.id = panelId;
+      card.closest(".card").appendChild(panel);
+    }
+  }
+  if (panel) {
+    const ok = errCount === 0;
+    panel.style.cssText = "margin-top:.5rem;padding:.6rem 1rem;border-radius:8px;font-size:.82rem;display:block;background:" +
+      (ok?"rgba(34,197,94,.1)":"rgba(239,68,68,.1)") + ";border:1px solid " +
+      (ok?"var(--ok-bdr)":"var(--err-bdr)") + ";color:" + (ok?"var(--ok-txt)":"var(--err-txt)");
+    panel.innerHTML = (ok?'<i class="bi bi-check-circle me-1"></i>':'<i class="bi bi-exclamation-circle me-1"></i>') +
+      "<b>" + okCount + " batches asignados" + (errCount?" | "+errCount+" errores":"") + "</b>";
+  }
+}
+
+async function descargarPlanAsignacion() {
+  if (!_planAsignacion || !_planAsignacion.batches.length) return;
+  try {
+    const r = await fetch("/api/mantenimiento_hr/descargar_plan_asignacion/" + _planHrOrigen, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({batches: _planAsignacion.batches})
+    });
+    if (!r.ok) { alert("Error generando Excel"); return; }
+    const blob = await r.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = "plan_asignacion_" + _planHrOrigen + ".xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { alert("Error: " + e.message); }
+}
 </script>
+<!-- Modal desasignar -->
+<div id="modal-desasignar" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.75);
+     z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:16px;
+              padding:1.8rem; max-width:420px; width:92%;">
+    <h5 style="margin:0 0 .4rem; font-weight:800; font-size:1rem;">
+      <i class="bi bi-arrow-left-right me-2" style="color:#dc2626;"></i>Desasignar en SAP
+    </h5>
+    <div style="color:var(--muted); font-size:.83rem; margin-bottom:1.2rem;">
+      HR <b id="modal-desi-hr"></b> &mdash; <b id="modal-desi-total"></b> ZFERs fuera de calendario
+    </div>
+    <div id="modal-desi-prueba" style="margin-bottom:1rem;">
+      <div style="font-size:.78rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:.6rem;">Prueba (cantidades pequeñas)</div>
+      <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+        <button onclick="confirmarDesasignar(1)" style="background:var(--tag-neutral-bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.45rem 1rem;font-size:.85rem;font-weight:600;cursor:pointer;">1 ZFER</button>
+        <button onclick="confirmarDesasignar(5)" style="background:var(--tag-neutral-bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.45rem 1rem;font-size:.85rem;font-weight:600;cursor:pointer;">5 ZFERs</button>
+        <button onclick="confirmarDesasignar(10)" style="background:var(--tag-neutral-bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.45rem 1rem;font-size:.85rem;font-weight:600;cursor:pointer;">10 ZFERs</button>
+      </div>
+      <hr style="border-color:var(--border);margin:.9rem 0;">
+    </div>
+    <button onclick="confirmarDesasignar(null)"
+      style="width:100%;background:#dc2626;color:#fff;border:none;border-radius:10px;padding:.65rem;font-size:.9rem;font-weight:700;cursor:pointer;margin-bottom:.6rem;">
+      <i class="bi bi-send me-2"></i>Enviar todos (<span id="modal-desi-total-btn"></span>)
+    </button>
+    <button onclick="cerrarModalDesasignar()"
+      style="width:100%;background:none;border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:.5rem;font-size:.85rem;cursor:pointer;">
+      Cancelar
+    </button>
+  </div>
+</div>
+
+
+<!-- Modal plan asignacion -->
+<div id="modal-asignar" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.75);
+     z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:16px;
+              padding:1.8rem; max-width:560px; width:95%; max-height:80vh; display:flex; flex-direction:column;">
+    <h5 style="margin:0 0 .4rem; font-weight:800; font-size:1rem;">
+      <i class="bi bi-plus-circle me-2" style="color:#16a34a;"></i>Plan de Asignacion SAP
+    </h5>
+    <div style="color:var(--muted); font-size:.82rem; margin-bottom:1rem;">
+      Se busca la HR adecuada para cada ZFER respetando el limite de 300 materiales.
+    </div>
+    <div id="modal-asignar-body" style="flex:1; overflow-y:auto; margin-bottom:1rem;"></div>
+    <div style="display:flex; gap:.6rem;">
+      <button id="btn-ejecutar-asignacion" onclick="ejecutarPlanAsignacion()"
+        style="flex:1; background:#16a34a; color:#fff; border:none; border-radius:10px;
+               padding:.6rem; font-size:.88rem; font-weight:700; cursor:pointer;">
+        <i class="bi bi-play-circle me-1"></i>Ejecutar en SAP
+      </button>
+      <button onclick="descargarPlanAsignacion()"
+        title="Ver y descargar el Excel que se enviaria a SAP"
+        style="background:var(--accent); color:#fff; border:none; border-radius:10px;
+               padding:.6rem .9rem; font-size:.85rem; cursor:pointer;">
+        <i class="bi bi-download"></i>
+      </button>
+      <button onclick="document.getElementById('modal-asignar').style.display='none'"
+        style="background:none; border:1px solid var(--border); color:var(--muted);
+               border-radius:10px; padding:.6rem 1rem; font-size:.85rem; cursor:pointer;">
+        Cancelar
+      </button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}

@@ -4102,7 +4102,60 @@ def api_hojas_ruta_buscar():
 
 # ── Mantenimiento HR ──────────────────────────────────────────────────────────
 
-_MHR_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ultimo_mantenimiento_hr.json")
+_MHR_JSON     = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ultimo_mantenimiento_hr.json")
+_MHR_TEMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_mhr")
+os.makedirs(_MHR_TEMP_DIR, exist_ok=True)
+
+
+def _mhr_generar_excel_disco(hr: dict, limite: int = None) -> str:
+    """Genera el Excel de desasignación para una HR y lo guarda en disco. Retorna la ruta."""
+    import openpyxl
+    from openpyxl.styles import PatternFill, Font, Alignment
+    id_hruta = hr["id_hruta"]
+    ruta = os.path.join(_MHR_TEMP_DIR, f"desasignar_{id_hruta}.xlsx")
+
+    # Eliminar archivo previo si existe (evita Permission denied si SAP lo tenía abierto)
+    try:
+        if os.path.exists(ruta):
+            os.remove(ruta)
+    except OSError as e:
+        raise RuntimeError(
+            f"No se puede sobrescribir el archivo Excel — ciérralo en SAP o Excel antes de continuar. ({e})"
+        )
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = str(id_hruta)[:31]
+
+    hdr_fill = PatternFill("solid", fgColor="1a4731")
+    hdr_font = Font(bold=True, color="FFFFFF", size=11)
+    fill_err  = PatternFill("solid", fgColor="ffc7ce")
+
+    for col, txt in enumerate(["Grupo de hoja de ruta", "Contador HR", "Material"], 1):
+        c = ws.cell(row=1, column=col, value=txt)
+        c.fill = hdr_fill; c.font = hdr_font
+        c.alignment = Alignment(horizontal="center")
+
+    zfor_map  = hr.get("zfor_map", {})
+    zfers_list = hr["zfers_fuera"][:limite] if limite else hr["zfers_fuera"]
+    row_i = 2
+    for zfer in zfers_list:
+        ws.cell(row=row_i, column=1, value=str(id_hruta)).fill = fill_err
+        ws.cell(row=row_i, column=2, value="01").fill = fill_err
+        ws.cell(row=row_i, column=3, value=zfer).fill = fill_err
+        row_i += 1
+        zfor = zfor_map.get(zfer, "")
+        if zfor:
+            ws.cell(row=row_i, column=1, value=str(id_hruta)).fill = fill_err
+            ws.cell(row=row_i, column=2, value="01").fill = fill_err
+            ws.cell(row=row_i, column=3, value=zfor).fill = fill_err
+            row_i += 1
+
+    ws.column_dimensions["A"].width = 24
+    ws.column_dimensions["B"].width = 14
+    ws.column_dimensions["C"].width = 18
+    wb.save(ruta)
+    return ruta
 
 
 @app.route("/mantenimiento_hr")
@@ -4116,115 +4169,120 @@ def mantenimiento_hr():
 def api_mantenimiento_hr_consultar():
     import json as _json
     from datetime import datetime as _dt
+    from collections import defaultdict as _dd
+    import time as _time
+
+    def _chunk_in(cn, sql_prefix, sql_suffix, items, chunk=500):
+        """Ejecuta query con IN en chunks de 500 para evitar límite de 2100 params de SQL Server."""
+        rows = []
+        for i in range(0, len(items), chunk):
+            batch = items[i:i+chunk]
+            ph = ",".join(["?"] * len(batch))
+            cur = cn.cursor()
+            cur.execute(f"{sql_prefix} ({ph}){sql_suffix}", batch)
+            rows.extend(cur.fetchall())
+        return rows
+
     try:
-        # 1. Query HRs con >= 300 materiales desde DB_SAP
+        t0 = _time.time()
+
+        # 1+2. Un solo JOIN: HRs ≥300 materiales + sus ZFERs de HR_MATERIALS
+        print("[MHR] Consultando HRs + materiales (JOIN)...")
         with get_conn() as cn:
             cur = cn.cursor()
             cur.execute("""
-                SELECT ID_HRUTA, DESCRIPCION, MATERIALES
-                FROM dbo.ODATA_HR_CONSULTA
-                WHERE TIPO_HR = 'PRODUCCION' AND MATERIALES >= 300
-                ORDER BY MATERIALES DESC
+                SELECT C.ID_HRUTA, C.DESCRIPCION, C.MATERIALES, M.MATERIAL
+                FROM dbo.ODATA_HR_CONSULTA C
+                JOIN dbo.HR_MATERIALS M ON C.ID_HRUTA = M.ID_HRUTA
+                WHERE C.TIPO_HR = 'PRODUCCION' AND C.MATERIALES >= 300
+                ORDER BY C.MATERIALES DESC
             """)
-            hrs = [{"id_hruta": str(r[0]), "descripcion": r[1], "materiales": int(r[2] or 0)}
-                   for r in cur.fetchall()]
+            hrs_meta = {}   # id_hruta → {descripcion, materiales}
+            zfers_by_hr = _dd(list)
+            for row in cur.fetchall():
+                hr_id = str(row[0]).strip()
+                if hr_id not in hrs_meta:
+                    hrs_meta[hr_id] = {"id_hruta": hr_id,
+                                       "descripcion": str(row[1] or ""),
+                                       "materiales": int(row[2] or 0)}
+                zfers_by_hr[hr_id].append(str(row[3]).strip())
 
-        if not hrs:
+        print(f"[MHR] HRs: {len(hrs_meta)} | ZFERs totales: {sum(len(v) for v in zfers_by_hr.values())} | {_time.time()-t0:.1f}s")
+
+        if not hrs_meta:
             result = {"ok": True, "fecha_consulta": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
                       "total_hrs": 0, "hojas_ruta": []}
             with open(_MHR_JSON, "w", encoding="utf-8") as f:
                 _json.dump(result, f, ensure_ascii=False)
             return jsonify(result)
 
-        # 2. Batch query de materiales
-        ids = [h["id_hruta"] for h in hrs]
-        placeholders = ",".join(["?" for _ in ids])
-        with get_conn() as cn:
-            cur = cn.cursor()
-            cur.execute(
-                f"SELECT ID_HRUTA, MATERIAL FROM dbo.HR_MATERIALS WHERE ID_HRUTA IN ({placeholders})",
-                ids
-            )
-            from collections import defaultdict as _dd
-            zfers_by_hr = _dd(list)
-            for row in cur.fetchall():
-                zfers_by_hr[str(row[0]).strip()].append(str(row[1]).strip())
-
         all_zfers = list({z for zlist in zfers_by_hr.values() for z in zlist})
 
-        # 3. Consultar CalendarioAGP
-        en_calendario_set = set()
-        calendario_error = None
-        if all_zfers:
+        # 3. CalendarioAGP — traer TODOS los ZFERcodes de una vez (sin IN enorme)
+        #    Más rápido que mandar 5000+ params: una sola query sin filtro, comparar en Python
+        print(f"[MHR] Consultando CalendarioAGP ({len(all_zfers)} ZFERs a cruzar)...")
+        t1 = _time.time()
+        try:
+            cal_cn = pyodbc.connect(_CONN_CALENDARIO, timeout=30)
             try:
-                cal_cn = pyodbc.connect(_CONN_CALENDARIO)
-                try:
-                    placeholders2 = ",".join(["?" for _ in all_zfers])
-                    cal_cur = cal_cn.cursor()
-                    cal_cur.execute(
-                        f"SELECT DISTINCT ZFERcode FROM dbo.TCAL_CALENDARIO_COLOMBIA WHERE ZFERcode IN ({placeholders2})",
-                        all_zfers
-                    )
-                    # Normalizar: strip() para evitar falsos negativos por espacios
-                    en_calendario_set = {str(r[0]).strip() for r in cal_cur.fetchall() if r[0]}
-                finally:
-                    cal_cn.close()
-            except Exception as cal_err:
-                calendario_error = str(cal_err)
-                # Si falla calendario NO podemos clasificar — devolver error explícito
-                return jsonify({"ok": False, "error": f"Error conectando a CalendarioAGP: {cal_err}"})
+                cal_cur = cal_cn.cursor()
+                cal_cur.execute("SELECT DISTINCT ZFERcode FROM dbo.TCAL_CALENDARIO_COLOMBIA WHERE ZFERcode IS NOT NULL")
+                en_calendario_set = {str(r[0]).strip() for r in cal_cur.fetchall() if r[0]}
+            finally:
+                cal_cn.close()
+        except Exception as cal_err:
+            return jsonify({"ok": False, "error": f"Error conectando a CalendarioAGP: {cal_err}"})
+        print(f"[MHR] Calendario: {len(en_calendario_set)} ZFERcodes cargados | {_time.time()-t1:.1f}s")
 
-        # 4. Clasificar
+        # 4. Clasificar en Python (O(1) por lookup en set)
+        hrs_orden = list(dict.fromkeys(  # preservar orden original por MATERIALES DESC
+            r for zlist in [list(zfers_by_hr.keys())] for r in zlist
+        ))
         hojas = []
-        for h in hrs:
-            zfers = zfers_by_hr.get(h["id_hruta"], [])
+        for hr_id, meta in hrs_meta.items():
+            zfers = zfers_by_hr[hr_id]
             fuera = [z for z in zfers if z not in en_calendario_set]
-            hojas.append({
-                "id_hruta": h["id_hruta"],
-                "descripcion": h["descripcion"],
-                "materiales": h["materiales"],
-                "total_zfer": len(zfers),
-                "en_calendario": len(zfers) - len(fuera),
+            hojas.append({**meta,
+                "total_zfer":      len(zfers),
+                "en_calendario":   len(zfers) - len(fuera),
                 "fuera_calendario": len(fuera),
-                "zfers_fuera": fuera,
+                "zfers_fuera":     fuera,
             })
+        hojas.sort(key=lambda h: h["materiales"], reverse=True)
 
-        # 5. Buscar ZFOR para cada ZFER fuera (batch desde ODATA_ZFER_BOM)
+        # 5. ZFOR desde ODATA_ZFER_BOM — chunked para evitar límite 2100 params
         all_fuera = list({z for h in hojas for z in h["zfers_fuera"]})
-        zfor_map = {}   # {zfer: zfor_o_None}
+        zfor_map = {}
         if all_fuera:
             try:
                 with get_conn() as cn:
-                    cur = cn.cursor()
-                    ph = ",".join(["?" for _ in all_fuera])
-                    cur.execute(
-                        f"SELECT MATERIAL, MAT_CONFIG FROM dbo.ODATA_ZFER_BOM WHERE MATERIAL IN ({ph})",
-                        all_fuera
-                    )
-                    for row in cur.fetchall():
+                    rows_bom = _chunk_in(cn,
+                        "SELECT MATERIAL, MAT_CONFIG FROM dbo.ODATA_ZFER_BOM WHERE MATERIAL IN",
+                        "", all_fuera)
+                    for row in rows_bom:
                         mat = str(row[0]).strip()
-                        mat_cfg = str(row[1]).strip() if row[1] else ""
-                        if mat not in zfor_map and mat_cfg:
-                            zfor_map[mat] = mat_cfg
+                        cfg = str(row[1]).strip() if row[1] else ""
+                        if mat not in zfor_map and cfg:
+                            zfor_map[mat] = cfg
             except Exception as e_bom:
-                print(f"[MHR] WARN: no se pudo cargar ZFOR desde ODATA_ZFER_BOM: {e_bom}")
+                print(f"[MHR] WARN ZFOR: {e_bom}")
 
-        # Enriquecer hojas con zfor_map y lista de ZFERs sin ZFOR (para la UI)
         for h in hojas:
-            h["zfor_map"]  = {z: zfor_map.get(z, "") for z in h["zfers_fuera"]}
-            h["sin_zfor"]  = [z for z in h["zfers_fuera"] if not zfor_map.get(z, "")]
+            h["zfor_map"] = {z: zfor_map.get(z, "") for z in h["zfers_fuera"]}
+            h["sin_zfor"] = [z for z in h["zfers_fuera"] if not zfor_map.get(z, "")]
 
-        result = {
-            "ok": True,
-            "fecha_consulta": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "total_hrs": len(hojas),
-            "hojas_ruta": hojas,
-        }
+        print(f"[MHR] Consulta completa en {_time.time()-t0:.1f}s")
+
+        result = {"ok": True,
+                  "fecha_consulta": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+                  "total_hrs": len(hojas), "hojas_ruta": hojas}
         with open(_MHR_JSON, "w", encoding="utf-8") as f:
             _json.dump(result, f, ensure_ascii=False)
         return jsonify(result)
 
     except Exception as e:
+        import traceback
+        print(f"[MHR] ERROR: {traceback.format_exc()}")
         return jsonify({"ok": False, "error": str(e)})
 
 
@@ -4293,6 +4351,349 @@ def api_mantenimiento_hr_exportar(id_hruta: str):
         filename = f"mhr_{id_hruta}_{_dt.now().strftime('%Y%m%d')}.xlsx"
         return send_file(buf, as_attachment=True, download_name=filename,
                          mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/mantenimiento_hr/desasignar/<id_hruta>", methods=["POST"])
+@login_required
+def api_mantenimiento_hr_desasignar(id_hruta: str):
+    """Genera el Excel de desasignación y lo sube a SAP vía ZPPP0084."""
+    import json as _json
+    try:
+        if not os.path.exists(_MHR_JSON):
+            return jsonify({"ok": False, "error": "No hay datos. Ejecuta la consulta primero."})
+        with open(_MHR_JSON, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        hr = next((h for h in data.get("hojas_ruta", []) if str(h["id_hruta"]) == str(id_hruta)), None)
+        if not hr:
+            return jsonify({"ok": False, "error": f"HR {id_hruta} no encontrada en el último resultado."})
+        if not hr.get("zfers_fuera"):
+            return jsonify({"ok": False, "error": "Esta HR no tiene ZFERs fuera de calendario."})
+
+        # Límite opcional para pruebas (query param ?limite=10)
+        limite = request.args.get("limite", type=int)  # None = todos
+
+        # Generar Excel en disco (con límite si aplica)
+        excel_path = _mhr_generar_excel_disco(hr, limite=limite)
+        n_enviados = limite if limite and limite < len(hr["zfers_fuera"]) else len(hr["zfers_fuera"])
+        print(f"[MHR] Excel generado: {excel_path} ({n_enviados} ZFERs)")
+
+        # Ejecutar ZPPP0084 en SAP desde sap_mantenimiento.py
+        import importlib
+        sap_mant = importlib.import_module("sap_mantenimiento")
+        fn = getattr(sap_mant, "zppp0084_desasignar", None)
+        if not fn:
+            return jsonify({"ok": False, "error": "sap_mantenimiento.py no encontrado o función faltante."})
+
+        resultado = fn(excel_path)
+        return jsonify({**resultado, "excel_path": excel_path,
+                        "id_hruta": id_hruta, "n_enviados": n_enviados})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/mantenimiento_hr/plan_asignacion/<id_hruta>")
+@login_required
+def api_mhr_plan_asignacion(id_hruta: str):
+    """
+    Calcula el plan de asignación para los ZFERs fuera de la HR indicada.
+    Para cada ZFER busca la HR candidata (solo BD, sin SAP) y agrupa en batches
+    respetando el límite de 300 materiales por HR.
+    """
+    import json as _json
+    try:
+        if not os.path.exists(_MHR_JSON):
+            return jsonify({"ok": False, "error": "No hay datos. Ejecuta la consulta primero."})
+        with open(_MHR_JSON, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        hr_origen = next((h for h in data.get("hojas_ruta", []) if str(h["id_hruta"]) == str(id_hruta)), None)
+        if not hr_origen:
+            return jsonify({"ok": False, "error": f"HR {id_hruta} no encontrada."})
+
+        zfers_fuera = hr_origen.get("zfers_fuera", [])
+        if not zfers_fuera:
+            return jsonify({"ok": False, "error": "No hay ZFERs fuera de calendario para esta HR."})
+
+        zfor_map = hr_origen.get("zfor_map", {})
+
+        # ── Obtener atributos de todos los ZFERs en batch ────────────────────
+        attrs_map = {}   # {zfer: {nivel, geometria, tamano, bom_posiciones}}
+        if zfers_fuera:
+            with get_conn() as cn:
+                cur = cn.cursor()
+                ph = ",".join(["?"] * len(zfers_fuera))
+
+                # Atributos básicos
+                cur.execute(f"""
+                    SELECT MATERIAL, AREA FROM dbo.ODATA_ZFER_HEAD
+                    WHERE MATERIAL IN ({ph}) AND CENTRO = 'CO01'
+                """, zfers_fuera)
+                area_map = {str(r[0]).strip(): float(r[1] or 0) for r in cur.fetchall()}
+
+                # Características de clasificación
+                cur.execute(f"""
+                    SELECT MATERIAL, ATNAM, ATWRT FROM dbo.ODATA_ZFER_CLASS_001
+                    WHERE MATERIAL IN ({ph}) AND CENTRO = 'CO01'
+                    AND ATNAM IN ('Z_AGP_LEVEL','Z_GEOMETRY_TYPE')
+                """, zfers_fuera)
+                class_map = {}
+                for r in cur.fetchall():
+                    mat = str(r[0]).strip()
+                    if mat not in class_map:
+                        class_map[mat] = {}
+                    class_map[mat][str(r[1]).strip()] = str(r[2]).strip()
+
+                # Posiciones BOM desde ODATA_ZFER_BOM (evita llamada SAP)
+                cur.execute(f"""
+                    SELECT MATERIAL, POSICION FROM dbo.ODATA_ZFER_BOM
+                    WHERE MATERIAL IN ({ph})
+                """, zfers_fuera)
+                bom_map = {}
+                for r in cur.fetchall():
+                    mat = str(r[0]).strip()
+                    try:
+                        pos = int(str(r[1]).strip())
+                    except Exception:
+                        continue
+                    bom_map.setdefault(mat, set()).add(pos)
+
+            for zfer in zfers_fuera:
+                area  = area_map.get(zfer, 0)
+                cls   = class_map.get(zfer, {})
+                posiciones = list(bom_map.get(zfer, set()))
+                # Guardar valores RAW para _hr_construir_criterios (espera "03", "02", etc.)
+                attrs_map[zfer] = {
+                    "Z_AGP_LEVEL":     cls.get("Z_AGP_LEVEL", ""),
+                    "Z_GEOMETRY_TYPE": cls.get("Z_GEOMETRY_TYPE", ""),
+                    "area":            area,
+                    "bom_posiciones":  posiciones,
+                    "sin_bom":         len(posiciones) == 0,
+                }
+
+        # ── Obtener capacidades actuales de todas las HRs de producción ──────
+        hr_capacidades = {}   # {id_hruta: materiales_actuales}
+        with get_conn() as cn:
+            cur = cn.cursor()
+            cur.execute("""
+                SELECT ID_HRUTA, MATERIALES FROM dbo.ODATA_HR_CONSULTA
+                WHERE TIPO_HR = 'PRODUCCION' AND ID_HRUTA IS NOT NULL
+            """)
+            for r in cur.fetchall():
+                hr_capacidades[str(r[0]).strip()] = int(r[1] or 0)
+
+        LIMITE = 300
+
+        # ── Calcular plan: asignar ZFERs a HRs respetando límite ─────────────
+        pendientes    = list(zfers_fuera)
+        batches       = []
+        sin_hr        = []
+        hr_asignados  = {}   # {id_hruta: n_zfers_ya_asignados_en_este_plan}
+
+        while pendientes:
+            zfer = pendientes[0]
+            attrs = attrs_map.get(zfer, {})
+
+            # Buscar HR candidata — pasar valores RAW que _hr_construir_criterios necesita
+            criterios = _hr_construir_criterios(
+                attrs_base={
+                    "Z_AGP_LEVEL":     attrs.get("Z_AGP_LEVEL", ""),
+                    "Z_GEOMETRY_TYPE": attrs.get("Z_GEOMETRY_TYPE", ""),
+                },
+                area=attrs.get("area"),
+                bom_posiciones=attrs.get("bom_posiciones", []),
+                metrologia_base=None, prueba_agua_base=None
+            )
+            resultados, _, _, _ = _hr_buscar(criterios)
+
+            # Filtrar HRs con capacidad disponible (excluir la HR origen)
+            candidatas = []
+            for r in resultados:
+                hid = str(r.get("ID_HRUTA", "")).strip()
+                if hid == str(id_hruta):
+                    continue   # no reasignar a la misma HR que se desasignó
+                actual    = hr_capacidades.get(hid, 0)
+                en_plan   = hr_asignados.get(hid, 0)
+                disponible = LIMITE - actual - en_plan
+                if disponible > 0:
+                    candidatas.append((hid, r.get("DESCRIPCION",""), disponible))
+
+            if not candidatas:
+                sin_hr.append(zfer)
+                pendientes.pop(0)
+                continue
+
+            # Elegir la HR con más materiales actuales (la más llena que aún cabe)
+            candidatas.sort(key=lambda x: hr_capacidades.get(x[0], 0), reverse=True)
+            hr_elegida, hr_desc, disponible = candidatas[0]
+
+            # Tomar los primeros `disponible` ZFERs pendientes para esta HR
+            lote = pendientes[:disponible]
+            pendientes = pendientes[disponible:]
+
+            hr_asignados[hr_elegida] = hr_asignados.get(hr_elegida, 0) + len(lote)
+            batches.append({
+                "hr_destino":  hr_elegida,
+                "hr_desc":     hr_desc,
+                "materiales_actuales": hr_capacidades.get(hr_elegida, 0),
+                "n_zfers":     len(lote),
+                "zfers":       lote,
+                "zfor_map":    {z: zfor_map.get(z, "") for z in lote},
+            })
+
+        sin_bom = [z for z in zfers_fuera if attrs_map.get(z, {}).get("sin_bom")]
+
+        return jsonify({
+            "ok": True,
+            "id_hruta_origen": id_hruta,
+            "total_zfers":     len(zfers_fuera),
+            "asignables":      sum(b["n_zfers"] for b in batches),
+            "sin_hr":          sin_hr,
+            "sin_bom":         sin_bom,
+            "batches":         batches,
+        })
+    except Exception as e:
+        import traceback
+        print(f"[MHR-PLAN] {traceback.format_exc()}")
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/mantenimiento_hr/descargar_plan_asignacion/<id_hruta>", methods=["POST"])
+@login_required
+def api_mhr_descargar_plan_asignacion(id_hruta: str):
+    """Genera el Excel del plan de asignación y lo descarga SIN enviar a SAP."""
+    import openpyxl
+    from openpyxl.styles import PatternFill, Font, Alignment
+    from io import BytesIO
+
+    body    = request.get_json() or {}
+    batches = body.get("batches", [])
+    if not batches:
+        return jsonify({"ok": False, "error": "Plan vacío."})
+
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Asignacion"
+
+        hdr_fill  = PatternFill("solid", fgColor="1a4731")
+        hdr_font  = Font(bold=True, color="FFFFFF", size=11)
+        fills     = [PatternFill("solid", fgColor=c) for c in
+                     ("c6efce","dae8fc","ffe6cc","e1d5e7","fff2cc","f8cecc","d5e8d4","dae3f3")]
+
+        for col, txt in enumerate(["Grupo de hoja de ruta", "Contador HR", "Material"], 1):
+            c = ws.cell(row=1, column=col, value=txt)
+            c.fill = hdr_fill; c.font = hdr_font
+            c.alignment = Alignment(horizontal="center")
+
+        row_i = 2
+        for bi, batch in enumerate(batches):
+            fill   = fills[bi % len(fills)]
+            hr_id  = str(batch["hr_destino"])
+            zfers  = batch["zfers"]
+            zfor_m = batch.get("zfor_map", {})
+            for zfer in zfers:
+                ws.cell(row=row_i, column=1, value=hr_id).fill = fill
+                ws.cell(row=row_i, column=2, value="01").fill = fill
+                ws.cell(row=row_i, column=3, value=zfer).fill = fill
+                row_i += 1
+                zfor = zfor_m.get(zfer, "")
+                if zfor:
+                    ws.cell(row=row_i, column=1, value=hr_id).fill = fill
+                    ws.cell(row=row_i, column=2, value="01").fill = fill
+                    ws.cell(row=row_i, column=3, value=zfor).fill = fill
+                    row_i += 1
+
+        ws.column_dimensions["A"].width = 24
+        ws.column_dimensions["B"].width = 14
+        ws.column_dimensions["C"].width = 18
+
+        buf = BytesIO()
+        wb.save(buf); buf.seek(0)
+        from datetime import datetime as _dt
+        fname = f"plan_asignacion_{id_hruta}_{_dt.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        return send_file(buf, as_attachment=True, download_name=fname,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/mantenimiento_hr/ejecutar_asignacion", methods=["POST"])
+@login_required
+def api_mhr_ejecutar_asignacion():
+    """
+    Recibe el plan completo (todos los batches) y genera UN solo Excel
+    con todos los ZFERs — el campo 'Grupo HR' cambia según el batch.
+    Llama ZPPP0084 Asignar una sola vez con ese Excel.
+    """
+    body = request.get_json() or {}
+    batches = body.get("batches", [])
+    id_hruta_origen = str(body.get("id_hruta_origen", "plan"))
+
+    if not batches:
+        return jsonify({"ok": False, "error": "Plan vacío."})
+
+    try:
+        import importlib, openpyxl
+        from openpyxl.styles import PatternFill, Font, Alignment
+
+        sap_mant = importlib.import_module("sap_mantenimiento")
+        fn = getattr(sap_mant, "zppp0084_asignar", None)
+        if not fn:
+            return jsonify({"ok": False, "error": "zppp0084_asignar no encontrada."})
+
+        # ── Generar Excel único con todos los batches ────────────────────────
+        total_zfers = sum(b["n_zfers"] for b in batches)
+        excel_path  = os.path.join(_MHR_TEMP_DIR, f"asignar_plan_{id_hruta_origen}.xlsx")
+
+        try:
+            if os.path.exists(excel_path):
+                os.remove(excel_path)
+        except OSError as e:
+            return jsonify({"ok": False, "error": f"No se puede sobrescribir Excel: {e}"})
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Asignacion"
+        hdr_fill = PatternFill("solid", fgColor="1a4731")
+        hdr_font = Font(bold=True, color="FFFFFF", size=11)
+        fill_ok  = PatternFill("solid", fgColor="c6efce")
+
+        for col, txt in enumerate(["Grupo de hoja de ruta", "Contador HR", "Material"], 1):
+            c = ws.cell(row=1, column=col, value=txt)
+            c.fill = hdr_fill; c.font = hdr_font
+            c.alignment = Alignment(horizontal="center")
+
+        row_i = 2
+        for batch in batches:
+            hr_id    = str(batch["hr_destino"])
+            zfers    = batch["zfers"]
+            zfor_map = batch.get("zfor_map", {})
+            for zfer in zfers:
+                ws.cell(row=row_i, column=1, value=hr_id).fill = fill_ok
+                ws.cell(row=row_i, column=2, value="01").fill = fill_ok
+                ws.cell(row=row_i, column=3, value=zfer).fill = fill_ok
+                row_i += 1
+                zfor = zfor_map.get(zfer, "")
+                if zfor:
+                    ws.cell(row=row_i, column=1, value=hr_id).fill = fill_ok
+                    ws.cell(row=row_i, column=2, value="01").fill = fill_ok
+                    ws.cell(row=row_i, column=3, value=zfor).fill = fill_ok
+                    row_i += 1
+
+        ws.column_dimensions["A"].width = 24
+        ws.column_dimensions["B"].width = 14
+        ws.column_dimensions["C"].width = 18
+        wb.save(excel_path)
+        print(f"[MHR-ASIGNAR] Excel generado: {excel_path} ({row_i-2} filas, {total_zfers} ZFERs)")
+
+        # ── Una sola llamada a ZPPP0084 ──────────────────────────────────────
+        resultado = fn(excel_path)
+        return jsonify({**resultado,
+                        "n_zfers": total_zfers,
+                        "n_batches": len(batches),
+                        "excel_path": excel_path})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
