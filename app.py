@@ -4167,20 +4167,29 @@ def _mhr_generar_excel_disco(hr: dict, limite: int = None) -> str:
     zfers_list = todos_disponibles[:limite] if limite else todos_disponibles
     if not zfers_list:
         raise RuntimeError("Todos los ZFERs de esta HR ya fueron desasignados en pruebas. Limpia el log QAS para repetir.")
-    # Buscar ZFORs ahora (solo para los ZFERs de este Excel, no para todos)
+    # Buscar ZFORs — deduplicar antes de la query
     zfor_map = hr.get("zfor_map") or {}
-    if not zfor_map and zfers_list:
+    zfers_uniq = list(dict.fromkeys(zfers_list))
+    if zfers_uniq:
         try:
             with get_conn() as cn:
-                ph = ",".join(["?"] * len(zfers_list))
+                ph = ",".join(["?"] * len(zfers_uniq))
                 cur = cn.cursor()
-                cur.execute(f"SELECT MATERIAL, MAT_CONFIG FROM dbo.ODATA_ZFER_BOM WHERE MATERIAL IN ({ph})", zfers_list)
+                cur.execute(
+                    f"SELECT MATERIAL, MAX(MAT_CONFIG) AS MAT_CONFIG "
+                    f"FROM dbo.ODATA_ZFER_BOM "
+                    f"WHERE MATERIAL IN ({ph}) AND MAT_CONFIG IS NOT NULL AND MAT_CONFIG != '' "
+                    f"GROUP BY MATERIAL",
+                    zfers_uniq
+                )
                 for row in cur.fetchall():
-                    mat = str(row[0]).strip(); cfg = str(row[1]).strip() if row[1] else ""
-                    if mat not in zfor_map and cfg:
+                    mat = str(row[0]).strip()
+                    cfg = str(row[1]).strip() if row[1] else ""
+                    if cfg:
                         zfor_map[mat] = cfg
-        except Exception:
-            pass
+            print(f"[EXCEL-ZFOR] {len(zfor_map)} ZFORs encontrados para {len(zfers_uniq)} ZFERs únicos")
+        except Exception as e_z:
+            print(f"[EXCEL-ZFOR] ERROR: {e_z}")
     row_i = 2
     for zfer in zfers_list:
         ws.cell(row=row_i, column=1, value=str(id_hruta)).fill = fill_err
@@ -4241,14 +4250,16 @@ def api_mantenimiento_hr_consultar():
                 ORDER BY C.MATERIALES DESC
             """)
             hrs_meta = {}   # id_hruta → {descripcion, materiales}
-            zfers_by_hr = _dd(list)
+            zfers_by_hr = _dd(set)   # set evita duplicados (HR_MATERIALS tiene 1 fila por posición BOM)
             for row in cur.fetchall():
                 hr_id = str(row[0]).strip()
                 if hr_id not in hrs_meta:
                     hrs_meta[hr_id] = {"id_hruta": hr_id,
                                        "descripcion": str(row[1] or ""),
                                        "materiales": int(row[2] or 0)}
-                zfers_by_hr[hr_id].append(str(row[3]).strip())
+                zfers_by_hr[hr_id].add(str(row[3]).strip())
+            # Convertir sets a listas para serialización JSON
+            zfers_by_hr = {k: list(v) for k, v in zfers_by_hr.items()}
 
         print(f"[MHR] HRs: {len(hrs_meta)} | ZFERs totales: {sum(len(v) for v in zfers_by_hr.values())} | {_time.time()-t0:.1f}s")
 
@@ -4270,12 +4281,15 @@ def api_mantenimiento_hr_consultar():
             try:
                 cal_cur = cal_cn.cursor()
                 cal_cur.execute("SELECT DISTINCT ZFERcode FROM dbo.TCAL_CALENDARIO_COLOMBIA WHERE ZFERcode IS NOT NULL")
-                en_calendario_set = {str(r[0]).strip() for r in cal_cur.fetchall() if r[0]}
+                rows_cal = cal_cur.fetchall()
+                en_calendario_set = {str(r[0]).strip() for r in rows_cal if r[0]}
             finally:
                 cal_cn.close()
         except Exception as cal_err:
             return jsonify({"ok": False, "error": f"Error conectando a CalendarioAGP: {cal_err}"})
         print(f"[MHR] Calendario: {len(en_calendario_set)} ZFERcodes cargados | {_time.time()-t1:.1f}s")
+        if not en_calendario_set:
+            return jsonify({"ok": False, "error": "ALERTA: CalendarioAGP devolvio 0 registros — tabla TCAL_CALENDARIO_COLOMBIA vacia o inaccesible. Cruce cancelado para evitar resultados incorrectos."})
 
         # 4. Clasificar en Python (O(1) por lookup en set)
         hrs_orden = list(dict.fromkeys(  # preservar orden original por MATERIALES DESC
@@ -4293,9 +4307,27 @@ def api_mantenimiento_hr_consultar():
             })
         hojas.sort(key=lambda h: h["materiales"], reverse=True)
 
-        # 5. ZFOR se carga SOLO cuando se necesita (Excel/SAP), no en la consulta inicial
-        # Esto evita la query lenta de ODATA_ZFER_BOM (era el cuello de 100+ segundos)
-        zfor_map = {}   # vacio — se llena en _mhr_generar_excel_disco y en plan_asignacion
+        # 5. ZFOR — solo para ZFERs fuera (deduplicados). Con GROUP BY es rápido (~1-2s)
+        all_fuera_uniq = list(dict.fromkeys(z for h in hojas for z in h["zfers_fuera"]))
+        zfor_map = {}
+        if all_fuera_uniq:
+            try:
+                t_zfor = _time.time()
+                with get_conn() as cn:
+                    cur = cn.cursor()
+                    ph_z = ",".join(["?"] * len(all_fuera_uniq))
+                    cur.execute(
+                        f"SELECT MATERIAL, MAX(MAT_CONFIG) FROM dbo.ODATA_ZFER_BOM "
+                        f"WHERE MATERIAL IN ({ph_z}) AND MAT_CONFIG IS NOT NULL AND MAT_CONFIG != '' "
+                        f"GROUP BY MATERIAL",
+                        all_fuera_uniq
+                    )
+                    for row in cur.fetchall():
+                        mat = str(row[0]).strip(); cfg = str(row[1]).strip() if row[1] else ""
+                        if cfg: zfor_map[mat] = cfg
+                print(f"[MHR] ZFORs: {len(zfor_map)}/{len(all_fuera_uniq)} ZFERs fuera | {_time.time()-t_zfor:.1f}s")
+            except Exception as e_zfor:
+                print(f"[MHR] WARN ZFOR: {e_zfor}")
 
         for h in hojas:
             h["zfor_map"] = {z: zfor_map.get(z, "") for z in h["zfers_fuera"]}
@@ -4354,9 +4386,28 @@ def api_mantenimiento_hr_exportar(id_hruta: str):
             c.font = hdr_font
             c.alignment = Alignment(horizontal="center")
 
-        zfor_map = hr.get("zfor_map", {})
+        # Buscar ZFORs frescos (el cache no los tiene, se buscan al generar Excel)
+        zfers_para_excel = list(dict.fromkeys(hr.get("zfers_fuera", [])))  # deduplicados
+        zfor_map = {}
+        if zfers_para_excel:
+            try:
+                ph_e = ",".join(["?"] * len(zfers_para_excel))
+                with get_conn() as cn:
+                    cur = cn.cursor()
+                    cur.execute(
+                        f"SELECT MATERIAL, MAX(MAT_CONFIG) FROM dbo.ODATA_ZFER_BOM "
+                        f"WHERE MATERIAL IN ({ph_e}) AND MAT_CONFIG IS NOT NULL AND MAT_CONFIG != '' "
+                        f"GROUP BY MATERIAL",
+                        zfers_para_excel
+                    )
+                    for row in cur.fetchall():
+                        mat = str(row[0]).strip(); cfg = str(row[1]).strip() if row[1] else ""
+                        if cfg: zfor_map[mat] = cfg
+                print(f"[EXPORTAR-ZFOR] {len(zfor_map)} ZFORs / {len(zfers_para_excel)} ZFERs únicos")
+            except Exception as e_ze:
+                print(f"[EXPORTAR-ZFOR] ERROR: {e_ze}")
         row_i = 2
-        for zfer in hr["zfers_fuera"]:
+        for zfer in zfers_para_excel:   # deduplicados
             # Fila ZFER
             ws.cell(row=row_i, column=1, value=str(id_hruta)).fill = fill_err
             ws.cell(row=row_i, column=2, value="01").fill = fill_err
@@ -4451,6 +4502,31 @@ def api_mhr_qas_limpiar():
         return jsonify({"ok": False, "error": str(e)})
 
 
+@app.route("/api/mantenimiento_hr/diag_zfor/<zfer>")
+@login_required
+def api_mhr_diag_zfor(zfer: str):
+    """Diagnóstico: busca el ZFOR de un ZFER específico en ODATA_ZFER_BOM."""
+    try:
+        with get_conn() as cn:
+            cur = cn.cursor()
+            cur.execute(
+                "SELECT TOP 5 MATERIAL, MAT_CONFIG, CENTRO, TIPO_MATERIAL "
+                "FROM dbo.ODATA_ZFER_BOM WHERE MATERIAL = ?", zfer
+            )
+            rows = [{"MAT_CONFIG": str(r[1] or ""), "CENTRO": str(r[2] or ""),
+                     "TIPO": str(r[3] or "")} for r in cur.fetchall()]
+            cur.execute(
+                "SELECT MAX(MAT_CONFIG) FROM dbo.ODATA_ZFER_BOM "
+                "WHERE MATERIAL = ? AND MAT_CONFIG IS NOT NULL AND MAT_CONFIG != ''", zfer
+            )
+            max_row = cur.fetchone()
+            max_cfg = str(max_row[0] or "") if max_row else ""
+        return jsonify({"ok": True, "zfer": zfer, "total_rows": len(rows),
+                        "sample": rows, "max_mat_config": max_cfg})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @app.route("/api/mantenimiento_hr/plan_asignacion/<id_hruta>")
 @login_required
 def api_mhr_plan_asignacion(id_hruta: str):
@@ -4480,20 +4556,30 @@ def api_mhr_plan_asignacion(id_hruta: str):
         if not zfers_fuera:
             return jsonify({"ok": False, "error": "No hay ZFERs disponibles para asignar (todos en log QAS o ninguno fuera de calendario)."})
 
-        # ZFOR: buscar ahora para los ZFERs del plan (no viene en el JSON cacheado)
+        # ZFOR: buscar en ODATA_ZFER_BOM — deduplicar ZFERs antes de la query
         zfor_map = hr_origen.get("zfor_map") or {}
-        if not zfor_map and zfers_fuera:
+        zfers_unicos = list(dict.fromkeys(zfers_fuera))  # orden preservado, sin duplicados
+        if zfers_unicos:
             try:
                 with get_conn() as cn:
-                    ph = ",".join(["?"] * len(zfers_fuera))
+                    ph = ",".join(["?"] * len(zfers_unicos))
                     cur = cn.cursor()
-                    cur.execute(f"SELECT MATERIAL, MAT_CONFIG FROM dbo.ODATA_ZFER_BOM WHERE MATERIAL IN ({ph})", zfers_fuera)
-                    for row in cur.fetchall():
-                        mat = str(row[0]).strip(); cfg = str(row[1]).strip() if row[1] else ""
-                        if mat not in zfor_map and cfg:
+                    cur.execute(
+                        f"SELECT MATERIAL, MAX(MAT_CONFIG) AS MAT_CONFIG "
+                        f"FROM dbo.ODATA_ZFER_BOM "
+                        f"WHERE MATERIAL IN ({ph}) AND MAT_CONFIG IS NOT NULL AND MAT_CONFIG != '' "
+                        f"GROUP BY MATERIAL",
+                        zfers_unicos
+                    )
+                    rows = cur.fetchall()
+                    print(f"[PLAN-ZFOR] query returned {len(rows)} rows para {len(zfers_unicos)} ZFERs únicos")
+                    for row in rows:
+                        mat = str(row[0]).strip()
+                        cfg = str(row[1]).strip() if row[1] else ""
+                        if cfg:
                             zfor_map[mat] = cfg
             except Exception as e_z:
-                print(f"[PLAN] WARN ZFOR: {e_z}")
+                print(f"[PLAN] ERROR ZFOR: {e_z}")
 
         # ── Obtener atributos de todos los ZFERs en batch ────────────────────
         attrs_map = {}   # {zfer: {nivel, geometria, tamano, bom_posiciones}}
