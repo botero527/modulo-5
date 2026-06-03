@@ -431,13 +431,17 @@ def _conectar_sap_nueva_sesion():
 
 def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
     """
-    C223 sesion auxiliar — flujo VBS correcto:
-    Por cada ZFER:
-      1. WERKS=CO01, MATNR=zfer, Enter
-      2. Si error SAP (material no existe) -> skip, reportar, continuar
-      3. ADATU[10,0] = hoy, Enter -> popup btnSPOP-OPTION1
-      4. PLNNR[16,0] = hr_id, Enter
-    Al final: MAAL -> PRUEFEN -> guardar btn[11]
+    C223 sesion auxiliar — flujo VBS correcto por ZFER:
+    Para cada ZFER:
+      1. MATNR=zfer, Enter  (doble Enter si hay popup)
+      2. SPOP-OPTION1 si aparece
+      3. ADATU[10,0]=hoy, Enter -> SPOP-OPTION1
+      4. PLNNR[16,0]=hr_id, Enter -> SPOP-OPTION1
+      5. getAbsoluteRow(0).selected=True
+      6. WERKS[0,0].setFocus
+      7. btnPRUEFEN
+      8. btn[3]
+      9. btn[11] SAVE (uno por ZFER)
     """
     import datetime as _dt2
     ses0, ses2, conn, err = _conectar_sap_nueva_sesion()
@@ -451,6 +455,15 @@ def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
         print(f"[C223-MANT] {msg}")
         detalles.append(msg)
 
+    def _spop(ses):
+        """Intenta confirmar popup SPOP-OPTION1 si existe."""
+        try:
+            ses.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+            time.sleep(0.5)
+            return True
+        except Exception:
+            return False
+
     hoy    = _dt2.datetime.today().strftime("%d.%m.%Y")
     _TBL   = "wnd[0]/usr/ssubSUBSCR_1200:SAPLCMFV:1200/tblSAPLCMFVT_MKAL"
     _MATNR = "wnd[0]/usr/subSUBSCR_1100:SAPLCMFV:1100/ctxtMKAL-MATNR"
@@ -459,7 +472,7 @@ def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
     _log(f"C223: {len(zfers)} ZFERs | HR={hr_id} | fecha={hoy}")
 
     try:
-        # Navegar a C223 con reintentos
+        # Navegar a C223
         nav_ok = False
         for _n in range(15):
             try:
@@ -484,41 +497,42 @@ def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
         # WERKS una sola vez
         ses2.findById(_WERKS).text = "CO01"
 
-        # Procesar cada ZFER
         for i, zfer in enumerate(zfers):
-            _log(f"[{i+1}/{len(zfers)}] Procesando {zfer}...")
+            _log(f"[{i+1}/{len(zfers)}] {zfer}...")
 
-            # Entrar MATNR + Enter
+            # ── 1. MATNR + Enter ──────────────────────────────────────────
             try:
                 ses2.findById(_MATNR).text = zfer.strip()
                 ses2.findById(_MATNR).setFocus()
                 ses2.findById(_MATNR).caretPosition = len(zfer.strip())
                 ses2.findById("wnd[0]").sendVKey(0)
                 _esperar_ocupado(ses2, 2.0)
-                # Popup "¿Crear nueva versión?" → OPTION1 = Sí
-                try:
-                    ses2.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
-                    time.sleep(0.5)
-                    _log(f"  Popup post-MATNR OPTION1 confirmado")
-                except Exception:
-                    pass
-            except Exception as e_matnr:
-                _log(f"  [ERROR] MATNR: {e_matnr}")
-                errores_zfer.append(f"{zfer}: error al entrar MATNR")
+            except Exception as e_m:
+                errores_zfer.append(f"{zfer}: error MATNR: {e_m}")
                 continue
 
-            # Verificar si SAP mostro error (material no existe)
+            # SPOP si aparece
+            if _spop(ses2):
+                _log(f"  SPOP post-MATNR")
+
+            # Segundo Enter (confirma la seleccion)
+            try:
+                ses2.findById(_MATNR).setFocus()
+                ses2.findById(_MATNR).caretPosition = len(zfer.strip())
+                ses2.findById("wnd[0]").sendVKey(0)
+                _esperar_ocupado(ses2, 1.5)
+            except Exception: pass
+
+            # Verificar error SAP
             sbar_txt, sbar_tipo = _leer_sbar(ses2)
-            if sbar_tipo == "E" or "no existe" in sbar_txt.lower() or "no está activado" in sbar_txt.lower():
-                _log(f"  [SKIP] SAP error para {zfer}: {sbar_txt}")
+            if sbar_tipo == "E" or "no existe" in sbar_txt.lower() or "no esta activado" in sbar_txt.lower():
+                _log(f"  [SKIP] {sbar_txt}")
                 errores_zfer.append(f"{zfer}: {sbar_txt}")
-                # Limpiar campo para el siguiente
-                try:
-                    ses2.findById(_MATNR).text = ""
+                try: ses2.findById(_MATNR).text = ""
                 except Exception: pass
                 continue
 
-            # ADATU[10,0] = fecha hoy, Enter
+            # ── 2. ADATU[10,0] = fecha hoy + Enter ───────────────────────
             try:
                 adatu = ses2.findById(f"{_TBL}/ctxtMKAL_EXPAND-ADATU[10,0]")
                 adatu.text = hoy
@@ -526,19 +540,12 @@ def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
                 adatu.caretPosition = 2
                 ses2.findById("wnd[0]").sendVKey(0)
                 _esperar_ocupado(ses2, 1.5)
-                _log(f"  ADATU={hoy} OK")
-            except Exception as e_adatu:
-                _log(f"  [WARN] ADATU: {e_adatu}")
+            except Exception as e_a:
+                _log(f"  [WARN] ADATU: {e_a}")
+            if _spop(ses2):
+                _log(f"  SPOP post-ADATU")
 
-            # Popup confirm (btnSPOP-OPTION1) si aparece
-            try:
-                ses2.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
-                time.sleep(0.5)
-                _log(f"  Popup SPOP confirmado")
-            except Exception:
-                pass  # No siempre aparece
-
-            # PLNNR[16,0] = HR, Enter
+            # ── 3. PLNNR[16,0] = hr_id + Enter ───────────────────────────
             try:
                 plnnr = ses2.findById(f"{_TBL}/ctxtMKAL_EXPAND-PLNNR[16,0]")
                 plnnr.text = hr_id
@@ -546,81 +553,66 @@ def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
                 plnnr.caretPosition = len(hr_id)
                 ses2.findById("wnd[0]").sendVKey(0)
                 _esperar_ocupado(ses2, 1.5)
-                _log(f"  PLNNR={hr_id} OK")
-            except Exception as e_plnnr:
-                _log(f"  [WARN] PLNNR: {e_plnnr}")
+            except Exception as e_p:
+                _log(f"  [WARN] PLNNR: {e_p}")
 
-            # Popup post-PLNNR: "¿Guardar cambios de hoja de ruta?" → OPTION1=Sí
+            # Confirmar popups post-PLNNR
+            for _ in range(3):
+                if not _spop(ses2):
+                    break
+
+            # ── 4. Seleccionar fila 0 ─────────────────────────────────────
+            try:
+                ses2.findById(_TBL).getAbsoluteRow(0).selected = True
+                ses2.findById(f"{_TBL}/ctxtMKAL_EXPAND-WERKS[0,0]").setFocus()
+                ses2.findById(f"{_TBL}/ctxtMKAL_EXPAND-WERKS[0,0]").caretPosition = 0
+            except Exception as e_sel:
+                _log(f"  [WARN] Seleccion fila: {e_sel}")
+
+            # ── 5. PRUEFEN ────────────────────────────────────────────────
+            ses2.findById("wnd[0]/usr/ssubSUBSCR_1200:SAPLCMFV:1200/btnPRUEFEN").press()
+            _esperar_ocupado(ses2, T_MEDIO)
+
+            # ── 6. btn[3] (verificar/back) ────────────────────────────────
+            try:
+                ses2.findById("wnd[0]/tbar[0]/btn[3]").press()
+                _esperar_ocupado(ses2, T_RAPIDO)
+            except Exception: pass
+
+            # ── 7. btn[11] GUARDAR ────────────────────────────────────────
+            sbar_pre, tipo_pre = _leer_sbar(ses2)
+            if tipo_pre == "E":
+                _log(f"  [SKIP] Pre-guardado error: {sbar_pre}")
+                errores_zfer.append(f"{zfer}: error pre-guardado: {sbar_pre}")
+                continue
+
+            ses2.findById("wnd[0]/tbar[0]/btn[11]").press()
+            _esperar_ocupado(ses2, T_LENTO)
+
+            # Confirmar popup de guardado
             for _ in range(3):
                 try:
                     wnd1 = ses2.findById("wnd[1]")
-                    txt_p = ""
-                    try: txt_p = str(wnd1.text or "").strip()
+                    txt_pop = ""
+                    try: txt_pop = str(wnd1.text or "").strip()
                     except Exception: pass
-                    if txt_p:
-                        _log(f"  Popup post-PLNNR: '{txt_p}'")
-                    try:
-                        ses2.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
-                    except Exception:
-                        wnd1.sendVKey(0)
+                    if txt_pop: _log(f"  Popup guardado: '{txt_pop}'")
+                    try: ses2.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+                    except Exception: wnd1.sendVKey(0)
                     time.sleep(0.4)
-                except Exception:
-                    break
+                except Exception: break
 
-        # MAAL
-        _log("MAAL...")
-        ses2.findById("wnd[0]/usr/ssubSUBSCR_1200:SAPLCMFV:1200/btnMAAL").press()
-        _esperar_ocupado(ses2, T_MEDIO)
-        try: ses2.findById("wnd[1]").sendVKey(0)
-        except Exception: pass
+            msg_g, tipo_g = _leer_sbar(ses2)
+            if tipo_g == "E":
+                errores_zfer.append(f"{zfer}: error guardando: {msg_g}")
+                _log(f"  [ERROR] Guardado: {msg_g}")
+            else:
+                _log(f"  OK guardado: {msg_g or 'OK'}")
 
-        # PRUEFEN
-        _log("PRUEFEN...")
-        ses2.findById("wnd[0]/usr/ssubSUBSCR_1200:SAPLCMFV:1200/btnPRUEFEN").press()
-        _esperar_ocupado(ses2, T_MEDIO)
-
-        try:
-            ses2.findById("wnd[0]/tbar[0]/btn[3]").press()
-            _esperar_ocupado(ses2, T_RAPIDO)
-        except Exception: pass
-
-        sbar_txt, sbar_tipo = _leer_sbar(ses2)
-        _log(f"Pre-guardado: '{sbar_txt}' tipo={sbar_tipo}")
-        if sbar_tipo == "E":
-            return {"ok": False, "error": f"Error C223: {sbar_txt}",
-                    "errores_zfer": errores_zfer, "detalles": detalles}
-
-        _log("Guardando btn[11]...")
-        ses2.findById("wnd[0]/tbar[0]/btn[11]").press()
-        _esperar_ocupado(ses2, T_LENTO)
-        
-        # Manejar popup de confirmacion de guardado si aparece
-        for _ in range(3):
-            try:
-                wnd1 = ses2.findById("wnd[1]")
-                txt_pop = ""
-                try: txt_pop = str(wnd1.text or "").strip()
-                except Exception: pass
-                _log(f"Popup post-guardado: '{txt_pop}'")
-                # Intentar btnSPOP-OPTION1 primero (Si/confirmar), si no Enter
-                try:
-                    ses2.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
-                except Exception:
-                    wnd1.sendVKey(0)
-                time.sleep(0.5)
-            except Exception:
-                break  # no hay popup
-
-        msg_final, tipo_final = _leer_sbar(ses2)
-        _log(f"Guardado: '{msg_final}' tipo={tipo_final}")
-
-        if tipo_final == "E":
-            return {"ok": False, "error": f"Error guardando: {msg_final}",
-                    "errores_zfer": errores_zfer, "detalles": detalles}
-
-        msg_ok = msg_final or "C223 OK"
+        # Resultado final
+        msg_ok = f"C223 OK — {len(zfers)-len(errores_zfer)}/{len(zfers)} ZFERs guardados"
         if errores_zfer:
-            msg_ok += f" | {len(errores_zfer)} ZFERs omitidos: " + "; ".join(errores_zfer[:3])
+            msg_ok += f" | Omitidos: " + "; ".join(errores_zfer[:3])
         return {"ok": True, "mensaje": msg_ok, "error": "",
                 "errores_zfer": errores_zfer, "detalles": detalles}
 
