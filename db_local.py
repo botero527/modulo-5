@@ -8,9 +8,9 @@ from typing import Optional
 
 _CONN_STR = (
     "DRIVER={ODBC Driver 17 for SQL Server};"
-    r"SERVER=localhost\SQLEXPRESS;"
-    "DATABASE=MODULO_5;"
-    "Trusted_Connection=yes;"
+    r"SERVER=agpcolombia.database.windows.net;"
+    "DATABASE=AGP_Ingenieria;"
+    "UID=DevIngenieria;PWD=HiJE068i0LQVrwA;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 )
 
 def _conn():
@@ -26,7 +26,7 @@ def bloqueo_existe(zfer: str, color_codigo: str) -> Optional[dict]:
         cur = cn.cursor()
         cur.execute(
             "SELECT id, motivo, bloqueado_por, fecha_bloqueo "
-            "FROM dbo.M5_Bloqueos "
+            "FROM itg.M5_BLOQUEOS "
             "WHERE pedido_origen=? AND color_codigo=? AND activo=1",
             (zfer, color_codigo)
         )
@@ -46,7 +46,7 @@ def bloqueos_para_zfer(zfer: str) -> list:
         cur = cn.cursor()
         cur.execute(
             "SELECT id, color_codigo, motivo, bloqueado_por, fecha_bloqueo "
-            "FROM dbo.M5_Bloqueos WHERE pedido_origen=? AND activo=1 ORDER BY fecha_bloqueo DESC",
+            "FROM itg.M5_BLOQUEOS WHERE pedido_origen=? AND activo=1 ORDER BY fecha_bloqueo DESC",
             (zfer,)
         )
         rows = cur.fetchall()
@@ -64,18 +64,18 @@ def bloquear(zfer: str, color_codigo: str, formula: str, tipo_pieza: str,
         cur = cn.cursor()
         # Verificar si ya existe (inactivo) para reactivar
         cur.execute(
-            "SELECT id FROM dbo.M5_Bloqueos WHERE pedido_origen=? AND color_codigo=?",
+            "SELECT id FROM itg.M5_BLOQUEOS WHERE pedido_origen=? AND color_codigo=?",
             (zfer, color_codigo)
         )
         row = cur.fetchone()
         if row:
             cur.execute(
-                "UPDATE dbo.M5_Bloqueos SET activo=1, motivo=?, bloqueado_por=?, fecha_bloqueo=GETDATE() WHERE id=?",
+                "UPDATE itg.M5_BLOQUEOS SET activo=1, motivo=?, bloqueado_por=?, fecha_bloqueo=GETDATE() WHERE id=?",
                 (motivo, bloqueado_por, row[0])
             )
         else:
             cur.execute(
-                "INSERT INTO dbo.M5_Bloqueos (pedido_origen, tipo_pieza, formula, acero_variante, color_codigo, motivo, bloqueado_por) "
+                "INSERT INTO itg.M5_BLOQUEOS (pedido_origen, tipo_pieza, formula, acero_variante, color_codigo, motivo, bloqueado_por) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (zfer, tipo_pieza, formula, acero_variante, color_codigo, motivo, bloqueado_por)
             )
@@ -92,7 +92,7 @@ def desbloquear(zfer: str, color_codigo: str) -> bool:
         cn = _conn()
         cur = cn.cursor()
         cur.execute(
-            "UPDATE dbo.M5_Bloqueos SET activo=0 WHERE pedido_origen=? AND color_codigo=? AND activo=1",
+            "UPDATE itg.M5_BLOQUEOS SET activo=0 WHERE pedido_origen=? AND color_codigo=? AND activo=1",
             (zfer, color_codigo)
         )
         cn.close()
@@ -110,7 +110,7 @@ def log_inicio(batch_id: str, zfer: str, tipo_pieza: str, formula: str,
         cn = _conn()
         cur = cn.cursor()
         cur.execute(
-            "INSERT INTO dbo.M5_LogEjecucion "
+            "INSERT INTO itg.M5_LOGEJECUCION "
             "(batch_id, pedido_origen, tipo_pieza, formula, color_codigo, acero_variante, estado, fecha_inicio) "
             "OUTPUT INSERTED.id "
             "VALUES (?, ?, ?, ?, ?, ?, 'EN_PROCESO', GETDATE())",
@@ -129,7 +129,7 @@ def log_fin(log_id: int, estado: str, detalle: str = "") -> None:
         cn = _conn()
         cur = cn.cursor()
         cur.execute(
-            "UPDATE dbo.M5_LogEjecucion SET estado=?, detalle_error=?, fecha_fin=GETDATE() WHERE id=?",
+            "UPDATE itg.M5_LOGEJECUCION SET estado=?, detalle_error=?, fecha_fin=GETDATE() WHERE id=?",
             (estado, detalle or None, log_id)
         )
         cn.close()

@@ -200,7 +200,7 @@ tabla(
         ["Tecnología principal", "Flask (Python) + SAP GUI Scripting (win32com)"],
         ["BD SAP (Azure)", "agpcolsap.database.windows.net / DB_COL_SAP"],
         ["BD Producción (Azure)", "agpcol.database.windows.net / agpc-productivity"],
-        ["BD Local", r"localhost\SQLEXPRESS / MODULO_5"],
+        ["BD Local", r"agpcolombia.database.windows.net / MODULO_5"],
         ["Puerto Flask", "5000 (http://localhost:5000)"],
         ["Archivos principales", "app.py, sap_auto.py, templates/*.html"],
     ],
@@ -473,7 +473,7 @@ h2("3.3 BD Local SQL Express — localhost\\SQLEXPRESS / MODULO_5")
 para("Lectura y escritura. Aquí vive toda la lógica de la cola, los bloques y el historial.", italic=True)
 separador()
 
-h3("dbo.M5_Bloques — Bloques de homologación")
+h3("itg.M5_BLOQUES — Bloques de homologación")
 para("Un bloque es un grupo de ZFERs que se procesan juntos. "
      "Puede tener una hora programada para ejecutarse automáticamente.")
 tabla(
@@ -496,7 +496,7 @@ tabla(
 )
 separador()
 
-h3("dbo.M5_Cola — Items de la cola (homologaciones individuales)")
+h3("itg.M5_COLA — Items de la cola (homologaciones individuales)")
 para("Cada fila es una tarea SAP individual dentro de un bloque.")
 tabla(
     ["Columna", "Tipo", "Descripción"],
@@ -528,7 +528,7 @@ tabla(
 )
 separador()
 
-h3("dbo.M5_LogEjecucion — Log histórico de ejecuciones")
+h3("itg.M5_LOGEJECUCION — Log histórico de ejecuciones")
 para("Historial permanente. Cada ZFER procesado deja un registro aquí. "
      "Si la BD local no existe, los errores se ignoran (solo warning en consola).")
 tabla(
@@ -555,7 +555,7 @@ tabla(
 )
 separador()
 
-h3("dbo.M5_LogEjecuciones — Log extendido (variante con más campos)")
+h3("itg.M5_LOGEJECUCIONES — Log extendido (variante con más campos)")
 para("Versión extendida del log que incluye advertencias y posiciones BOM.")
 tabla(
     ["Columna extra vs M5_LogEjecucion", "Descripción"],
@@ -598,7 +598,7 @@ tabla(
 )
 separador()
 
-h3("dbo.M5_RutasZFER — Rutas asignadas a ZFERs")
+h3("itg.M5_RUTASZFER — Rutas asignadas a ZFERs")
 para("Registro de asignaciones de hojas de ruta.")
 tabla(
     ["Columna", "Descripción"],
@@ -613,7 +613,7 @@ tabla(
 )
 separador()
 
-h3("dbo.M5_Bloqueos — Combinaciones bloqueadas")
+h3("itg.M5_BLOQUEOS — Combinaciones bloqueadas")
 para("Combinaciones que el usuario marcó como bloqueadas en la UI.")
 tabla(
     ["Columna", "Descripción"],
@@ -1320,7 +1320,7 @@ h2("Asignación (botón Asignar HR)")
 bullet("Llama ca02_desasignar_hr(zfer_nuevo) — quita la HR actual si tiene una")
 bullet("Llama ca02_asignar_hr(zfer_nuevo, id_hruta) — asigna la nueva")
 bullet("Si CA02 retorna True → llama c223_actualizar_version_fabricacion(zfer_nuevo, id_hruta)")
-bullet("Guarda el resultado en dbo.M5_RutasZFER")
+bullet("Guarda el resultado en itg.M5_RUTASZFER")
 separador()
 
 h2("Validador de antenas pasta plata")

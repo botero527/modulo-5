@@ -78,7 +78,7 @@ _T_MIN_LENTO  = 0.05
 _T_POLL = 0.05
 #700176997
 
-_SAP_USER     = os.environ.get("SAP_USER",     "JPINZON")
+_SAP_USER     = os.environ.get("SAP_USER",     "FESPITIA")
 _SAP_PASSWORD = os.environ.get("SAP_PASSWORD", "Agp2026*")
 _SAP_CLIENT   = os.environ.get("SAP_CLIENT",   "300")
 _SAP_SYSTEM   = os.environ.get("SAP_SYSTEM",   "AGP PRD")   # producción; "QAS" para pruebas
@@ -88,7 +88,7 @@ _SAP_SYSTEM   = os.environ.get("SAP_SYSTEM",   "AGP PRD")   # producción; "QAS"
 _SAP_CONEXIONES = {
     "QAS":     {"appserver": "/H/18.233.139.237/H/10.0.3.38",  "systemnumber": "00"},
     "AGP PRD": {"appserver": "/H/18.233.139.237/H/10.0.5.151", "systemnumber": "02"},
-}
+} 
 # Rutas típicas de sapshcut.exe en Windows
 _SAPSHCUT_PATHS = [
     r"C:\Program Files\SAP\FrontEnd\SAPgui\sapshcut.exe",
@@ -100,9 +100,9 @@ _SAPSHCUT_PATHS = [
 # ── BD Local ──────────────────────────────────────────────────────────────────
 _DB_LOCAL_STR = (
     "DRIVER={ODBC Driver 17 for SQL Server};"
-    r"SERVER=localhost\SQLEXPRESS;"
-    "DATABASE=MODULO_5;"
-    "Trusted_Connection=yes;"
+    r"SERVER=agpcolombia.database.windows.net;"
+    "DATABASE=AGP_Ingenieria;"
+    "UID=DevIngenieria;PWD=HiJE068i0LQVrwA;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 )
 
 # ── BD SAP (Azure) — solo lectura, para buscar planos ─────────────────────────
@@ -1547,7 +1547,7 @@ class AutomatizadorSAP:
                     pass
 
         _SQL_INSERT = (
-            "INSERT INTO dbo.M5_LogEjecucion "
+            "INSERT INTO itg.M5_LOGEJECUCION "
             "(batch_id, pedido_origen, tipo_pieza, formula, color_codigo, color_nombre, "
             " acero_variante, tipo, zfer_nuevo, zfor_nuevo, zpla, "
             " estado, detalle_error, duracion_seg, plano_anterior, plano_nuevo, "
@@ -3584,6 +3584,16 @@ class AutomatizadorSAP:
                         if ok_asi:
                             res._log(f"  CA02 OK: HR={hr_id} → {zfer_nuevo}")
                             self.c223_actualizar_version_fabricacion(zfer_nuevo, hr_id, res)
+                            # ZINGP0004 al final si HR cambió exitosamente
+                            try:
+                                import importlib as _il_z
+                                _fn_z = getattr(_il_z.import_module("sap_mantenimiento"), "zinpg0004_actualizar", None)
+                                if _fn_z and zfer_nuevo:
+                                    res._log(f"  ZINGP0004 para {zfer_nuevo}...")
+                                    _zr = _fn_z([zfer_nuevo])
+                                    res._log(f"  ZINGP0004: {'OK' if _zr.get('ok') else _zr.get('error','')}")
+                            except Exception as _ez:
+                                res._log(f"  [WARN] ZINGP0004: {_ez}")
                         else:
                             res._log(f"  [WARN] CA02 asignación falló — revisar manualmente")
                 except Exception as e_hr:

@@ -2151,12 +2151,14 @@ def api_vehiculo_lookup():
         return jsonify({"vehiculo": "", "error": str(e)}), 200
 
 
-# ── BD Local (rutas ZFER) ─────────────────────────────────────────────────────
+# ── BD AGP Ingeniería (migrada desde localhost\SQLEXPRESS\MODULO_5) ──────────
 _DB_LOCAL_STR = (
     "DRIVER={ODBC Driver 17 for SQL Server};"
-    r"SERVER=localhost\SQLEXPRESS;"
-    "DATABASE=MODULO_5;"
-    "Trusted_Connection=yes;"
+    "SERVER=agpcolombia.database.windows.net;"
+    "DATABASE=AGP_Ingenieria;"
+    "UID=DevIngenieria;"
+    "PWD=HiJE068i0LQVrwA;"
+    "Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 )
 
 def _get_conn_local():
@@ -2198,7 +2200,7 @@ def _guardar_homologacion_formula(item: dict, res, session_user: str = "sistema"
             with _get_conn_local() as cn:
                 row = cn.cursor().execute(
                     "SELECT ruta, tiene_simetria, zfer_simetrico "
-                    "FROM dbo.M5_RutasZFER WHERE zfer = ?",
+                    "FROM itg.M5_RUTASZFER WHERE zfer = ?",
                     item.get("zfer", "")
                 ).fetchone()
                 if row:
@@ -2303,12 +2305,12 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int) -> None:
 
             # Si ya existe id_origen, actualizar en lugar de insertar
             existe = cur.execute(
-                "SELECT 1 FROM dbo.jobs_gestor_auto WHERE id_origen = ?", id_origen
+                "SELECT 1 FROM itg.M5_JOBSGESTORAUTO WHERE id_origen = ?", id_origen
             ).fetchone()
 
             if existe:
                 cur.execute("""
-                    UPDATE dbo.jobs_gestor_auto SET
+                    UPDATE itg.M5_JOBSGESTORAUTO SET
                         vehiculo_nombre  = ?, version_vehiculo = ?, vehiculo_codigo = ?,
                         pieza = ?, simetria = ?, zfer_simetria = ?,
                         zfer  = ?, zfor = ?, zpla = ?, ruta_3dm = ?
@@ -2323,7 +2325,7 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int) -> None:
                 print(f"[GESTOR] Actualizado jobs id_origen={id_origen}")
             else:
                 cur.execute("""
-                    INSERT INTO dbo.jobs_gestor_auto
+                    INSERT INTO itg.M5_JOBSGESTORAUTO
                         (id_origen, vehiculo_nombre, version_vehiculo, vehiculo_codigo,
                          pieza, simetria, zfer_simetria, zfer, zfor, zpla, ruta_3dm)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?)
@@ -2337,12 +2339,12 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int) -> None:
 
             # ── BOM: borrar anteriores y reinsertar (idempotente) ─────────
             zfer_key = str(zfer_nuevo or zfer_base)
-            cur.execute("DELETE FROM dbo.bom_zfer_gestor_auto WHERE zfer = ?", zfer_key)
+            cur.execute("DELETE FROM itg.M5_BOMGESTORAUTO WHERE zfer = ?", zfer_key)
 
             bom_detalle = getattr(res, "bom_detalle", []) or []
             if bom_detalle:
                 cur.executemany(
-                    "INSERT INTO dbo.bom_zfer_gestor_auto (zfer, posicion, clase, descripcion) VALUES (?,?,?,?)",
+                    "INSERT INTO itg.M5_BOMGESTORAUTO (zfer, posicion, clase, descripcion) VALUES (?,?,?,?)",
                     [(zfer_key,
                       str(b.get("posnr", "")).strip(),
                       str(b.get("clase_destino", "")).strip(),
@@ -2358,11 +2360,11 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int) -> None:
 def _migracion_bd_local():
     """Aplica migraciones de columnas faltantes en la BD local (idempotente)."""
     migraciones = [
-        ("dbo.M5_Cola", "cambiar_hr",  "ALTER TABLE dbo.M5_Cola ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
-        ("dbo.M5_Cola", "zhal",        "ALTER TABLE dbo.M5_Cola ADD zhal NVARCHAR(20) NULL"),
-        ("dbo.M5_Cola", "acero_dir",   "ALTER TABLE dbo.M5_Cola ADD acero_dir NVARCHAR(10) NULL"),
-        ("dbo.M5_Cola", "subproducto",   "ALTER TABLE dbo.M5_Cola ADD subproducto NVARCHAR(20) NULL"),
-        ("dbo.M5_Cola", "plano_manual",  "ALTER TABLE dbo.M5_Cola ADD plano_manual NVARCHAR(100) NULL"),
+        ("itg.M5_COLA", "cambiar_hr",  "ALTER TABLE itg.M5_COLA ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
+        ("itg.M5_COLA", "zhal",        "ALTER TABLE itg.M5_COLA ADD zhal NVARCHAR(20) NULL"),
+        ("itg.M5_COLA", "acero_dir",   "ALTER TABLE itg.M5_COLA ADD acero_dir NVARCHAR(10) NULL"),
+        ("itg.M5_COLA", "subproducto",   "ALTER TABLE itg.M5_COLA ADD subproducto NVARCHAR(20) NULL"),
+        ("itg.M5_COLA", "plano_manual",  "ALTER TABLE itg.M5_COLA ADD plano_manual NVARCHAR(100) NULL"),
     ]
     try:
         cn  = _get_conn_local()
@@ -2392,7 +2394,7 @@ def api_ruta_get(zfer: str):
         cur = cn.cursor()
         cur.execute(
             "SELECT ruta, descripcion, modificado_el, tiene_simetria, zfer_simetrico, pieza_contraria "
-            "FROM dbo.M5_RutasZFER WHERE zfer = ?", zfer
+            "FROM itg.M5_RUTASZFER WHERE zfer = ?", zfer
         )
         row = cur.fetchone()
         cn.close()
@@ -2428,7 +2430,7 @@ def api_ruta_set(zfer: str):
         cn  = _get_conn_local()
         cur = cn.cursor()
         cur.execute("""
-            MERGE dbo.M5_RutasZFER AS t
+            MERGE itg.M5_RUTASZFER AS t
             USING (SELECT ? AS zfer, ? AS ruta, ? AS descripcion,
                           ? AS tiene_simetria, ? AS zfer_simetrico, ? AS pieza_contraria) AS s
               ON t.zfer = s.zfer
@@ -2602,8 +2604,8 @@ def _cola_proximo_bloque() -> dict | None:
             cur = cn.cursor()
             cur.execute("""
                 SELECT TOP 1 id, bloque_num, hora_prog, timer_activo,
-                       (SELECT COUNT(*) FROM dbo.M5_Cola WHERE bloque_id=b.id AND estado='PENDIENTE') AS n
-                FROM dbo.M5_Bloques b
+                       (SELECT COUNT(*) FROM itg.M5_COLA WHERE bloque_id=b.id AND estado='PENDIENTE') AS n
+                FROM itg.M5_BLOQUES b
                 WHERE estado='PENDIENTE' AND timer_activo=1
                 ORDER BY hora_prog ASC
             """)
@@ -2622,7 +2624,7 @@ def _cola_archivar_y_limpiar(bloque_id: int, ejecutado_por: str = "sistema"):
         with _get_conn_local() as cn:
             cur = cn.cursor()
             cur.execute("""
-                INSERT INTO dbo.M5_LogEjecuciones
+                INSERT INTO itg.M5_LOGEJECUCIONES
                     (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
                      pn_base, nivel, tipo_pieza, formula_nueva, acero_dir,
                      zfer_nuevo, estado, error_msg, ejecutado_el, ejecutado_por)
@@ -2630,12 +2632,12 @@ def _cola_archivar_y_limpiar(bloque_id: int, ejecutado_por: str = "sistema"):
                        pn_base, nivel, tipo_pieza, formula_nueva, acero_dir,
                        zfer_nuevo, estado, error_msg,
                        ISNULL(ejecutado_el, GETDATE()), ?
-                FROM dbo.M5_Cola
+                FROM itg.M5_COLA
                 WHERE bloque_id = ? AND estado IN ('OK','ERROR')
             """, ejecutado_por, bloque_id)
             archivados = cur.rowcount
             # Limpiar cola temporal (todos los items del bloque)
-            cur.execute("DELETE FROM dbo.M5_Cola WHERE bloque_id=?", bloque_id)
+            cur.execute("DELETE FROM itg.M5_COLA WHERE bloque_id=?", bloque_id)
             # NO borrar el bloque — queda COMPLETADO para que el usuario vea el reporte
             print(f"[COLA] bloque {bloque_id}: {archivados} archivados → M5_LogEjecuciones, bloque queda COMPLETADO")
     except Exception as e:
@@ -2649,19 +2651,19 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
     try:
         with _get_conn_local() as cn:
             cur = cn.cursor()
-            cur.execute("UPDATE dbo.M5_Bloques SET estado='EJECUTANDO' WHERE id=?", bloque_id)
+            cur.execute("UPDATE itg.M5_BLOQUES SET estado='EJECUTANDO' WHERE id=?", bloque_id)
             cur.execute("""
                 SELECT id, zfer_base, tipo, color, color_nombre, zpla, franja,
                        pn_base, nivel, tipo_pieza, formula_nueva, acero_dir, cambiar_hr, zhal,
                        ISNULL(subproducto,'')
-                FROM dbo.M5_Cola
+                FROM itg.M5_COLA
                 WHERE bloque_id=? AND estado='PENDIENTE'
             """, bloque_id)
             rows = cur.fetchall()
 
         if not rows:
             with _get_conn_local() as cn:
-                cn.cursor().execute("UPDATE dbo.M5_Bloques SET estado='COMPLETADO' WHERE id=?", bloque_id)
+                cn.cursor().execute("UPDATE itg.M5_BLOQUES SET estado='COMPLETADO' WHERE id=?", bloque_id)
             return
 
         cola = [{"tipo": r[2], "zfer": r[1], "color": r[3], "color_nombre": r[4],
@@ -2682,7 +2684,7 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                     print(f"[COLA] bloque {bloque_id}: no se pudo abrir SAP — abortando")
                     with _get_conn_local() as cn:
                         cn.cursor().execute(
-                            "UPDATE dbo.M5_Bloques SET estado='ERROR' WHERE id=?", bloque_id
+                            "UPDATE itg.M5_BLOQUES SET estado='ERROR' WHERE id=?", bloque_id
                         )
                     return
 
@@ -2804,6 +2806,19 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                                     hr_res = sap.cambiar_hoja_ruta(zfer_nuevo, hr_id)
                                     if hr_res["ok"]:
                                         print(f"[COLA] HR cambiada: {zfer_nuevo} → HR {hr_id}")
+                                        # ZINGP0004 al final si HR cambió exitosamente
+                                        try:
+                                            import importlib as _il
+                                            _fn_zing = getattr(_il.import_module("sap_mantenimiento"), "zinpg0004_actualizar", None)
+                                            if _fn_zing:
+                                                print(f"[COLA] ZINGP0004 para {zfer_nuevo}...")
+                                                _zing_res = _fn_zing([zfer_nuevo])
+                                                if _zing_res.get("ok"):
+                                                    print(f"[COLA] ZINGP0004 OK: {zfer_nuevo}")
+                                                else:
+                                                    print(f"[COLA] ZINGP0004 WARN: {_zing_res.get('error','')}")
+                                        except Exception as _zing_ex:
+                                            print(f"[COLA] ZINGP0004 error (no bloquea): {_zing_ex}")
                                     else:
                                         error_msg = (error_msg + f" | CA02: {hr_res['error']}").strip(" |")
                                 except Exception as hr_ex:
@@ -2822,7 +2837,7 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                 try:
                     with _get_conn_local() as cn:
                         cn.cursor().execute("""
-                            UPDATE dbo.M5_Cola
+                            UPDATE itg.M5_COLA
                             SET estado=?, ejecutado_el=GETDATE(), zfer_nuevo=?, error_msg=?
                             WHERE id=?
                         """, estado_item, zfer_nuevo or None, error_msg or None, item["_cola_id"])
@@ -2844,7 +2859,7 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
             try:
                 with _get_conn_local() as cn:
                     cn.cursor().execute("""
-                        UPDATE dbo.M5_Cola SET estado='ERROR', error_msg=?
+                        UPDATE itg.M5_COLA SET estado='ERROR', error_msg=?
                         WHERE bloque_id=? AND estado='PENDIENTE'
                     """, str(sap_ex)[:500], bloque_id)
                 err_n = len(cola)
@@ -2855,19 +2870,19 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
         with _get_conn_local() as cn:
             cur2 = cn.cursor()
             cur2.execute("""
-                UPDATE dbo.M5_Bloques
+                UPDATE itg.M5_BLOQUES
                 SET estado='COMPLETADO', ejecutado_el=GETDATE(), ok_count=?, error_count=?
                 WHERE id=?
             """, ok_n, err_n, bloque_id)
             # Si no quedó ningún bloque PENDIENTE, crear uno nuevo para mañana 7am
-            cur2.execute("SELECT COUNT(*) FROM dbo.M5_Bloques WHERE estado='PENDIENTE'")
+            cur2.execute("SELECT COUNT(*) FROM itg.M5_BLOQUES WHERE estado='PENDIENTE'")
             if cur2.fetchone()[0] == 0:
                 from datetime import timedelta as _td
                 manana7 = (_dt.now() + _td(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
-                cur2.execute("SELECT ISNULL(MAX(bloque_num),0)+1 FROM dbo.M5_Bloques")
+                cur2.execute("SELECT ISNULL(MAX(bloque_num),0)+1 FROM itg.M5_BLOQUES")
                 nuevo_num = cur2.fetchone()[0]
                 cur2.execute(
-                    "INSERT INTO dbo.M5_Bloques (bloque_num, hora_prog, timer_activo) VALUES (?,?,1)",
+                    "INSERT INTO itg.M5_BLOQUES (bloque_num, hora_prog, timer_activo) VALUES (?,?,1)",
                     nuevo_num, manana7
                 )
         # Mover ejecutados de M5_Cola → M5_LogEjecuciones y limpiar cola temporal
@@ -2886,21 +2901,21 @@ def _cola_limpiar_al_inicio():
             cur = cn.cursor()
             # Borrar bloques COMPLETADOS con más de 7 días (historial en LogEjecuciones ya los tiene)
             cur.execute("""
-                DELETE FROM dbo.M5_Bloques
+                DELETE FROM itg.M5_BLOQUES
                 WHERE estado = 'COMPLETADO'
                   AND ejecutado_el < DATEADD(day, -7, GETDATE())
             """)
             if cur.rowcount:
                 print(f"[COLA] limpieza: {cur.rowcount} bloques completados viejos eliminados")
             # Resetear bloques EJECUTANDO a PENDIENTE (quedaron pegados por crash/restart)
-            cur.execute("SELECT id FROM dbo.M5_Bloques WHERE estado='EJECUTANDO'")
+            cur.execute("SELECT id FROM itg.M5_BLOQUES WHERE estado='EJECUTANDO'")
             bloques_pegados = [r[0] for r in cur.fetchall()]
             if bloques_pegados:
-                cur.execute("UPDATE dbo.M5_Bloques SET estado='PENDIENTE' WHERE estado='EJECUTANDO'")
+                cur.execute("UPDATE itg.M5_BLOQUES SET estado='PENDIENTE' WHERE estado='EJECUTANDO'")
                 ph = ",".join("?" * len(bloques_pegados))
                 # Resetear TODOS los items (PENDIENTE y ERROR) de esos bloques
                 cur.execute(f"""
-                    UPDATE dbo.M5_Cola
+                    UPDATE itg.M5_COLA
                     SET estado='PENDIENTE', error_msg=NULL, ejecutado_el=NULL
                     WHERE bloque_id IN ({ph})
                       AND estado IN ('PENDIENTE','ERROR')
@@ -2927,7 +2942,7 @@ def _cola_scheduler_tick():
         with _get_conn_local() as cn:
             cur = cn.cursor()
             cur.execute("""
-                SELECT id, hora_prog FROM dbo.M5_Bloques
+                SELECT id, hora_prog FROM itg.M5_BLOQUES
                 WHERE estado='PENDIENTE' AND timer_activo=1 AND hora_prog IS NOT NULL
             """)
             ahora = _dt.now()
@@ -2956,18 +2971,18 @@ def api_cola_estado():
             cur.execute("""
                 SELECT TOP 1 b.id, b.bloque_num, b.hora_prog, b.timer_activo,
                        COUNT(c.id) AS n_items
-                FROM dbo.M5_Bloques b
-                LEFT JOIN dbo.M5_Cola c ON c.bloque_id=b.id AND c.estado='PENDIENTE'
+                FROM itg.M5_BLOQUES b
+                LEFT JOIN itg.M5_COLA c ON c.bloque_id=b.id AND c.estado='PENDIENTE'
                 WHERE b.estado='PENDIENTE' AND b.timer_activo=1
                 GROUP BY b.id, b.bloque_num, b.hora_prog, b.timer_activo
                 ORDER BY b.hora_prog ASC
             """)
             bloque = cur.fetchone()
             # Total en cola (todos los bloques)
-            cur.execute("SELECT COUNT(*) FROM dbo.M5_Cola WHERE estado='PENDIENTE'")
+            cur.execute("SELECT COUNT(*) FROM itg.M5_COLA WHERE estado='PENDIENTE'")
             total = cur.fetchone()[0]
             # Timer activo o no (si todos los bloques tienen timer=0)
-            cur.execute("SELECT COUNT(*) FROM dbo.M5_Bloques WHERE timer_activo=1 AND estado='PENDIENTE'")
+            cur.execute("SELECT COUNT(*) FROM itg.M5_BLOQUES WHERE timer_activo=1 AND estado='PENDIENTE'")
             timer_on = cur.fetchone()[0] > 0
 
         if bloque:
@@ -3002,7 +3017,7 @@ def api_cola_agregar():
             # Buscar bloque PENDIENTE (nunca EJECUTANDO) — cualquier hora, timer on/off
             cur.execute("""
                 SELECT TOP 1 id, bloque_num, hora_prog
-                FROM dbo.M5_Bloques
+                FROM itg.M5_BLOQUES
                 WHERE estado='PENDIENTE'
                 ORDER BY hora_prog ASC
             """)
@@ -3012,10 +3027,10 @@ def api_cola_agregar():
                 # No hay bloque PENDIENTE → crear uno para mañana 7am
                 from datetime import timedelta
                 manana7 = (_dt.now() + timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
-                cur.execute("SELECT ISNULL(MAX(bloque_num),0)+1 FROM dbo.M5_Bloques")
+                cur.execute("SELECT ISNULL(MAX(bloque_num),0)+1 FROM itg.M5_BLOQUES")
                 nuevo_num = cur.fetchone()[0]
                 cur.execute("""
-                    INSERT INTO dbo.M5_Bloques (bloque_num, hora_prog, timer_activo)
+                    INSERT INTO itg.M5_BLOQUES (bloque_num, hora_prog, timer_activo)
                     OUTPUT INSERTED.id, INSERTED.bloque_num, INSERTED.hora_prog
                     VALUES (?, ?, 1)
                 """, nuevo_num, manana7)
@@ -3048,7 +3063,7 @@ def api_cola_agregar():
                 zhal_val = str(it.get("zhal",""))[:20] or None if tipo_item.startswith("FORMULA") else None
                 plano_manual_val = str(it.get("plano_manual","")).strip()[:100] or None
                 cur.execute("""
-                    INSERT INTO dbo.M5_Cola
+                    INSERT INTO itg.M5_COLA
                     (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
                      pn_base, nivel, tipo_pieza, formula_nueva, descripcion, acero_dir, cambiar_hr, zhal, subproducto, plano_manual)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
@@ -3083,8 +3098,8 @@ def api_cola_bloques():
                        SUM(CASE WHEN c.estado='PENDIENTE'  THEN 1 ELSE 0 END) AS pend,
                        SUM(CASE WHEN c.estado='OK'         THEN 1 ELSE 0 END) AS ok_n,
                        SUM(CASE WHEN c.estado='ERROR'      THEN 1 ELSE 0 END) AS err_n
-                FROM dbo.M5_Bloques b
-                LEFT JOIN dbo.M5_Cola c ON c.bloque_id = b.id
+                FROM itg.M5_BLOQUES b
+                LEFT JOIN itg.M5_COLA c ON c.bloque_id = b.id
                 GROUP BY b.id, b.bloque_num, b.hora_prog, b.timer_activo, b.estado,
                          b.creado_el, b.ejecutado_el, b.ok_count, b.error_count
                 ORDER BY b.hora_prog DESC
@@ -3098,7 +3113,7 @@ def api_cola_bloques():
                 cur.execute(f"""
                     SELECT bloque_id, zfer_base, tipo, color, color_nombre, zpla, formula_nueva,
                            estado, zfer_nuevo, error_msg
-                    FROM dbo.M5_Cola WHERE bloque_id IN ({placeholders})
+                    FROM itg.M5_COLA WHERE bloque_id IN ({placeholders})
                     ORDER BY id
                 """, *bloque_ids)
                 for row in cur.fetchall():
@@ -3132,8 +3147,8 @@ def api_cola_ejecutar_bloque(bloque_id: int):
             cur = cn.cursor()
             cur.execute("""
                 SELECT b.estado, COUNT(c.id) AS n_pend
-                FROM dbo.M5_Bloques b
-                LEFT JOIN dbo.M5_Cola c ON c.bloque_id=b.id AND c.estado='PENDIENTE'
+                FROM itg.M5_BLOQUES b
+                LEFT JOIN itg.M5_COLA c ON c.bloque_id=b.id AND c.estado='PENDIENTE'
                 WHERE b.id=?
                 GROUP BY b.estado
             """, bloque_id)
@@ -3160,7 +3175,7 @@ def api_cola_toggle_timer(bloque_id: int):
     activo = 1 if body.get("activo") else 0
     try:
         with _get_conn_local() as cn:
-            cn.cursor().execute("UPDATE dbo.M5_Bloques SET timer_activo=? WHERE id=?", activo, bloque_id)
+            cn.cursor().execute("UPDATE itg.M5_BLOQUES SET timer_activo=? WHERE id=?", activo, bloque_id)
         return jsonify({"ok": True, "timer_activo": bool(activo)})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -3177,7 +3192,7 @@ def api_cola_cambiar_hora(bloque_id: int):
         hora_str_norm = hora_str[:16]  # "2025-01-15T07:00"
         hora = _dt.strptime(hora_str_norm, "%Y-%m-%dT%H:%M")
         with _get_conn_local() as cn:
-            cn.cursor().execute("UPDATE dbo.M5_Bloques SET hora_prog=? WHERE id=? AND estado='PENDIENTE'",
+            cn.cursor().execute("UPDATE itg.M5_BLOQUES SET hora_prog=? WHERE id=? AND estado='PENDIENTE'",
                                 hora, bloque_id)
         return jsonify({"ok": True, "hora_prog": hora.strftime("%d/%m/%Y %H:%M")})
     except Exception as e:
@@ -3192,14 +3207,14 @@ def api_cola_reset_bloque(bloque_id: int):
         with _get_conn_local() as cn:
             cur = cn.cursor()
             cur.execute("""
-                UPDATE dbo.M5_Bloques SET estado='PENDIENTE'
+                UPDATE itg.M5_BLOQUES SET estado='PENDIENTE'
                 WHERE id=? AND estado IN ('EJECUTANDO','ERROR','COMPLETADO')
             """, bloque_id)
             if cur.rowcount == 0:
                 return jsonify({"ok": False, "error": "Bloque no encontrado o ya está en estado PENDIENTE"})
             # Resetear TODOS los ítems (incluso EJECUTANDO) a PENDIENTE para reintento completo
             cur.execute("""
-                UPDATE dbo.M5_Cola SET estado='PENDIENTE', error_msg=NULL, ejecutado_el=NULL
+                UPDATE itg.M5_COLA SET estado='PENDIENTE', error_msg=NULL, ejecutado_el=NULL
                 WHERE bloque_id=? AND estado IN ('PENDIENTE','ERROR','EJECUTANDO')
             """, bloque_id)
         return jsonify({"ok": True})
@@ -3214,8 +3229,8 @@ def api_cola_borrar_bloque(bloque_id: int):
     try:
         with _get_conn_local() as cn:
             cur = cn.cursor()
-            cur.execute("DELETE FROM dbo.M5_Cola WHERE bloque_id=?", bloque_id)
-            cur.execute("DELETE FROM dbo.M5_Bloques WHERE id=?", bloque_id)
+            cur.execute("DELETE FROM itg.M5_COLA WHERE bloque_id=?", bloque_id)
+            cur.execute("DELETE FROM itg.M5_BLOQUES WHERE id=?", bloque_id)
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -3228,12 +3243,12 @@ def api_cola_vaciar_bloque(bloque_id: int):
     try:
         with _get_conn_local() as cn:
             cur = cn.cursor()
-            cur.execute("DELETE FROM dbo.M5_Cola WHERE bloque_id=? AND estado='PENDIENTE'", bloque_id)
+            cur.execute("DELETE FROM itg.M5_COLA WHERE bloque_id=? AND estado='PENDIENTE'", bloque_id)
             deleted = cur.rowcount
             # Si el bloque queda vacío y sigue PENDIENTE, eliminarlo también
             cur.execute("""
-                DELETE FROM dbo.M5_Bloques WHERE id=? AND estado='PENDIENTE'
-                AND NOT EXISTS (SELECT 1 FROM dbo.M5_Cola WHERE bloque_id=?)
+                DELETE FROM itg.M5_BLOQUES WHERE id=? AND estado='PENDIENTE'
+                AND NOT EXISTS (SELECT 1 FROM itg.M5_COLA WHERE bloque_id=?)
             """, bloque_id, bloque_id)
         return jsonify({"ok": True, "deleted": deleted})
     except Exception as e:
@@ -3263,7 +3278,7 @@ def api_indicadores_data():
                     SUM(CASE WHEN tipo='COLOR' AND estado='ERROR' THEN 1 ELSE 0 END) AS colores_error,
                     SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='OK'    THEN 1 ELSE 0 END) AS formulas_ok,
                     SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='ERROR' THEN 1 ELSE 0 END) AS formulas_error
-                FROM dbo.M5_LogEjecuciones
+                FROM itg.M5_LOGEJECUCIONES
             """)
             row = cur.fetchone()
             total_ok       = row[0] or 0
@@ -3281,7 +3296,7 @@ def api_indicadores_data():
                     SUM(CASE WHEN tipo='COLOR'        AND estado='ERROR' THEN 1 ELSE 0 END) AS colores_error,
                     SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='OK'   THEN 1 ELSE 0 END) AS formulas_ok,
                     SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='ERROR' THEN 1 ELSE 0 END) AS formulas_error
-                FROM dbo.M5_LogEjecuciones
+                FROM itg.M5_LOGEJECUCIONES
                 WHERE ejecutado_el >= DATEADD(day, -30, GETDATE())
                 GROUP BY CAST(ejecutado_el AS DATE)
                 ORDER BY fecha
@@ -3306,7 +3321,7 @@ def api_indicadores_data():
                     SUM(CASE WHEN tipo='COLOR'        AND estado='ERROR' THEN 1 ELSE 0 END) AS colores_error,
                     SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='OK'   THEN 1 ELSE 0 END) AS formulas_ok,
                     SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='ERROR' THEN 1 ELSE 0 END) AS formulas_error
-                FROM dbo.M5_LogEjecuciones
+                FROM itg.M5_LOGEJECUCIONES
                 WHERE ejecutado_el >= DATEADD(week, -12, GETDATE())
                 GROUP BY DATEPART(year, ejecutado_el)*100 + DATEPART(week, ejecutado_el)
                 ORDER BY semana
@@ -3328,7 +3343,7 @@ def api_indicadores_data():
                 SELECT TOP 10
                     zfer_base,
                     COUNT(*) AS total
-                FROM dbo.M5_LogEjecuciones
+                FROM itg.M5_LOGEJECUCIONES
                 WHERE estado='OK' AND zfer_base IS NOT NULL AND zfer_base <> ''
                 GROUP BY zfer_base
                 ORDER BY total DESC
@@ -3339,7 +3354,7 @@ def api_indicadores_data():
             cur.execute("""
                 SELECT TOP 10
                     zfer_nuevo, tipo, estado, ejecutado_el, formula_nueva, color_nombre, zfer_base
-                FROM dbo.M5_LogEjecuciones
+                FROM itg.M5_LOGEJECUCIONES
                 ORDER BY ejecutado_el DESC
             """)
             recientes = [
@@ -3384,7 +3399,7 @@ def api_cola_historial():
                 SELECT TOP {limit}
                     id, bloque_id, zfer_base, tipo, color, color_nombre, zpla,
                     formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg, ejecutado_el
-                FROM dbo.M5_LogEjecuciones
+                FROM itg.M5_LOGEJECUCIONES
                 ORDER BY ejecutado_el DESC
             """)
             rows = cur.fetchall()
@@ -3409,13 +3424,13 @@ def api_cola_bloque_reporte(bloque_id: int):
             # Info del bloque
             cur.execute("""
                 SELECT bloque_num, hora_prog, ejecutado_el, ok_count, error_count
-                FROM dbo.M5_Bloques WHERE id=?
+                FROM itg.M5_BLOQUES WHERE id=?
             """, bloque_id)
             br = cur.fetchone()
             cur.execute("""
                 SELECT zfer_base, tipo, color, color_nombre, zpla, franja,
                        formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg, ejecutado_el
-                FROM dbo.M5_LogEjecuciones WHERE bloque_id=?
+                FROM itg.M5_LOGEJECUCIONES WHERE bloque_id=?
                 ORDER BY ejecutado_el
             """, bloque_id)
             rows = cur.fetchall()
@@ -3452,7 +3467,7 @@ def api_cola_bloque_excel(bloque_id: int):
             cur = cn.cursor()
             cur.execute("""
                 SELECT bloque_num, hora_prog, ejecutado_el, ok_count, error_count
-                FROM dbo.M5_Bloques WHERE id=?
+                FROM itg.M5_BLOQUES WHERE id=?
             """, bloque_id)
             br = cur.fetchone()
             # Detectar columnas opcionales (pueden no existir si aún no se corrió la migración)
@@ -3475,7 +3490,7 @@ def api_cola_bloque_excel(bloque_id: int):
                 SELECT zfer_base, tipo, color, color_nombre, zpla, franja,
                        formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg,
                        ejecutado_el, {sel_extra}
-                FROM dbo.M5_LogEjecuciones WHERE bloque_id=?
+                FROM itg.M5_LOGEJECUCIONES WHERE bloque_id=?
                 ORDER BY tipo, ejecutado_el
             """, bloque_id)
             rows = cur.fetchall()

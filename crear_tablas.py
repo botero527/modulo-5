@@ -3,7 +3,7 @@ import pyodbc
 import sys
 #aqui meto la configuracion del servidor pa cualquier cosa que cambien la direccion o algo es solo cambiar la direccion de esta chimbada
 DB_LOCAL = {
-    "server": r"localhost\SQLEXPRESS",
+    "server": r"agpcolombia.database.windows.net",
     "database": "MODULO_5",
     "driver": "ODBC Driver 17 for SQL server",
 }
@@ -12,7 +12,7 @@ CONNECTION_STRING = (
     f"DRIVER={{{DB_LOCAL['driver']}}};"
     f"SERVER={DB_LOCAL['server']};"
     f"DATABASE={DB_LOCAL['database']};"
-    "Trusted_Connection=yes;"
+    "UID=DevIngenieria;PWD=HiJE068i0LQVrwA;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 )
 
 
@@ -28,7 +28,7 @@ WHERE name = ?
 #aqui la primera tabla la m5_Bloqueos
 
 SQL_CREAR_BLOQUEOS = """
-CREATE TABLE dbo.M5_Bloqueos (
+CREATE TABLE itg.M5_BLOQUEOS (
     id              INT IDENTITY(1,1)   NOT NULL,
     pedido_origen   NVARCHAR(50)        NOT NULL,
     tipo_pieza      NVARCHAR(20)        NOT NULL,
@@ -50,19 +50,19 @@ IF NOT EXISTS (
     WHERE TABLE_NAME = 'M5_Bloqueos' AND COLUMN_NAME = 'color_codigo'
 )
 BEGIN
-    ALTER TABLE dbo.M5_Bloqueos
+    ALTER TABLE itg.M5_BLOQUEOS
     ADD color_codigo NVARCHAR(50) NOT NULL DEFAULT ''
 END
 """
 
 SQL_INDICE_BLOQUEOS = """
 CREATE NONCLUSTERED INDEX IX_M5_Bloqueos_Pedido_Activo
-    ON dbo.M5_Bloqueos (pedido_origen, tipo_pieza, activo)
+    ON itg.M5_BLOQUEOS (pedido_origen, tipo_pieza, activo)
 """
 
 #la otra tabla la M5_LogEjecucion
 SQL_CREAR_LOG = """
-CREATE TABLE dbo.M5_LogEjecucion (
+CREATE TABLE itg.M5_LOGEJECUCION (
     id              INT IDENTITY(1,1)   NOT NULL,
     batch_id        UNIQUEIDENTIFIER    NOT NULL,
     pedido_origen   NVARCHAR(50)        NOT NULL,
@@ -80,12 +80,12 @@ CREATE TABLE dbo.M5_LogEjecucion (
 
 SQL_INDICE_LOG_BATCH = """
 CREATE NONCLUSTERED INDEX IX_M5_LogEjecucion_Batch_Estado
-    ON dbo.M5_LogEjecucion (batch_id, estado)
+    ON itg.M5_LOGEJECUCION (batch_id, estado)
 """
 
 SQL_INDICE_LOG_PEDIDO = """
 CREATE NONCLUSTERED INDEX IX_M5_LogEjecucion_Pedido
-    ON dbo.M5_LogEjecucion (pedido_origen, fecha_inicio DESC)
+    ON itg.M5_LOGEJECUCION (pedido_origen, fecha_inicio DESC)
 """
 
 #FUNCIONESSSSSSSSSSSS
