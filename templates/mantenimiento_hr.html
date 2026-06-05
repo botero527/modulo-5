@@ -200,19 +200,7 @@ function renderResults(data) {
                         padding:.28rem .85rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
                  <i class="bi bi-download me-1"></i>Excel
                </button>
-               <button onclick="event.stopPropagation();abrirModalDesasignar('${h.id_hruta}', ${h.fuera_calendario})"
-                 id="btn-desasignar-${h.id_hruta}"
-                 style="background:#dc2626;color:#fff;border:none;border-radius:8px;
-                        padding:.28rem .85rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
-                 <i class="bi bi-arrow-left-right me-1"></i>Desasignar SAP
-               </button>
-               <button onclick="event.stopPropagation();abrirPlanAsignacion('${h.id_hruta}')"
-                 id="btn-asignar-${h.id_hruta}"
-                 style="background:#16a34a;color:#fff;border:none;border-radius:8px;
-                        padding:.28rem .85rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
-                 <i class="bi bi-plus-circle me-1"></i>Asignar SAP
-               </button>
-               <button onclick="event.stopPropagation();abrirFlujoCompleto('${h.id_hruta}', ${h.fuera_calendario})"
+               <button onclick="event.stopPropagation();abrirDiagnostico('${h.id_hruta}', ${h.fuera_calendario})"
                  id="btn-flujo-${h.id_hruta}"
                  style="background:linear-gradient(135deg,#dc2626,#7c3aed);color:#fff;border:none;border-radius:8px;
                         padding:.28rem .85rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
@@ -407,6 +395,7 @@ async function buscarZfer() {
 
 // ── Asignar SAP ───────────────────────────────────────────────────────────────
 let _planAsignacion = null;
+let _flujoResultados = [];   // global: accedido por _flujoFin
 let _planHrOrigen   = null;
 
 async function abrirPlanAsignacion(id_hruta) {
@@ -612,7 +601,11 @@ async function ejecutarC223() {
       const omit = (d.errores_zfer && d.errores_zfer.length) ? " (" + d.errores_zfer.length + " omitidos)" : "";
       if (d.ok) {
         okC++;
-        resDiv.innerHTML += '<div style="color:var(--ok-txt);"><i class="bi bi-check-circle me-1"></i>C223 HR ' + b.hr_destino + ': ' + (d.mensaje||"OK") + '</div>';
+        const ok_c = (d.resultados||[]).filter(r=>r.estado==="OK").length;
+      const err_c = (d.resultados||[]).filter(r=>r.estado==="ERROR").length;
+      const badge_c = err_c>0?" | "+err_c+" fallaron":"";
+      resDiv.innerHTML += '<div style="color:'+(err_c>0?"#ca8a04":"var(--ok-txt)")+';"><i class="bi bi-'+(err_c>0?"exclamation-triangle":"check-circle")+' me-1"></i>C223 HR '+b.hr_destino+': '+ok_c+' OK'+badge_c+'</div>';
+      if(err_c>0 && d.errores_zfer) d.errores_zfer.slice(0,3).forEach(e=>{ resDiv.innerHTML+='<div style="font-size:.75rem;color:var(--err-txt);padding-left:.8rem;">'+e+'</div>'; });
       } else {
         errC++;
         const log = (d.detalles && d.detalles.length) ? " | " + d.detalles.slice(-2).join(" | ") : "";
@@ -698,7 +691,10 @@ async function ejecutarFlujoCompleto(limite) {
   // ── PASO 1: Desasignar ────────────────────────────────────────────────────
   _flujoLog("&#x27F3;", "<b>Paso 1/5</b> — Desasignar (ZPPP0084)...", "var(--accent)");
   try {
-    const url1 = "/api/mantenimiento_hr/desasignar/" + hrId + (limite ? "?limite=" + limite : "");
+    // Si hay ZFERs pre-validados del diagnóstico, usar ese conteo como limite
+    const nDesi = _flujoZfersValidos ? _flujoZfersValidos.length : null;
+    const desiLimite = limite || nDesi;
+    const url1 = "/api/mantenimiento_hr/desasignar/" + hrId + (desiLimite ? "?limite=" + desiLimite : "");
     const r1 = await fetch(url1, {method:"POST"});
     const d1 = await r1.json();
     if (!d1.ok) {
@@ -715,7 +711,9 @@ async function ejecutarFlujoCompleto(limite) {
   _flujoLog("&#x27F3;", "<b>Paso 2/5</b> — Calculando plan de asignación...", "var(--accent)");
   let plan = null;
   try {
-    const r2 = await fetch("/api/mantenimiento_hr/plan_asignacion/" + hrId + (limite ? "?limite=" + limite : ""));
+    // skip_qas=1: los ZFERs que acaban de desasignarse deben poder asignarse aunque estén en el log QAS
+    const planUrl = "/api/mantenimiento_hr/plan_asignacion/" + hrId + "?skip_qas=1" + (limite ? "&limite=" + limite : "");
+    const r2 = await fetch(planUrl);
     const d2 = await r2.json();
     if (!d2.ok || !d2.batches.length) {
       _flujoLog("&#x2716;", "Plan fallido: " + (d2.error||"sin batches"), "var(--err-txt)");
@@ -917,6 +915,101 @@ async function limpiarQAS() {
 
 // Cargar al inicio
 cargarQASLog();
+
+let _flujoZfersValidos = null;   // ZFERs pre-validados del diagnóstico
+
+// ── Diagnóstico + Flujo Completo ─────────────────────────────────────────────
+let _diagData = null;
+let _diagHrId = null;
+let _diagTotal = 0;
+
+async function abrirDiagnostico(id_hruta, total) {
+  _diagHrId = id_hruta; _diagTotal = total;
+  const modal = document.getElementById("modal-diagnostico");
+  const body  = document.getElementById("diag-body");
+  modal.style.display = "flex";
+  body.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted);"><span style="animation:spin 1s linear infinite;display:inline-block;font-size:1.5rem;">&#x27F3;</span><br><br>Analizando ' + total + ' ZFERs...</div>';
+  document.getElementById("diag-btns").style.display = "none";
+
+  try {
+    const r = await fetch("/api/mantenimiento_hr/diagnostico/" + id_hruta);
+    const d = await r.json();
+    if (!d.ok) {
+      body.innerHTML = '<div style="color:var(--err-txt);padding:1rem;">' + (d.error||"Error") + '</div>';
+      return;
+    }
+    _diagData = d;
+    _renderDiagnostico(d);
+    document.getElementById("diag-btns").style.display = "";
+  const nv = document.getElementById("diag-n-validos"); if(nv) nv.textContent = d.n_validos;
+  } catch(e) {
+    body.innerHTML = '<div style="color:var(--err-txt);padding:1rem;">Error: ' + e.message + '</div>';
+  }
+}
+
+function _renderDiagnostico(d) {
+  const body = document.getElementById("diag-body");
+  const pct = Math.round((d.n_validos / d.total) * 100);
+  const okColor = pct === 100 ? "var(--ok-txt)" : pct > 70 ? "#ca8a04" : "var(--err-txt)";
+
+  let html = '<div style="margin-bottom:1rem;">';
+  // Resumen chips
+  html += '<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem;">';
+  html += '<div style="background:rgba(34,197,94,.1);border:1px solid var(--ok-bdr);border-radius:8px;padding:.4rem .8rem;font-size:.8rem;"><b style="color:var(--ok-txt);">' + d.n_validos + '</b> listos para ejecutar</div>';
+  if (d.resumen.no_asignados) html += '<div style="background:rgba(239,68,68,.1);border:1px solid var(--err-bdr);border-radius:8px;padding:.4rem .8rem;font-size:.8rem;"><b style="color:var(--err-txt);">' + d.resumen.no_asignados + '</b> ya no están en esta HR</div>';
+  if (d.resumen.inactivos)    html += '<div style="background:rgba(239,68,68,.1);border:1px solid var(--err-bdr);border-radius:8px;padding:.4rem .8rem;font-size:.8rem;"><b style="color:var(--err-txt);">' + d.resumen.inactivos + '</b> inactivos en SAP</div>';
+  if (d.resumen.sin_hr)       html += '<div style="background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.4);border-radius:8px;padding:.4rem .8rem;font-size:.8rem;color:#ca8a04;"><b>' + d.resumen.sin_hr + '</b> sin HR destino</div>';
+  html += '</div>';
+
+  // Barra de porcentaje
+  html += '<div style="background:var(--border);border-radius:4px;height:6px;margin-bottom:.8rem;">';
+  html += '<div style="width:' + pct + '%;height:100%;background:' + okColor + ';border-radius:4px;transition:width .5s;"></div></div>';
+  html += '<div style="font-size:.75rem;color:var(--muted);">' + pct + '% de los ' + d.total + ' ZFERs pueden procesarse</div>';
+
+  // Rechazados (si hay)
+  if (d.rechazados && d.rechazados.length) {
+    html += '<details style="margin-top:.8rem;"><summary style="font-size:.78rem;cursor:pointer;color:var(--muted);">Ver ' + d.rechazados.length + ' ZFERs que se omitirán</summary>';
+    html += '<div style="max-height:120px;overflow-y:auto;margin-top:.4rem;">';
+    html += d.rechazados.map(r =>
+      '<div style="font-size:.75rem;padding:.15rem 0;border-bottom:1px solid var(--border);display:flex;gap:.5rem;">' +
+      '<span style="font-family:monospace;color:var(--muted);">' + r.zfer + '</span>' +
+      '<span style="color:var(--err-txt);">' + r.motivo + '</span></div>'
+    ).join('');
+    html += '</div></details>';
+  }
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+function cerrarDiagnostico() {
+  document.getElementById("modal-diagnostico").style.display = "none";
+}
+
+function ejecutarDesdeDignostico(limite) {
+  cerrarDiagnostico();
+  if (!_diagData) return;
+  // Pasar los ZFERs válidos al flujo completo
+  _diagHrTotal = _diagData.n_validos;
+  abrirFlujoCompletoConZfers(_diagHrId, _diagData.validos, limite);
+}
+
+async function abrirFlujoCompletoConZfers(id_hruta, zfers_validos, limite) {
+  _flujoHR = id_hruta;
+  _flujoTotal = zfers_validos.length;
+  _flujoZfersValidos = zfers_validos;  // guardar para usar en el flujo
+
+  document.getElementById("flujo-total").textContent = _flujoTotal;
+  document.getElementById("flujo-prueba").style.display = _flujoTotal > 10 ? "" : "none";
+  document.getElementById("modal-flujo").style.display = "flex";
+  document.getElementById("flujo-progress").innerHTML = "";
+  document.getElementById("flujo-progress").style.display = "none";
+  document.getElementById("flujo-zona-reporte").style.display = "none";
+  document.getElementById("flujo-btns").style.display = "";
+
+  if (limite !== undefined) {
+    await ejecutarFlujoCompleto(limite);
+  }
+}
 </script>
 <!-- Modal desasignar -->
 <div id="modal-desasignar" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.75);
@@ -1082,6 +1175,51 @@ cargarQASLog();
           Cerrar
         </button>
       </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Modal Diagnóstico -->
+<div id="modal-diagnostico" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.78);
+     z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:16px;
+              padding:1.8rem; max-width:500px; width:94%; max-height:85vh; display:flex; flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;">
+      <h5 style="margin:0; font-weight:800; font-size:1rem;">
+        <i class="bi bi-search me-2" style="color:var(--accent);"></i>Diagnóstico previo
+      </h5>
+      <button onclick="cerrarDiagnostico()" style="background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;">&#x2715;</button>
+    </div>
+    <div style="color:var(--muted); font-size:.82rem; margin-bottom:1rem;">
+      Validando qué ZFERs pueden procesarse antes de ejecutar
+    </div>
+
+    <div id="diag-body" style="flex:1; overflow-y:auto;"></div>
+
+    <div id="diag-btns" style="display:none; margin-top:.8rem; border-top:1px solid var(--border); padding-top:.8rem;">
+      <div style="font-size:.75rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:.5rem;">
+        Ejecutar con ZFERs validados
+      </div>
+      <div id="diag-prueba-btns" style="display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.5rem;">
+        <button onclick="ejecutarDesdeDignostico(1)"
+          style="background:var(--tag-neutral-bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.38rem .9rem;font-size:.82rem;font-weight:600;cursor:pointer;">
+          1 ZFER
+        </button>
+        <button onclick="ejecutarDesdeDignostico(5)"
+          style="background:var(--tag-neutral-bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.38rem .9rem;font-size:.82rem;font-weight:600;cursor:pointer;">
+          5 ZFERs
+        </button>
+        <button onclick="ejecutarDesdeDignostico(10)"
+          style="background:var(--tag-neutral-bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.38rem .9rem;font-size:.82rem;font-weight:600;cursor:pointer;">
+          10 ZFERs
+        </button>
+      </div>
+      <button onclick="ejecutarDesdeDignostico(null)"
+        style="width:100%;background:linear-gradient(135deg,#dc2626,#7c3aed);color:#fff;border:none;
+               border-radius:10px;padding:.6rem;font-size:.88rem;font-weight:700;cursor:pointer;">
+        <i class="bi bi-lightning-charge me-1"></i>Ejecutar todos los validados (<span id="diag-n-validos"></span>)
+      </button>
     </div>
   </div>
 </div>

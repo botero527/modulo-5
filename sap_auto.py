@@ -78,7 +78,7 @@ _T_MIN_LENTO  = 0.05
 _T_POLL = 0.05
 #700176997
 
-_SAP_USER     = os.environ.get("SAP_USER",     "FESPITIA")
+_SAP_USER     = os.environ.get("SAP_USER",     "PROGRAING")
 _SAP_PASSWORD = os.environ.get("SAP_PASSWORD", "Agp2026*")
 _SAP_CLIENT   = os.environ.get("SAP_CLIENT",   "300")
 _SAP_SYSTEM   = os.environ.get("SAP_SYSTEM",   "AGP PRD")   # producción; "QAS" para pruebas
@@ -128,6 +128,7 @@ class ResultadoItem:
     zpla:           str   = ""
     posiciones_bom: list  = field(default_factory=list)
     bom_detalle:    list  = field(default_factory=list)  # [{posnr, clase_destino}]
+    bom_sap:        list  = field(default_factory=list)  # [{pos, clase}] BOM completo del ZFER nuevo desde ZPPR0008
     advertencias:   list  = field(default_factory=list)  # advertencias no-fatales
     estado:         str   = "PENDIENTE"   # EN_PROCESO | OK | ERROR
     error:          str   = ""
@@ -1679,8 +1680,18 @@ class AutomatizadorSAP:
                             break
                     except Exception:
                         pass
+                # Leer clase (CLASS) — necesaria para GestorAuto_bom_zfer_local
+                clase = ""
+                for col in ("CLASS", "KLASSE", "KLART", "CLASE"):
+                    try:
+                        v = str(grid.GetCellValue(i, col) or "").strip()
+                        if v:
+                            clase = v
+                            break
+                    except Exception:
+                        pass
                 posiciones.append(pos_int)
-                filas.append({"pos": pos_int, "nombre": nombre})
+                filas.append({"pos": pos_int, "nombre": nombre, "clase": clase})
 
             return {"ok": True, "posiciones": posiciones, "filas": filas, "error": ""}
         except Exception as e:
@@ -2419,13 +2430,27 @@ class AutomatizadorSAP:
             print(f"    [WARN] _obtener_orden_diferenciales: {e}")
             return []
 
-    def mm02_actualizar_diferenciales_zpla(self, zfer: str, zpla_base: str, res=None):
+    # Mapa subproducto → diferenciales que DEBEN estar activos para ese subproducto
+    _SUB_DIFERENCIAL = {
+        "X57":  ["02"],
+        "X128": ["03"],
+        "X79":  ["03"],
+        "X80":  ["03", "12"],
+        "X17":  ["23"],
+        "X18":  ["12"],
+    }
+
+    def mm02_actualizar_diferenciales_zpla(self, zfer: str, zpla_base: str, res=None,
+                                           sub_base: str = "", sub_nuevo: str = ""):
         """
         Reemplaza TODOS los diferenciales de comportamiento del ZFER_NUEVO en MM02:
         1. Consulta BD: diferenciales del ZPLA base (target) + orden completo del popup
         2. Calcula el índice (abs_row) de cada valor en el popup a partir del orden BD
         3. Abre popup → navega directo a cada fila → marca/desmarca → confirma → guarda
         NO lee el popup — usa índices calculados. Elimina el bucle lento de findById fallidos.
+
+        sub_base / sub_nuevo: si cambia el subproducto (cambio de fórmula), fuerza
+        los diferenciales del mapa _SUB_DIFERENCIAL: desactiva los del base, activa los del nuevo.
         """
         diffs_zpla = self._buscar_diferenciales_zpla(zpla_base)
         log_diffs  = ",".join(diffs_zpla) if diffs_zpla else "(ninguno)"
@@ -2441,6 +2466,27 @@ class AutomatizadorSAP:
                 return s.strip().lower()
 
         target_set = {_norm(v) for v in diffs_zpla}
+
+        # Override por cambio de subproducto (solo si ambos están en el mapa y son distintos)
+        sub_base_key  = (sub_base  or "").strip().upper()
+        sub_nuevo_key = (sub_nuevo or "").strip().upper()
+        # Buscar coincidencia parcial (ej: "X57" dentro de "X57 Algo")
+        def _match_sub(key):
+            for k in self._SUB_DIFERENCIAL:
+                if key.startswith(k) or k in key:
+                    return k
+            return None
+
+        sub_base_k  = _match_sub(sub_base_key)
+        sub_nuevo_k = _match_sub(sub_nuevo_key)
+
+        if sub_base_k and sub_nuevo_k and sub_base_k != sub_nuevo_k:
+            forzar_off = {_norm(d) for d in self._SUB_DIFERENCIAL.get(sub_base_k, [])}
+            forzar_on  = {_norm(d) for d in self._SUB_DIFERENCIAL.get(sub_nuevo_k, [])}
+            target_set = (target_set - forzar_off) | forzar_on
+            print(f"    Override subproducto {sub_base_k}→{sub_nuevo_k}: OFF={forzar_off} ON={forzar_on}")
+            if res:
+                res._log(f"  Override diferencial subproducto {sub_base_k}→{sub_nuevo_k}: OFF={forzar_off} ON={forzar_on}")
 
         # Lista ordenada de todos los posibles valores → define el orden del popup
         orden_completo = self._obtener_orden_diferenciales()
@@ -3240,6 +3286,16 @@ class AutomatizadorSAP:
                 res._log("PASO 5: omitido (sin PN base)")
 
             res.estado    = "OK"
+            # Leer BOM completo del ZFER nuevo desde SAP (para GestorAuto)
+            if res.zfer_nuevo:
+                try:
+                    _bom_sap = self.zppr0008_leer_bom_completo(res.zfer_nuevo)
+                    if _bom_sap.get("ok"):
+                        res.bom_sap = [{"pos": f["pos"], "clase": f["clase"]}
+                                       for f in _bom_sap.get("filas", []) if f.get("clase")]
+                        res._log(f"  BOM SAP completo: {len(res.bom_sap)} posiciones con clase")
+                except Exception as e_bom_sap:
+                    res._log(f"  [WARN] BOM SAP: {e_bom_sap}")
             res.fecha_fin = datetime.datetime.now()
             res._log(f"=== COMPLETADO OK ({res.duracion_seg}s) ===")
             
@@ -3393,8 +3449,21 @@ class AutomatizadorSAP:
                 # 5b — Subproducto (solo si viene informado)
                 if subproducto:
                     self.mm02_actualizar_subproducto(mat, subproducto, res)
-                # 5c — Diferenciales de comportamiento: reemplazar con los del ZPLA base
-                self.mm02_actualizar_diferenciales_zpla(mat, zpla_base, res)
+                # 5c — Diferenciales con override subproducto
+
+                # Obtener subproducto del ZFER base para override diferencial
+                _sub_base = ""
+                try:
+                    with __import__('pyodbc').connect(_DB_SAP_STR, autocommit=True) as _cn_s:
+                        _r = _cn_s.cursor().execute(
+                            "SELECT TOP 1 ATWRT FROM dbo.ODATA_ZFER_CLASS_001 "
+                            "WHERE MATERIAL=? AND CENTRO='CO01' AND ATNAM='Z_SUBPRODUCT'",
+                            zfer_base).fetchone()
+                        _sub_base = str(_r[0] or "").strip() if _r else ""
+                except Exception:
+                    pass
+                self.mm02_actualizar_diferenciales_zpla(mat, zpla_base, res,
+                                                             sub_base=_sub_base, sub_nuevo=subproducto or "")
 
             # 5d — Plano: solo para ZFER nuevo (no ZFOR)
             self.mm02_cambiar_plano(zfer_nuevo, res, zfer_base=zfer_base, plano_manual=plano_manual)
@@ -3423,6 +3492,16 @@ class AutomatizadorSAP:
                 print(f"    [WARN] PASO 7 navegación: {e}")
 
             res.estado    = "OK"
+            # Leer BOM completo del ZFER nuevo desde SAP (para GestorAuto)
+            if res.zfer_nuevo:
+                try:
+                    _bom_sap = self.zppr0008_leer_bom_completo(res.zfer_nuevo)
+                    if _bom_sap.get("ok"):
+                        res.bom_sap = [{"pos": f["pos"], "clase": f["clase"]}
+                                       for f in _bom_sap.get("filas", []) if f.get("clase")]
+                        res._log(f"  BOM SAP completo: {len(res.bom_sap)} posiciones con clase")
+                except Exception as e_bom_sap:
+                    res._log(f"  [WARN] BOM SAP: {e_bom_sap}")
             res.fecha_fin = datetime.datetime.now()
             res._log(f"=== COMPLETADO OK ({res.duracion_seg}s) ===")
 
@@ -3567,7 +3646,20 @@ class AutomatizadorSAP:
                     self.mm02_actualizar_partnumber(mat, nuevo_pn)
                 if subproducto:
                     self.mm02_actualizar_subproducto(mat, subproducto, res)
-                self.mm02_actualizar_diferenciales_zpla(mat, zpla_base_m, res)
+
+                # Obtener subproducto del ZFER base para override diferencial
+                _sub_base = ""
+                try:
+                    with __import__('pyodbc').connect(_DB_SAP_STR, autocommit=True) as _cn_s:
+                        _r = _cn_s.cursor().execute(
+                            "SELECT TOP 1 ATWRT FROM dbo.ODATA_ZFER_CLASS_001 "
+                            "WHERE MATERIAL=? AND CENTRO='CO01' AND ATNAM='Z_SUBPRODUCT'",
+                            zfer_base).fetchone()
+                        _sub_base = str(_r[0] or "").strip() if _r else ""
+                except Exception:
+                    pass
+                self.mm02_actualizar_diferenciales_zpla(mat, zpla_base_m, res,
+                                                             sub_base=_sub_base, sub_nuevo=subproducto or "")
 
             # PASO 5 — CA02 (solo si cambio_hr=True)
             if cambio_hr:
@@ -3613,6 +3705,16 @@ class AutomatizadorSAP:
                 print(f"    [WARN] Navegación final: {e}")
 
             res.estado    = "OK"
+            # Leer BOM completo del ZFER nuevo desde SAP (para GestorAuto)
+            if res.zfer_nuevo:
+                try:
+                    _bom_sap = self.zppr0008_leer_bom_completo(res.zfer_nuevo)
+                    if _bom_sap.get("ok"):
+                        res.bom_sap = [{"pos": f["pos"], "clase": f["clase"]}
+                                       for f in _bom_sap.get("filas", []) if f.get("clase")]
+                        res._log(f"  BOM SAP completo: {len(res.bom_sap)} posiciones con clase")
+                except Exception as e_bom_sap:
+                    res._log(f"  [WARN] BOM SAP: {e_bom_sap}")
             res.fecha_fin = datetime.datetime.now()
             res._log(f"=== COMPLETADO OK ({res.duracion_seg}s) ===")
 
@@ -3978,8 +4080,21 @@ class AutomatizadorSAP:
                 # 5b — Subproducto
                 if subproducto:
                     self.mm02_actualizar_subproducto(mat, subproducto, res)
-                # 5c — Diferenciales de comportamiento: reemplazar con los del ZPLA base
-                self.mm02_actualizar_diferenciales_zpla(mat, zpla_base_c, res)
+                # 5c — Diferenciales con override subproducto
+
+                # Obtener subproducto del ZFER base para override diferencial
+                _sub_base = ""
+                try:
+                    with __import__('pyodbc').connect(_DB_SAP_STR, autocommit=True) as _cn_s:
+                        _r = _cn_s.cursor().execute(
+                            "SELECT TOP 1 ATWRT FROM dbo.ODATA_ZFER_CLASS_001 "
+                            "WHERE MATERIAL=? AND CENTRO='CO01' AND ATNAM='Z_SUBPRODUCT'",
+                            zfer_base).fetchone()
+                        _sub_base = str(_r[0] or "").strip() if _r else ""
+                except Exception:
+                    pass
+                self.mm02_actualizar_diferenciales_zpla(mat, zpla_base_c, res,
+                                                             sub_base=_sub_base, sub_nuevo=subproducto or "")
 
             # 5d — Plano con SP: solo para ZFER nuevo
             self.mm02_cambiar_plano_con_sp(zfer_nuevo, res, zfer_base=zfer_base, plano_manual=plano_manual)
@@ -4011,6 +4126,16 @@ class AutomatizadorSAP:
                 print(f"    [WARN] Navegación final: {e}")
 
             res.estado    = "OK"
+            # Leer BOM completo del ZFER nuevo desde SAP (para GestorAuto)
+            if res.zfer_nuevo:
+                try:
+                    _bom_sap = self.zppr0008_leer_bom_completo(res.zfer_nuevo)
+                    if _bom_sap.get("ok"):
+                        res.bom_sap = [{"pos": f["pos"], "clase": f["clase"]}
+                                       for f in _bom_sap.get("filas", []) if f.get("clase")]
+                        res._log(f"  BOM SAP completo: {len(res.bom_sap)} posiciones con clase")
+                except Exception as e_bom_sap:
+                    res._log(f"  [WARN] BOM SAP: {e_bom_sap}")
             res.fecha_fin = datetime.datetime.now()
             res._log(f"=== COMPLETADO OK ({res.duracion_seg}s) ===")
 

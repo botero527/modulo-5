@@ -544,8 +544,9 @@ def q_atributos(material: str) -> dict:
         return {"_error": str(e)}
 
 
+@lru_cache(maxsize=400)
 def q_entregas(material: str) -> list:
-    """Tabla 3: ODATA_ZCDS_Entregas_Pos_CO — números de entrega (ntgew > 0)."""
+    """Tabla 3: ODATA_ZCDS_Entregas_Pos_CO — números de entrega (ntgew > 0). Cacheado."""
     try:
         conn = get_conn()
         cur  = conn.cursor()
@@ -575,6 +576,7 @@ def _parsear_partnumber(pn: str) -> dict | None:
             "color": parts[3], "pieza": parts[4]}
 
 
+@lru_cache(maxsize=200)
 def q_variantes_por_pn(vehiculo: str, version: str, formula: str, pieza: str) -> list:
     """
     Busca ZFERs activos (no ZZ) en CO01 cuyo PARTNUMBER comparte vehiculo+version+
@@ -629,6 +631,7 @@ def q_variantes_por_pn(vehiculo: str, version: str, formula: str, pieza: str) ->
 
 
 
+@lru_cache(maxsize=200)
 def q_zplas_compatibles(formula_code: str, piece_type: str,
                         shade_band: str = "", differentials_base: str = "",
                         tiene_acero_base: bool | None = None) -> list:
@@ -705,6 +708,7 @@ def q_zplas_compatibles(formula_code: str, piece_type: str,
     except Exception as e:
         return [{"_error": str(e)}]
 
+@lru_cache(maxsize=200)
 def q_formulas_por_pieza(piece_type: str, nivel: str, subproducto: str,
                           formula_base: str) -> list:
     """
@@ -824,6 +828,7 @@ def q_formulas_por_pieza(piece_type: str, nivel: str, subproducto: str,
         return [{"_error": str(e)}]
 
 
+@lru_cache(maxsize=200)
 def q_mercados(entregas: list) -> list:
     """Tabla 4: ODATA_ZCDS_Entregas_Head_CO — conteo por route/mercado."""
     if not entregas:
@@ -1104,7 +1109,7 @@ def detalle_zfer(material: str):
         return render_template("index.html",
             error=f"Error de conexión BD: {head['_error']}")
 
-    mercados = q_mercados(entregas)
+    mercados = q_mercados(tuple(entregas))
  
     # Construir lista de atributos para mostrar (en orden definido)
     attrs_display = []
@@ -2162,199 +2167,101 @@ _DB_LOCAL_STR = (
 )
 
 def _get_conn_local():
+    """Conexion al servidor AGP Ingenieria (antes era localhost SQLEXPRESS)."""
     return pyodbc.connect(_DB_LOCAL_STR, autocommit=True)
 
 
-def _guardar_homologacion_formula(item: dict, res, session_user: str = "sistema") -> None:
+def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
     """
-    Inserta en M5_HomologacionFormula + M5_HomologacionFormula_BOM
-    después de una homologación de fórmula exitosa.
-    Se llama en el worker SÓLO cuando tipo in FORMULA* y estado == OK.
-    No lanza excepción — cualquier error se imprime pero no interrumpe el flujo.
+    Inserta en itg.GestorAuto_jobs_auto + itg.GestorAuto_bom_zfer_local.
+    BOM completo desde ODATA_ZFER_BOM. Estado inicial: PENDIENTE.
     """
     try:
         zfer_nuevo  = getattr(res, "zfer_nuevo",  "") or ""
         zfor_nuevo  = getattr(res, "zfor_nuevo",  "") or ""
         zpla        = getattr(res, "zpla",         "") or ""
-        bom_detalle = getattr(res, "bom_detalle",  [])
 
-        # ── Atributos del ZFER nuevo desde Azure (cacheado) ────────────
         attrs_nuevo = {}
         if zfer_nuevo:
-            try:
-                attrs_nuevo = q_atributos(zfer_nuevo)
-            except Exception:
-                pass
+            try: attrs_nuevo = q_atributos(zfer_nuevo)
+            except Exception: pass
 
-        vehiculo_nombre  = attrs_nuevo.get("Z_VEHICLE_MODEL", "")
-        version_vehiculo = attrs_nuevo.get("Z_AGP_VERSION",   "")
-        pieza            = attrs_nuevo.get("Z_PIECE_TYPE",     "")
-        pn_nuevo         = attrs_nuevo.get("Z_AGP_PARTNUMBER","")
-        vehiculo_codigo  = (pn_nuevo.split("_")[0] if pn_nuevo and "_" in pn_nuevo else "")
+        vehiculo_nombre  = (attrs_nuevo.get("Z_VEHICLE_MODEL", "") or "").strip() or "SIN NOMBRE"
+        version_vehiculo = (attrs_nuevo.get("Z_AGP_VERSION",   "") or "").strip() or "SIN VERSION"
+        pieza            = (attrs_nuevo.get("Z_PIECE_TYPE",     "") or "").strip()
+        pn_nuevo         = (attrs_nuevo.get("Z_AGP_PARTNUMBER","") or "").strip()
+        vehiculo_codigo  = (pn_nuevo.split("_")[0] if pn_nuevo and "_" in pn_nuevo else "").strip() or "0000"
+        pieza_3d         = str(pieza or "").zfill(3)[:3] if pieza else "000"
 
-        # ── Ruta y simetría del ZFER base desde M5_RutasZFER ───────────
-        ruta_3dm       = None
-        tiene_simetria = 0
-        zfer_simetrico = None
+        # Ruta y simetría desde M5_RUTASZFER
+        ruta_3dm = None; tiene_sim = False; zfer_sim = None
         try:
             with _get_conn_local() as cn:
                 row = cn.cursor().execute(
-                    "SELECT ruta, tiene_simetria, zfer_simetrico "
-                    "FROM itg.M5_RUTASZFER WHERE zfer = ?",
-                    item.get("zfer", "")
+                    "SELECT ruta, tiene_simetria, zfer_simetrico FROM itg.M5_RUTASZFER WHERE zfer=?",
+                    item.get("zfer","")
                 ).fetchone()
                 if row:
-                    ruta_3dm       = str(row[0] or "") or None
-                    tiene_simetria = 1 if row[1] else 0
-                    zfer_simetrico = str(row[2] or "") or None
-        except Exception:
-            pass
+                    ruta_3dm = str(row[0] or "").strip() or None
+                    tiene_sim = bool(row[1])
+                    zfer_sim  = str(row[2] or "").strip() or None
+        except Exception: pass
 
-        # ── INSERT principal ────────────────────────────────────────────
+        if not ruta_3dm:
+            print(f"[GESTOR] Omitido hom_id={hom_id}: ruta_3dm vacia")
+            return
+
+        simetria_val = "SI" if tiene_sim else "NO"
+
         with _get_conn_local() as cn:
             cur = cn.cursor()
+
+            # INSERT en GestorAuto_jobs_auto (id_job es auto-increment)
             cur.execute("""
-                INSERT INTO dbo.M5_HomologacionFormula
-                    (zfer_base, formula_base, formula_nueva, acero_dir,
-                     color_codigo, color_nombre,
-                     zfer_nuevo, zfor_nuevo, zpla,
-                     vehiculo_nombre, version_vehiculo, vehiculo_codigo, pieza,
-                     ruta_3dm, tiene_simetria, zfer_simetrico,
-                     creado_por, estado, batch_id)
-                OUTPUT INSERTED.id
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO itg.GestorAuto_jobs_auto
+                    (vehiculo_nombre, version_vehiculo, vehiculo_codigo,
+                     pieza, zfer, zfor, zpla,
+                     simetria, zfer_simetria,
+                     ruta_destino, estado)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
             """,
-                item.get("zfer",         ""),
-                getattr(res, "formula",  "") or item.get("formula_nueva", ""),
-                item.get("formula_nueva",""),
-                item.get("acero_dir",    ""),
-                item.get("color",        ""),
-                item.get("color_nombre", ""),
-                zfer_nuevo  or None,
-                zfor_nuevo  or None,
-                zpla        or None,
-                vehiculo_nombre  or None,
-                version_vehiculo or None,
-                vehiculo_codigo  or None,
-                pieza            or None,
+                vehiculo_nombre, version_vehiculo, vehiculo_codigo,
+                pieza_3d,
+                str(zfer_nuevo or ""),
+                str(zfor_nuevo or "") or None,
+                str(zpla or "") or None,
+                simetria_val, zfer_sim,
                 ruta_3dm,
-                tiene_simetria,
-                zfer_simetrico,
-                session_user,
-                "OK",
-                getattr(res, "batch_id", "") or None,
+                "PENDIENTE"
             )
-            hom_id = cur.fetchone()[0]
+            print(f"[GESTOR] Insertado GestorAuto_jobs_auto zfer={zfer_nuevo}")
 
-            # ── INSERT BOM detalle ──────────────────────────────────────
-            if bom_detalle and hom_id:
-                cur.executemany(
-                    "INSERT INTO dbo.M5_HomologacionFormula_BOM (homologacion_id, zfer_nuevo, posnr, clase_destino) VALUES (?,?,?,?)",
-                    [(hom_id, zfer_nuevo or None, b.get("posnr",""), b.get("clase_destino","") or None) for b in bom_detalle]
-                )
+            # BOM completo desde ZPPR0008 (leído en tiempo real de SAP post-homologación)
+            zfer_key = str(zfer_nuevo or item.get("zfer",""))
+            cur.execute("DELETE FROM itg.GestorAuto_bom_zfer_local WHERE zfer=?", zfer_key)
 
-        print(f"[HOMOLOG] Guardado id={hom_id} zfer_nuevo={zfer_nuevo} BOM={len(bom_detalle)} pos")
-        return hom_id
-
-    except Exception as e:
-        print(f"[HOMOLOG] Error guardando homologación: {e}")
-        return None
-
-
-def _guardar_gestor_auto(item: dict, res, hom_id: int) -> None:
-    """
-    Inserta en jobs_gestor_auto + bom_zfer_gestor_auto después de una
-    homologación de fórmula exitosa (cuando ya existe el registro en
-    M5_HomologacionFormula con id=hom_id).
-    No lanza excepción — cualquier error solo se imprime.
-    Solo inserta si ruta_3dm no está vacía (constraint NOT NULL).
-    """
-    try:
-        with _get_conn_local() as cn:
-            cur = cn.cursor()
-
-            # Leer el registro recién guardado en M5_HomologacionFormula
-            row = cur.execute("""
-                SELECT id, vehiculo_nombre, version_vehiculo, vehiculo_codigo,
-                       pieza, tiene_simetria, zfer_simetrico,
-                       zfer_base, zfor_nuevo, zpla, ruta_3dm, zfer_nuevo
-                FROM dbo.M5_HomologacionFormula
-                WHERE id = ?
-            """, hom_id).fetchone()
-
-            if not row:
-                print(f"[GESTOR] No se encontró M5_HomologacionFormula id={hom_id}")
-                return
-
-            (id_origen, veh_nombre, veh_version, veh_codigo,
-             pieza, tiene_sim, zfer_sim,
-             zfer_base, zfor_nuevo, zpla, ruta_3dm, zfer_nuevo) = row
-
-            # ruta_3dm es NOT NULL en la tabla destino — omitir si falta
-            if not ruta_3dm or not str(ruta_3dm).strip():
-                print(f"[GESTOR] Omitido id={hom_id}: ruta_3dm vacía")
-                return
-
-            # Valores con defaults para campos NOT NULL
-            veh_nombre   = (veh_nombre   or "").strip() or "SIN NOMBRE"
-            veh_version  = (veh_version  or "").strip() or "SIN VERSION"
-            veh_codigo   = (veh_codigo   or "").strip() or "0000"
-            pieza_3d     = str(pieza or "").strip().zfill(3)[:3] if pieza else "000"
-            simetria_val = "SI" if tiene_sim else "NO"
-            zfer_sim_val = str(zfer_sim or "").strip() or None
-
-            # Si ya existe id_origen, actualizar en lugar de insertar
-            existe = cur.execute(
-                "SELECT 1 FROM itg.M5_JOBSGESTORAUTO WHERE id_origen = ?", id_origen
-            ).fetchone()
-
-            if existe:
-                cur.execute("""
-                    UPDATE itg.M5_JOBSGESTORAUTO SET
-                        vehiculo_nombre  = ?, version_vehiculo = ?, vehiculo_codigo = ?,
-                        pieza = ?, simetria = ?, zfer_simetria = ?,
-                        zfer  = ?, zfor = ?, zpla = ?, ruta_3dm = ?
-                    WHERE id_origen = ?
-                """,
-                    veh_nombre, veh_version, veh_codigo,
-                    pieza_3d, simetria_val, zfer_sim_val,
-                    str(zfer_nuevo or zfer_base), str(zfor_nuevo or "") or None,
-                    str(zpla or "") or None, str(ruta_3dm).strip(),
-                    id_origen
-                )
-                print(f"[GESTOR] Actualizado jobs id_origen={id_origen}")
+            # Prioridad: res.bom_sap (ZPPR0008 completo) > res.bom_detalle (parcial)
+            bom_sap     = getattr(res, "bom_sap",     []) or []
+            bom_detalle = getattr(res, "bom_detalle",  []) or []
+            if bom_sap:
+                bom_completo = [(zfer_key, str(b.get("pos","")).strip(),
+                                 str(b.get("clase","")).strip(), None)
+                                for b in bom_sap if b.get("pos") and b.get("clase")]
             else:
-                cur.execute("""
-                    INSERT INTO itg.M5_JOBSGESTORAUTO
-                        (id_origen, vehiculo_nombre, version_vehiculo, vehiculo_codigo,
-                         pieza, simetria, zfer_simetria, zfer, zfor, zpla, ruta_3dm)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
-                """,
-                    id_origen, veh_nombre, veh_version, veh_codigo,
-                    pieza_3d, simetria_val, zfer_sim_val,
-                    str(zfer_nuevo or zfer_base), str(zfor_nuevo or "") or None,
-                    str(zpla or "") or None, str(ruta_3dm).strip()
-                )
-                print(f"[GESTOR] Insertado jobs id_origen={id_origen}")
+                bom_completo = [(zfer_key, str(b.get("posnr","")).strip(),
+                                 str(b.get("clase_destino","")).strip(), None)
+                                for b in bom_detalle if b.get("posnr") and b.get("clase_destino")]
 
-            # ── BOM: borrar anteriores y reinsertar (idempotente) ─────────
-            zfer_key = str(zfer_nuevo or zfer_base)
-            cur.execute("DELETE FROM itg.M5_BOMGESTORAUTO WHERE zfer = ?", zfer_key)
-
-            bom_detalle = getattr(res, "bom_detalle", []) or []
-            if bom_detalle:
+            if bom_completo:
                 cur.executemany(
-                    "INSERT INTO itg.M5_BOMGESTORAUTO (zfer, posicion, clase, descripcion) VALUES (?,?,?,?)",
-                    [(zfer_key,
-                      str(b.get("posnr", "")).strip(),
-                      str(b.get("clase_destino", "")).strip(),
-                      None)   # descripcion siempre NULL — no disponible
-                     for b in bom_detalle if b.get("posnr")]
+                    "INSERT INTO itg.GestorAuto_bom_zfer_local (zfer, posicion, clase, descripcion) VALUES (?,?,?,?)",
+                    bom_completo
                 )
-                print(f"[GESTOR] BOM {len(bom_detalle)} posiciones para {zfer_key}")
+                print(f"[GESTOR] BOM COMPLETO {len(bom_completo)} posiciones para {zfer_key}")
 
     except Exception as e:
-        print(f"[GESTOR] Error guardando gestor_auto: {e}")
+        print(f"[GESTOR] Error: {e}")
+
 
 
 def _migracion_bd_local():
@@ -2844,11 +2751,9 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                 except Exception as db_ex:
                     print(f"[COLA] error guardando item {item['_cola_id']}: {db_ex}")
 
-                # Registrar homologación de fórmula en tabla dedicada
+                # Registrar en GestorAuto (server) después de fórmula exitosa
                 if estado_item == "OK" and tipo in ("FORMULA", "FORMULA_CON_ACERO", "FORMULA_SIN_SIN", "FORMULA_CON_CON") and res:
-                    _hom_id = _guardar_homologacion_formula(item, res, session_user=ejecutado_por)
-                    if _hom_id:
-                        _guardar_gestor_auto(item, res, _hom_id)
+                    _guardar_gestor_auto(item, res, 0)
 
                 if estado_item == "OK": ok_n += 1
                 else:                  err_n += 1
@@ -4322,31 +4227,8 @@ def api_mantenimiento_hr_consultar():
             })
         hojas.sort(key=lambda h: h["materiales"], reverse=True)
 
-        # 5. ZFOR — solo para ZFERs fuera (deduplicados). Con GROUP BY es rápido (~1-2s)
-        all_fuera_uniq = list(dict.fromkeys(z for h in hojas for z in h["zfers_fuera"]))
-        zfor_map = {}
-        if all_fuera_uniq:
-            try:
-                t_zfor = _time.time()
-                with get_conn() as cn:
-                    cur = cn.cursor()
-                    ph_z = ",".join(["?"] * len(all_fuera_uniq))
-                    cur.execute(
-                        f"SELECT MATERIAL, MAX(MAT_CONFIG) FROM dbo.ODATA_ZFER_BOM "
-                        f"WHERE MATERIAL IN ({ph_z}) AND MAT_CONFIG IS NOT NULL AND MAT_CONFIG != '' "
-                        f"GROUP BY MATERIAL",
-                        all_fuera_uniq
-                    )
-                    for row in cur.fetchall():
-                        mat = str(row[0]).strip(); cfg = str(row[1]).strip() if row[1] else ""
-                        if cfg: zfor_map[mat] = cfg
-                print(f"[MHR] ZFORs: {len(zfor_map)}/{len(all_fuera_uniq)} ZFERs fuera | {_time.time()-t_zfor:.1f}s")
-            except Exception as e_zfor:
-                print(f"[MHR] WARN ZFOR: {e_zfor}")
-
-        for h in hojas:
-            h["zfor_map"] = {z: zfor_map.get(z, "") for z in h["zfers_fuera"]}
-            h["sin_zfor"] = [z for z in h["zfers_fuera"] if not zfor_map.get(z, "")]
+        # 5. ZFOR: se carga al generar Excel/plan (no en consultar — lento con 900+ ZFERs)
+        zfor_map = {}  # vacio — se llena en exportar y plan_asignacion
 
         print(f"[MHR] Consulta completa en {_time.time()-t0:.1f}s")
 
@@ -4542,6 +4424,103 @@ def api_mhr_diag_zfor(zfer: str):
         return jsonify({"ok": False, "error": str(e)})
 
 
+@app.route("/api/mantenimiento_hr/diagnostico/<id_hruta>")
+@login_required
+def api_mhr_diagnostico(id_hruta: str):
+    """
+    Pre-valida cuántos ZFERs realmente se pueden procesar:
+    1. Sigue asignado a esta HR en HR_MATERIALS
+    2. Existe y está activo en ODATA_ZFER_HEAD
+    3. Tiene HR destino disponible con capacidad (corre plan)
+    Retorna: {ok, total, validos, rechazados:[{zfer, motivo}], resumen}
+    """
+    import json as _json
+    try:
+        if not os.path.exists(_MHR_JSON):
+            return jsonify({"ok": False, "error": "Ejecuta la consulta primero."})
+        with open(_MHR_JSON, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        hr_origen = next((h for h in data.get("hojas_ruta", []) if str(h["id_hruta"]) == str(id_hruta)), None)
+        if not hr_origen:
+            return jsonify({"ok": False, "error": f"HR {id_hruta} no encontrada."})
+
+        zfers = list(dict.fromkeys(hr_origen.get("zfers_fuera", [])))
+        if not zfers:
+            return jsonify({"ok": False, "error": "No hay ZFERs fuera de calendario."})
+
+        rechazados = []
+        validos = list(zfers)
+
+        # 1. ¿Sigue asignado a esta HR? (HR_MATERIALS)
+        ph = ",".join(["?"] * len(validos))
+        with get_conn() as cn:
+            cur = cn.cursor()
+            cur.execute(
+                f"SELECT MATERIAL FROM dbo.HR_MATERIALS WHERE ID_HRUTA=? AND MATERIAL IN ({ph})",
+                [id_hruta] + validos
+            )
+            aun_asignados = {str(r[0]).strip() for r in cur.fetchall()}
+
+        no_asignados = [z for z in validos if z not in aun_asignados]
+        for z in no_asignados:
+            rechazados.append({"zfer": z, "motivo": "Ya no está en esta HR"})
+        validos = [z for z in validos if z in aun_asignados]
+
+        # 2. ¿Activo en ODATA_ZFER_HEAD?
+        if validos:
+            ph2 = ",".join(["?"] * len(validos))
+            with get_conn() as cn:
+                cur = cn.cursor()
+                cur.execute(
+                    f"SELECT MATERIAL FROM dbo.ODATA_ZFER_HEAD WHERE MATERIAL IN ({ph2}) AND CENTRO='CO01'",
+                    validos
+                )
+                activos = {str(r[0]).strip() for r in cur.fetchall()}
+            inactivos = [z for z in validos if z not in activos]
+            for z in inactivos:
+                rechazados.append({"zfer": z, "motivo": "No existe o inactivo en SAP"})
+            validos = [z for z in validos if z in activos]
+
+        # 3. ¿Tiene HR destino con capacidad? (plan rápido)
+        sin_hr_dest = []
+        if validos:
+            hr_capacidades = {}
+            with get_conn() as cn:
+                cur = cn.cursor()
+                cur.execute("SELECT ID_HRUTA, MATERIALES FROM dbo.ODATA_HR_CONSULTA WHERE TIPO_HR='PRODUCCION'")
+                for r in cur.fetchall():
+                    hr_capacidades[str(r[0]).strip()] = int(r[1] or 0)
+
+            LIMITE = 300
+            for z in validos:
+                # Check if any HR has capacity (simple check without full criteria)
+                disponibles = [hid for hid, mat in hr_capacidades.items()
+                               if hid != str(id_hruta) and mat < LIMITE]
+                if not disponibles:
+                    sin_hr_dest.append(z)
+
+            for z in sin_hr_dest:
+                rechazados.append({"zfer": z, "motivo": "Sin HR destino con capacidad disponible"})
+            validos = [z for z in validos if z not in sin_hr_dest]
+
+        resumen = {
+            "total_fuera": len(zfers),
+            "validos": len(validos),
+            "no_asignados": len(no_asignados),
+            "inactivos": len([r for r in rechazados if "inactivo" in r["motivo"].lower() or "existe" in r["motivo"].lower()]),
+            "sin_hr": len(sin_hr_dest),
+        }
+
+        return jsonify({
+            "ok": True, "id_hruta": id_hruta,
+            "total": len(zfers), "n_validos": len(validos),
+            "validos": validos, "rechazados": rechazados, "resumen": resumen
+        })
+    except Exception as e:
+        import traceback; print(traceback.format_exc())
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @app.route("/api/mantenimiento_hr/plan_asignacion/<id_hruta>")
 @login_required
 def api_mhr_plan_asignacion(id_hruta: str):
@@ -4563,9 +4542,14 @@ def api_mhr_plan_asignacion(id_hruta: str):
         # Aplicar limite si viene (para flujo completo con 1/10 ZFERs)
         # Filtrar QAS primero para tomar los realmente pendientes
         _limite_plan = request.args.get("limite", type=int)
-        ya_desasig = _qas_leer_desasignados()
+        # skip_qas=1: flujo completo pasa esto para NO filtrar por QAS (acaba de desasignar esos mismos)
+        _skip_qas = request.args.get("skip_qas", type=int, default=0)
         zfers_fuera_all = hr_origen.get("zfers_fuera", [])
-        zfers_disponibles = [z for z in zfers_fuera_all if z not in ya_desasig]
+        if _skip_qas:
+            zfers_disponibles = list(zfers_fuera_all)
+        else:
+            ya_desasig = _qas_leer_desasignados()
+            zfers_disponibles = [z for z in zfers_fuera_all if z not in ya_desasig]
         zfers_fuera = zfers_disponibles[:_limite_plan] if _limite_plan else zfers_disponibles
 
         if not zfers_fuera:
