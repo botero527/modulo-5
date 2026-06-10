@@ -227,12 +227,18 @@ function _itemRow(it) {
   const detalle = it.tipo === 'color'
     ? `<span class="item-color">${it.color_nombre||it.color||'—'}</span>`
     : `<span class="tag t-color">${it.formula_nueva||'—'}</span>`;
-  const esAdv = it.estado === 'OK' && (it.error_msg||'').startsWith('[ADV]');
+  const esAdv = it.estado === 'OK' && ((it.error_msg||'').startsWith('[ADV]') || (it.error_msg||'').includes('[HR-WARN]'));
+  const _fmtMsgs = (raw, strip5) => {
+    const txt = strip5 ? (raw||'').replace(/^\[ADV\]\s*/,'') : (raw||'');
+    return txt.split('|').map(s => s.trim()).filter(Boolean)
+              .map(s => `<div style="margin-top:.1rem;">• ${s}</div>`).join('');
+  };
   const estadoHtml = it.estado === 'ERROR'
-    ? `<span class="item-estado-err" title="${it.error_msg||''}"><i class="bi bi-x-circle-fill me-1"></i>${(it.error_msg||'Error').substring(0,60)}${(it.error_msg||'').length>60?'…':''}</span>`
+    ? `<span class="item-estado-err"><i class="bi bi-x-circle-fill me-1"></i>ERROR</span>
+       <div style="font-size:.68rem;color:var(--err-txt);margin-top:.2rem;word-break:break-word;">${_fmtMsgs(it.error_msg,false)||it.error_msg||'Error'}</div>`
     : esAdv
     ? `<span style="background:var(--warn-bg);color:var(--warn-txt);border:1px solid var(--warn-bdr);border-radius:10px;padding:.15rem .5rem;font-size:.72rem;font-weight:700;">⚠ ADV ${it.zfer_nuevo ? '→ '+it.zfer_nuevo : ''}</span>
-       <div style="font-size:.68rem;color:var(--warn-txt);margin-top:.15rem;" title="${it.error_msg||''}">${(it.error_msg||'').substring(5,80)}${(it.error_msg||'').length>80?'…':''}</div>`
+       <div style="font-size:.68rem;color:var(--warn-txt);margin-top:.2rem;word-break:break-word;">${_fmtMsgs(it.error_msg,true)}</div>`
     : it.estado === 'OK'
     ? `<span class="item-estado-ok"><i class="bi bi-check-circle-fill me-1"></i>OK ${it.zfer_nuevo ? '→ '+it.zfer_nuevo : ''}</span>`
     : `<span class="item-estado-pend"><i class="bi bi-hourglass me-1"></i>Pendiente</span>`;
@@ -445,10 +451,14 @@ async function _verReporteBloque(bloqueId) {
           : it.estado==='OK'
           ? `<span class="rep-tag-ok"><i class="bi bi-check-circle-fill me-1"></i>OK</span>`
           : `<span style="color:var(--muted);font-size:.72rem;">—</span>`;
-        const advMsg = esAdv ? (it.error_msg||'').substring(5).trim() : '';
-        const errShort = esAdv
-          ? (advMsg.length>60 ? advMsg.substring(0,60)+'…' : advMsg||'—')
-          : it.error_msg ? (it.error_msg.length>60 ? it.error_msg.substring(0,60)+'…' : it.error_msg) : '—';
+        const _repMsgs = (raw, strip5) => {
+          const txt = strip5 ? (raw||'').replace(/^\[ADV\]\s*/,'') : (raw||'');
+          return txt.split('|').map(s=>s.trim()).filter(Boolean)
+                    .map(s=>`<div>• ${s}</div>`).join('') || '—';
+        };
+        const errShort = it.error_msg
+          ? `<div style="font-size:.68rem;word-break:break-word;">${_repMsgs(it.error_msg, esAdv)}</div>`
+          : '—';
         return `<div class="rep-row" style="background:${bg};">
           <span style="color:var(--muted);font-size:.7rem;">${i+1}</span>
           <span style="font-weight:700;color:var(--zfer-txt);font-size:.8rem;">${it.zfer_base}</span>

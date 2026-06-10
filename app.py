@@ -2181,60 +2181,77 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
         zfor_nuevo  = getattr(res, "zfor_nuevo",  "") or ""
         zpla        = getattr(res, "zpla",         "") or ""
 
-        attrs_nuevo = {}
-        if zfer_nuevo:
-            try: attrs_nuevo = q_atributos(zfer_nuevo)
-            except Exception: pass
+        # Atributos del ZFER BASE (ya sincronizado en ODATA) — el nuevo aún no está en ODATA
+        zfer_base = item.get("zfer", "")
+        attrs_base = {}
+        try: attrs_base = q_atributos(zfer_base)
+        except Exception: pass
 
-        vehiculo_nombre  = (attrs_nuevo.get("Z_VEHICLE_MODEL", "") or "").strip() or "SIN NOMBRE"
-        version_vehiculo = (attrs_nuevo.get("Z_AGP_VERSION",   "") or "").strip() or "SIN VERSION"
-        pieza            = (attrs_nuevo.get("Z_PIECE_TYPE",     "") or "").strip()
-        pn_nuevo         = (attrs_nuevo.get("Z_AGP_PARTNUMBER","") or "").strip()
-        vehiculo_codigo  = (pn_nuevo.split("_")[0] if pn_nuevo and "_" in pn_nuevo else "").strip() or "0000"
-        pieza_3d         = str(pieza or "").zfill(3)[:3] if pieza else "000"
+        vehiculo_nombre  = (attrs_base.get("Z_VEHICLE_MODEL", "") or "").strip() or ""
+        version_vehiculo = (attrs_base.get("Z_AGP_VERSION",   "") or "").strip() or ""
+        pieza            = (attrs_base.get("Z_PIECE_TYPE",     "") or item.get("tipo_pieza","") or "").strip()
+        pn_base          = item.get("pn_base", "") or (attrs_base.get("Z_AGP_PARTNUMBER","") or "")
+        vehiculo_codigo  = (pn_base.split("_")[0] if pn_base and "_" in pn_base else "").strip() or ""
+        pieza_3d         = str(pieza or "").zfill(3)[:3] if pieza else ""
 
-        # Ruta y simetría desde M5_RUTASZFER
+        # Ruta y simetría desde M5_RUTASZFER (del ZFER base)
         ruta_3dm = None; tiene_sim = False; zfer_sim = None
         try:
             with _get_conn_local() as cn:
                 row = cn.cursor().execute(
                     "SELECT ruta, tiene_simetria, zfer_simetrico FROM itg.M5_RUTASZFER WHERE zfer=?",
-                    item.get("zfer","")
+                    zfer_base
                 ).fetchone()
                 if row:
-                    ruta_3dm = str(row[0] or "").strip() or None
+                    ruta_3dm  = str(row[0] or "").strip() or None
                     tiene_sim = bool(row[1])
                     zfer_sim  = str(row[2] or "").strip() or None
         except Exception: pass
 
         if not ruta_3dm:
-            print(f"[GESTOR] Omitido hom_id={hom_id}: ruta_3dm vacia")
-            return
+            print(f"[GESTOR] ruta_3dm vacia para {zfer_base} — insertando con NULL")
 
         simetria_val = "SI" if tiene_sim else "NO"
+
+        # Atributos del ZFER simétrico (si aplica)
+        zfor_sim = None; zpla_sim = None; pieza_sim = None
+        if tiene_sim and zfer_sim:
+            try:
+                attrs_sim = q_atributos(zfer_sim)
+                pieza_sim = (attrs_sim.get("Z_PIECE_TYPE","") or "").strip().zfill(3)[:3] or None
+                # zfor y zpla del simétrico desde ODATA_ZFER_HEAD
+                head_sim = q_zfer_head(zfer_sim)
+                if head_sim and not isinstance(head_sim, dict) and "_error" not in (head_sim or {}):
+                    pass  # head_sim es un dict
+                if isinstance(head_sim, dict) and "_error" not in head_sim:
+                    zfor_sim = str(head_sim.get("ZFOR","") or "").strip() or None
+            except Exception: pass
+            # zpla del simétrico: buscamos en M5_RUTASZFER si tiene zpla guardado
+            # o usamos el mismo zpla del job principal
+            zpla_sim = zpla or None
 
         with _get_conn_local() as cn:
             cur = cn.cursor()
 
-            # INSERT en GestorAuto_jobs_auto (id_job es auto-increment)
+            # INSERT en GestorAuto_jobs_auto con todos los campos
             cur.execute("""
                 INSERT INTO itg.GestorAuto_jobs_auto
                     (vehiculo_nombre, version_vehiculo, vehiculo_codigo,
                      pieza, zfer, zfor, zpla,
-                     simetria, zfer_simetria,
-                     ruta_destino, estado)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                     simetria, pieza_simetria, zfer_simetria, zfor_simetria, zpla_simetria,
+                     ruta_3dm, estado)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
                 vehiculo_nombre, version_vehiculo, vehiculo_codigo,
                 pieza_3d,
                 str(zfer_nuevo or ""),
                 str(zfor_nuevo or "") or None,
                 str(zpla or "") or None,
-                simetria_val, zfer_sim,
+                simetria_val, pieza_sim, zfer_sim, zfor_sim, zpla_sim,
                 ruta_3dm,
                 "PENDIENTE"
             )
-            print(f"[GESTOR] Insertado GestorAuto_jobs_auto zfer={zfer_nuevo}")
+            print(f"[GESTOR] Insertado GestorAuto_jobs_auto zfer={zfer_nuevo} veh='{vehiculo_nombre}' pieza={pieza_3d}")
 
             # BOM completo desde ZPPR0008 (leído en tiempo real de SAP post-homologación)
             zfer_key = str(zfer_nuevo or item.get("zfer",""))
@@ -2246,11 +2263,11 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
             if bom_sap:
                 bom_completo = [(zfer_key, str(b.get("pos","")).strip(),
                                  str(b.get("clase","")).strip(), None)
-                                for b in bom_sap if b.get("pos") and b.get("clase")]
+                                for b in bom_sap if str(b.get("pos","")).strip()]
             else:
                 bom_completo = [(zfer_key, str(b.get("posnr","")).strip(),
                                  str(b.get("clase_destino","")).strip(), None)
-                                for b in bom_detalle if b.get("posnr") and b.get("clase_destino")]
+                                for b in bom_detalle if str(b.get("posnr","")).strip()]
 
             if bom_completo:
                 cur.executemany(
@@ -2705,8 +2722,11 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                             print(f"[COLA] {item['zfer']} → buscando HR candidata para {zfer_nuevo}…")
                             hr_id, hr_desc, hr_err = _hr_buscar_candidata(item["zfer"], zfer_nuevo)
                             if hr_err:
-                                print(f"[COLA] HR candidata no encontrada: {hr_err}")
-                                error_msg = (error_msg + f" | HR: {hr_err}").strip(" |")
+                                msg_hr = f"⚠ HR no asignada: {hr_err}"
+                                print(f"[COLA] {msg_hr}")
+                                # Se guarda como advertencia — la homologación SAP fue OK pero HR pendiente
+                                error_msg = (error_msg + f" | [HR-WARN] {hr_err}").strip(" |")
+                                if res: res._advertir(f"HR no asignada: {hr_err}")
                             else:
                                 print(f"[COLA] HR candidata: {hr_id} ({hr_desc})")
                                 try:
@@ -3754,8 +3774,12 @@ def _hr_construir_criterios(attrs_base: dict, area, bom_posiciones: list,
 def _hr_buscar_candidata(zfer_base: str, zfer_nuevo: str) -> tuple:
     """
     Dado zfer_base (atributos BD) y zfer_nuevo (BOM SAP), busca la HR candidata:
-    la de mayor MATERIALES que no supere 450.
+    la de mayor MATERIALES que no supere 300 (límite actual).
     Retorna (id_hruta: str | None, descripcion: str, error: str | None)
+    Errores posibles:
+      - "SAP BOM error: ..."  → no se pudo leer BOM del ZFER nuevo
+      - "Sin HRs candidatas con materiales ≤ 300" → no hay HR disponible
+      - "Sin HRs con criterios del ZFER" → BOM o atributos no matchean ninguna HR
     """
     try:
         import importlib
@@ -3799,7 +3823,13 @@ def _hr_buscar_candidata(zfer_base: str, zfer_nuevo: str) -> tuple:
 
         elegibles = [r for r in resultados if r.get("MATERIALES") is not None and r["MATERIALES"] <= 300]
         if not elegibles:
-            return None, "", "Sin HRs candidatas con materiales ≤ 300"
+            if resultados:
+                # Hay HRs pero todas están llenas (> 300 materiales)
+                max_mat = max(r.get("MATERIALES", 0) for r in resultados)
+                return None, "", f"Todas las HRs candidatas superan el límite de 300 materiales (max encontrado: {max_mat}). Revisar capacidad."
+            else:
+                # No hubo ninguna HR con los criterios del ZFER
+                return None, "", "No se encontró ninguna HR de producción compatible con los criterios del ZFER (nivel, geometría, tamaño, BOM). Revisar configuración del ZFER o crear HR nueva."
         candidata = max(elegibles, key=lambda r: r["MATERIALES"])
         return str(candidata["ID_HRUTA"]), candidata.get("DESCRIPCION",""), None
 

@@ -574,7 +574,7 @@ def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
 
         ses2.findById("wnd[0]/usr/ssubSUBSCR_1200:SAPLCMFV:1200/btnPRUEFEN").press()
         _esperar_ocupado(ses2, T_MEDIO)
-
+        
         try:
             ses2.findById("wnd[0]/tbar[0]/btn[3]").press()
             _esperar_ocupado(ses2, T_RAPIDO)
@@ -636,15 +636,27 @@ def c223_mantenimiento(zfers: list, hr_id: str) -> dict:
         ok_count = 0
         for i, zfer in enumerate(zfers):
             _log(f"[{i+1}/{len(zfers)}] {zfer}...")
+            # Asegurar WERKS antes de cada ZFER (puede perderse entre iteraciones)
+            try: ses2.findById(_WERKS).text = "CO01"
+            except Exception: pass
             ok, detalle = _procesar_zfer(zfer, intento=1)
 
             if not ok:
                 _log(f"  Fallo 1er intento: {detalle} — reintentando...")
-                # Limpiar estado antes de reintentar
+                # Limpiar estado y re-navegar a C223 para asegurar estado limpio
                 _cerrar_popups_wnd1(ses2)
                 try: ses2.findById(_MATNR).text = ""
                 except Exception: pass
-                time.sleep(1.0)
+                time.sleep(1.5)
+                # Re-navegar para estado completamente limpio
+                try:
+                    ses2.findById("wnd[0]/tbar[0]/okcd").text = "C223"
+                    ses2.findById("wnd[0]").sendVKey(0)
+                    _esperar_ocupado(ses2, T_MEDIO)
+                    _cerrar_popups_wnd1(ses2)
+                    ses2.findById(_WERKS).text = "CO01"
+                except Exception as e_renav:
+                    _log(f"  [WARN] Re-nav: {e_renav}")
                 ok, detalle = _procesar_zfer(zfer, intento=2)
 
             estado = "OK" if ok else "ERROR"
