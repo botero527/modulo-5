@@ -78,8 +78,8 @@ _T_MIN_LENTO  = 0.05
 _T_POLL = 0.05
 #700176997
 
-_SAP_USER     = os.environ.get("SAP_USER",     "FESPITIA")
-_SAP_PASSWORD = os.environ.get("SAP_PASSWORD", "Agp2026*")
+_SAP_USER     = os.environ.get("SAP_USER",     "INTELLIGENCE")
+_SAP_PASSWORD = os.environ.get("SAP_PASSWORD", "INTELsap_2026")
 _SAP_CLIENT   = os.environ.get("SAP_CLIENT",   "300")
 _SAP_SYSTEM   = os.environ.get("SAP_SYSTEM",   "AGP PRD")   # producción; "QAS" para pruebas
 
@@ -1439,6 +1439,51 @@ class AutomatizadorSAP:
             pass
 
         print(f"      MM02 {material} PARTNUMBER → {nuevo_pn}")
+
+    # ── Verificación final BOM: ZFER nuevo vs ZPLA homologado ────────────────
+
+    def _verificar_clases_bom(self, bom_zfer: list, clases_zpla: dict,
+                               zpla: str, res) -> None:
+        """
+        Compara las clases del ZFER nuevo (bom_zfer) contra las del ZPLA (clases_zpla).
+        Solo revisa posiciones que existen en AMBOS. Si alguna clase difiere → advertencia.
+        No bloquea el flujo.
+
+        bom_zfer    : lista de {pos: str, clase: str} — del ZFER nuevo (ZPPR0008)
+        clases_zpla : dict {pos_zfill4: clase, pos: clase} — del ZPLA (ya leído)
+        """
+        if not bom_zfer or not clases_zpla:
+            return
+
+        mismatches = []
+        for item in bom_zfer:
+            pos   = str(item.get("pos", "")).strip()
+            clase = str(item.get("clase", "")).strip()
+            if not pos or not clase:
+                continue   # posiciones L-type sin clase: no participan
+            # Buscar en clases_zpla con o sin cero-padding
+            try:
+                pos_int = int(pos)
+                pos4    = str(pos_int).zfill(4)
+            except ValueError:
+                pos4 = pos
+            clase_zpla = clases_zpla.get(pos4) or clases_zpla.get(pos, "")
+            if not clase_zpla:
+                continue   # posición no existe en ZPLA: ignorar
+            if clase.upper() != clase_zpla.upper():
+                mismatches.append(
+                    f"pos {pos4}: ZFER='{clase}' vs ZPLA='{clase_zpla}'"
+                )
+
+        if mismatches:
+            msg = f"BOM-DIFF ({zpla}): " + " | ".join(mismatches)
+            print(f"    [WARN] {msg}")
+            if res:
+                res._advertir(msg)
+        else:
+            print(f"    [BOM-CHECK] Clases OK vs ZPLA {zpla} ({len(bom_zfer)} posiciones)")
+            if res:
+                res._log(f"  [BOM-CHECK] Clases OK vs ZPLA {zpla}")
 
     # ── SAP: leer posicion→clase del ZPLA en sesión auxiliar ─────────────────
 
@@ -3332,6 +3377,9 @@ class AutomatizadorSAP:
                         res.bom_sap = [{"pos": f["pos"], "clase": f.get("clase", "")}
                                        for f in _bom_sap.get("filas", [])]
                         res._log(f"  BOM SAP completo: {len(res.bom_sap)} posiciones")
+                        # Verificar clases vs ZPLA homologado
+                        if zpla_usado and clases:
+                            self._verificar_clases_bom(res.bom_sap, clases, zpla_usado, res)
                 except Exception as e_bom_sap:
                     res._log(f"  [WARN] BOM SAP: {e_bom_sap}")
             res.fecha_fin = datetime.datetime.now()
@@ -3548,6 +3596,9 @@ class AutomatizadorSAP:
                         res.bom_sap = [{"pos": f["pos"], "clase": f.get("clase", "")}
                                        for f in _bom_sap.get("filas", [])]
                         res._log(f"  BOM SAP completo: {len(res.bom_sap)} posiciones")
+                        # Verificar clases vs ZPLA homologado
+                        if zpla_usado and clases:
+                            self._verificar_clases_bom(res.bom_sap, clases, zpla_usado, res)
                 except Exception as e_bom_sap:
                     res._log(f"  [WARN] BOM SAP: {e_bom_sap}")
             res.fecha_fin = datetime.datetime.now()
@@ -3770,6 +3821,9 @@ class AutomatizadorSAP:
                         res.bom_sap = [{"pos": f["pos"], "clase": f.get("clase", "")}
                                        for f in _bom_sap.get("filas", [])]
                         res._log(f"  BOM SAP completo: {len(res.bom_sap)} posiciones")
+                        # Verificar clases vs ZPLA homologado
+                        if zpla_usado and clases:
+                            self._verificar_clases_bom(res.bom_sap, clases, zpla_usado, res)
                 except Exception as e_bom_sap:
                     res._log(f"  [WARN] BOM SAP: {e_bom_sap}")
             res.fecha_fin = datetime.datetime.now()
@@ -4201,6 +4255,9 @@ class AutomatizadorSAP:
                         res.bom_sap = [{"pos": f["pos"], "clase": f.get("clase", "")}
                                        for f in _bom_sap.get("filas", [])]
                         res._log(f"  BOM SAP completo: {len(res.bom_sap)} posiciones")
+                        # Verificar clases vs ZPLA homologado
+                        if zpla_usado and clases:
+                            self._verificar_clases_bom(res.bom_sap, clases, zpla_usado, res)
                 except Exception as e_bom_sap:
                     res._log(f"  [WARN] BOM SAP: {e_bom_sap}")
             res.fecha_fin = datetime.datetime.now()

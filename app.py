@@ -2765,9 +2765,9 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                     with _get_conn_local() as cn:
                         cn.cursor().execute("""
                             UPDATE itg.M5_COLA
-                            SET estado=?, ejecutado_el=GETDATE(), zfer_nuevo=?, error_msg=?
+                            SET estado=?, ejecutado_el=?, zfer_nuevo=?, error_msg=?
                             WHERE id=?
-                        """, estado_item, zfer_nuevo or None, error_msg or None, item["_cola_id"])
+                        """, estado_item, _dt.now(), zfer_nuevo or None, error_msg or None, item["_cola_id"])
                 except Exception as db_ex:
                     print(f"[COLA] error guardando item {item['_cola_id']}: {db_ex}")
 
@@ -2796,9 +2796,9 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
             cur2 = cn.cursor()
             cur2.execute("""
                 UPDATE itg.M5_BLOQUES
-                SET estado='COMPLETADO', ejecutado_el=GETDATE(), ok_count=?, error_count=?
+                SET estado='COMPLETADO', ejecutado_el=?, ok_count=?, error_count=?
                 WHERE id=?
-            """, ok_n, err_n, bloque_id)
+            """, _dt.now(), ok_n, err_n, bloque_id)
             # Si no quedó ningún bloque PENDIENTE, crear uno nuevo para mañana 7am
             cur2.execute("SELECT COUNT(*) FROM itg.M5_BLOQUES WHERE estado='PENDIENTE'")
             if cur2.fetchone()[0] == 0:
@@ -3053,7 +3053,7 @@ def api_cola_bloques():
                 bloques.append({
                     "id": r[0], "bloque_num": r[1],
                     "hora_prog": r[2].isoformat() if r[2] else "",
-                    "ejecutado_el": r[6].isoformat() if r[6] else None,
+                    "ejecutado_el": r[6].strftime("%d/%m/%Y %H:%M") if r[6] else None,
                     "timer_activo": bool(r[3]), "estado": r[4],
                     "ok_count": r[7], "error_count": r[8],
                     "total_items": r[9] or 0, "pendientes": r[10] or 0,

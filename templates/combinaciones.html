@@ -1309,7 +1309,7 @@ async function _enviarTodoACola() {
           <i class="bi bi-check-circle-fill me-1"></i>${cola.length} ítem(s) → Bloque ${d.bloque_num} · ${d.hora_prog}
         </span>`;
       // Desmarcar todos
-      document.querySelectorAll(".sap-check:checked,.chk-fc:checked,.col-queue-check:checked")
+      document.querySelectorAll(".sap-check:checked,.chk-fc:checked,.schk-fc:checked,.col-queue-check:checked")
         .forEach(c => { c.checked = false; });
       _actualizarContadorCola();
       _colaActualizarBadge();

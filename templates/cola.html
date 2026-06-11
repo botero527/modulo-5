@@ -182,7 +182,7 @@ async function _cargarBloques() {
       } else if (b.estado === 'COMPLETADO') {
         const okBadge  = b.ok_count    ? `<span class="bloque-badge-ok" style="font-size:.72rem;">✓ ${b.ok_count} OK</span>` : '';
         const errBadge = b.error_count ? `<span class="bloque-badge-err" style="font-size:.72rem;">✗ ${b.error_count} errores</span>` : '';
-        const ejTime   = b.ejecutado_el ? `<span style="font-size:.76rem;color:var(--muted);">Ejecutado: ${new Date(b.ejecutado_el).toLocaleString('es-CO')}</span>` : '';
+        const ejTime   = b.ejecutado_el ? `<span style="font-size:.76rem;color:var(--muted);">Ejecutado: ${b.ejecutado_el}</span>` : '';
         accionesHtml = `
           <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">
             ${ejTime} ${okBadge} ${errBadge}
@@ -345,57 +345,124 @@ async function _cargarHistorial() {
       cont.innerHTML = `<div class="empty-state"><i class="bi bi-journal-x"></i><div>Sin ejecuciones registradas aún</div></div>`;
       return;
     }
-    // Agrupar por bloque_id
-    const bloques = {};
+    // Agrupar por bloque_id (orden: más reciente primero)
+    const bloqueMap = {};
+    const bloqueOrder = [];
     d.log.forEach(r => {
-      if (!bloques[r.bloque_id]) bloques[r.bloque_id] = [];
-      bloques[r.bloque_id].push(r);
+      if (!bloqueMap[r.bloque_id]) { bloqueMap[r.bloque_id] = []; bloqueOrder.push(r.bloque_id); }
+      bloqueMap[r.bloque_id].push(r);
     });
+
+    const _tipoBadge = tipo => {
+      if (tipo === 'COLOR')              return `<span style="background:var(--ok-bg);color:var(--ok-txt);border:1px solid var(--ok-bdr);border-radius:5px;padding:.08rem .35rem;font-size:.65rem;font-weight:700;letter-spacing:.03em;">COLOR</span>`;
+      if (tipo === 'FORMULA')            return `<span style="background:var(--pur-bg,#ede9fe);color:var(--pur-txt,#6d28d9);border:1px solid var(--pur-bdr,#c4b5fd);border-radius:5px;padding:.08rem .35rem;font-size:.65rem;font-weight:700;letter-spacing:.03em;">FÓRMULA</span>`;
+      if (tipo === 'FORMULA_CON_ACERO') return `<span style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:5px;padding:.08rem .35rem;font-size:.65rem;font-weight:700;letter-spacing:.03em;">+ ACERO</span>`;
+      if (tipo === 'FORMULA_SIN_SIN')   return `<span style="background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc;border-radius:5px;padding:.08rem .35rem;font-size:.65rem;font-weight:700;letter-spacing:.03em;">SIN→SIN</span>`;
+      if (tipo === 'FORMULA_CON_CON')   return `<span style="background:#f0fdf4;color:#166534;border:1px solid #86efac;border-radius:5px;padding:.08rem .35rem;font-size:.65rem;font-weight:700;letter-spacing:.03em;">CON→CON</span>`;
+      return `<span style="background:var(--chip-bg);color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:.08rem .35rem;font-size:.65rem;">${tipo}</span>`;
+    };
+
     let html = '';
-    for (const [bid, items] of Object.entries(bloques).reverse()) {
-      const okN  = items.filter(i=>i.estado==='OK').length;
-      const errN = items.filter(i=>i.estado==='ERROR').length;
-      const fecha = items[0].ejecutado_el||'—';
+    for (const bid of bloqueOrder) {
+      const items = bloqueMap[bid];
+      const okN   = items.filter(i=>i.estado==='OK').length;
+      const errN  = items.filter(i=>i.estado==='ERROR').length;
+      const advN  = items.filter(i=>(i.error_msg||'').startsWith('[ADV]')).length;
+      const fecha = items[0].ejecutado_el || '—';
+
       const rows = items.map(r => {
-        const badge = r.estado==='OK'
-          ? `<span class="bloque-badge-ok" style="font-size:.7rem;">OK</span>`
-          : `<span class="bloque-badge-err" style="font-size:.7rem;">ERROR</span>`;
-        const det = r.tipo==='COLOR'
-          ? `<span class="item-color">${r.color_nombre||r.color||'—'}</span>`
-          : `<span class="tag t-color">${r.formula_nueva||'—'}</span>`;
-        return `<div class="item-row">
-          <span class="item-zfer">${r.zfer_base}</span>
-          <span class="item-tipo">${r.tipo}</span>
-          ${det}
-          ${r.zfer_nuevo?`<span style="color:var(--accent);font-size:.72rem;font-weight:700;">→ ${r.zfer_nuevo}</span>`:''}
-          <span style="flex:1;"></span>
-          ${badge}
-          ${r.error_msg?`<span style="color:var(--err-txt);font-size:.7rem;" title="${r.error_msg}">${r.error_msg.substring(0,50)}…</span>`:''}
-          <span style="color:var(--muted);font-size:.7rem;">${r.ejecutado_el}</span>
+        const esAdv = (r.error_msg||'').startsWith('[ADV]');
+        const estadoBadge = r.estado==='OK'
+          ? (esAdv
+              ? `<span style="background:#fef9c3;color:#854d0e;border:1px solid #fde68a;border-radius:5px;padding:.1rem .4rem;font-size:.67rem;font-weight:700;">⚠ ADV</span>`
+              : `<span style="background:var(--ok-bg);color:var(--ok-txt);border:1px solid var(--ok-bdr);border-radius:5px;padding:.1rem .4rem;font-size:.67rem;font-weight:700;">✓ OK</span>`)
+          : `<span style="background:var(--err-bg);color:var(--err-txt);border:1px solid var(--err-bdr);border-radius:5px;padding:.1rem .4rem;font-size:.67rem;font-weight:700;">✗ ERR</span>`;
+
+        const detalle = r.tipo==='COLOR'
+          ? `<span style="color:var(--text);font-size:.75rem;">${r.color_nombre||r.color||'—'}</span>`
+          : `<span style="color:var(--accent);font-size:.75rem;font-weight:600;">${r.formula_nueva||'—'}</span>`;
+
+        const zferNuevo = r.zfer_nuevo
+          ? `<span style="color:var(--info-txt);font-size:.72rem;font-weight:700;">→ ${r.zfer_nuevo}</span>`
+          : '';
+
+        let msgHtml = '';
+        if (r.error_msg) {
+          const rawMsg  = esAdv ? r.error_msg.replace(/^\[ADV\]\s*/,'') : r.error_msg;
+          const msgColor = esAdv ? 'color:#92400e;' : 'color:var(--err-txt);';
+          const bullets = rawMsg.split('|').map(s=>s.trim()).filter(Boolean);
+          msgHtml = `<div style="font-size:.68rem;${msgColor}margin-top:.15rem;line-height:1.4;">
+            ${bullets.map(b=>`<div>• ${b}</div>`).join('')}
+          </div>`;
+        }
+
+        return `<div style="display:grid;grid-template-columns:auto auto 1fr auto;align-items:start;gap:.5rem .8rem;
+                            padding:.55rem 1rem;border-bottom:1px solid var(--border);min-height:0;">
+          <div style="display:flex;flex-direction:column;gap:.25rem;min-width:0;">
+            <span style="font-weight:700;font-size:.8rem;color:var(--zfer-txt);white-space:nowrap;">${r.zfer_base}</span>
+            <span style="color:var(--muted);font-size:.67rem;white-space:nowrap;">${r.ejecutado_el||''}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:.25rem;align-items:flex-start;">
+            ${_tipoBadge(r.tipo)}
+            ${estadoBadge}
+          </div>
+          <div style="min-width:0;overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+              ${detalle}
+              ${zferNuevo}
+            </div>
+            ${msgHtml}
+          </div>
+          <div></div>
         </div>`;
       }).join('');
-      html += `<div class="bloque-card" style="margin-bottom:1rem;">
-        <div class="bloque-header">
-          <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">
-            <span style="font-weight:800;color:var(--blq-title);"><i class="bi bi-layers-fill me-1"></i>Bloque #${bid}</span>
-            ${okN?`<span class="bloque-badge-ok" style="font-size:.72rem;">✓ ${okN} OK</span>`:''}
-            ${errN?`<span class="bloque-badge-err" style="font-size:.72rem;">✗ ${errN} errores</span>`:''}
-            <span style="font-size:.75rem;color:var(--muted);">${fecha}</span>
+
+      const pct   = items.length ? Math.round(okN/items.length*100) : 0;
+      const barClr = errN ? 'var(--err-bdr)' : 'var(--ok-bdr)';
+      html += `<div class="bloque-card" style="margin-bottom:1.1rem;overflow:hidden;">
+        <div class="bloque-header" style="border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;min-width:0;">
+            <span style="font-weight:800;color:var(--blq-title);font-size:.9rem;white-space:nowrap;">
+              <i class="bi bi-layers-fill me-1"></i>Bloque #${bid}
+            </span>
+            <span style="font-size:.72rem;color:var(--muted);">${fecha}</span>
+            <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
+              ${okN  ? `<span class="bloque-badge-ok"  style="font-size:.7rem;">✓ ${okN} OK</span>` : ''}
+              ${errN ? `<span class="bloque-badge-err" style="font-size:.7rem;">✗ ${errN} error${errN>1?'es':''}</span>` : ''}
+              ${advN && !errN ? `<span style="background:#fef9c3;color:#854d0e;border:1px solid #fde68a;border-radius:5px;padding:.05rem .35rem;font-size:.7rem;font-weight:700;">⚠ ${advN} adv.</span>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:.3rem;">
+              <div style="width:60px;height:5px;background:var(--border);border-radius:3px;overflow:hidden;">
+                <div style="width:${pct}%;height:100%;background:${barClr};border-radius:3px;transition:width .3s;"></div>
+              </div>
+              <span style="font-size:.67rem;color:var(--muted);">${pct}%</span>
+            </div>
           </div>
-          <a href="${_COLA_URL}/bloque/${bid}/reporte/excel" class="btn-sm-go" style="text-decoration:none;display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;">
-            <i class="bi bi-file-earmark-excel"></i>Excel
-          </a>
+          <div style="display:flex;gap:.4rem;align-items:center;">
+            <button class="btn-sm-purple" style="font-size:.75rem;" onclick="_verReporteBloque(${bid})">
+              <i class="bi bi-file-earmark-bar-graph me-1"></i>Reporte
+            </button>
+            <a href="${_COLA_URL}/bloque/${bid}/reporte/excel" class="btn-sm-go" style="text-decoration:none;display:inline-flex;align-items:center;gap:.3rem;font-size:.75rem;">
+              <i class="bi bi-file-earmark-excel"></i>Excel
+            </a>
+          </div>
         </div>
         <div>${rows}</div>
       </div>`;
     }
+
     const totalOk  = d.log.filter(r=>r.estado==='OK').length;
     const totalErr = d.log.filter(r=>r.estado==='ERROR').length;
+    const totalAdv = d.log.filter(r=>(r.error_msg||'').startsWith('[ADV]')).length;
     cont.innerHTML = `
-      <div style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:1.2rem;">
-        <span class="bloque-badge-ok" style="font-size:.82rem;padding:.3rem .85rem;">✓ ${totalOk} exitosas</span>
-        ${totalErr?`<span class="bloque-badge-err" style="font-size:.82rem;padding:.3rem .85rem;">✗ ${totalErr} con error</span>`:''}
-        <span style="color:var(--muted);font-size:.78rem;">Últimas ${d.log.length} ejecuciones · ${Object.keys(bloques).length} bloques</span>
+      <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:1.2rem;
+                  padding:.7rem 1rem;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;">
+        <i class="bi bi-clock-history" style="color:var(--muted);font-size:1rem;"></i>
+        <span style="font-weight:700;font-size:.85rem;color:var(--text);">${d.log.length} ejecuciones · ${bloqueOrder.length} bloques</span>
+        <span style="color:var(--border);">|</span>
+        <span class="bloque-badge-ok"  style="font-size:.78rem;padding:.2rem .7rem;">✓ ${totalOk} OK</span>
+        ${totalErr ? `<span class="bloque-badge-err" style="font-size:.78rem;padding:.2rem .7rem;">✗ ${totalErr} error${totalErr>1?'es':''}</span>` : ''}
+        ${totalAdv ? `<span style="background:#fef9c3;color:#854d0e;border:1px solid #fde68a;border-radius:6px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;">⚠ ${totalAdv} con advertencias</span>` : ''}
       </div>
       ${html}`;
   } catch(e) {
