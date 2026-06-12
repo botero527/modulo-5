@@ -1398,19 +1398,10 @@ class AutomatizadorSAP:
         """
         self._cerrar_dialogs_abiertos()
 
-        # Navegación limpia con /N — con retry si queda algún dialog
-        for _nav_try in range(3):
-            try:
-                self.session.findById(self._ID_TCODE_BOX).text = "/NMM02"
-                self.session.findById("wnd[0]").sendVKey(0)
-                self._esperar(T_MEDIO)
-                break
-            except Exception as _nav_e:
-                if _nav_try == 2:
-                    raise
-                print(f"      [MM02] tcode box no accesible (intento {_nav_try+1}), cerrando dialogs...")
-                self._cerrar_dialogs_abiertos()
-                self._esperar(T_MEDIO)
+        # Navegación limpia con /N
+        self.session.findById(self._ID_TCODE_BOX).text = "/NMM02"
+        self.session.findById("wnd[0]").sendVKey(0)
+        self._esperar(T_MEDIO)
 
         self.session.findById(self._ID_MM02_MATNR).text = material
         self.session.findById("wnd[0]").sendVKey(0)
@@ -2355,19 +2346,9 @@ class AutomatizadorSAP:
         """Abre MM02 del material y deja activo el tab PIEZA (Clasificación > PIEZA)."""
         self._cerrar_dialogs_abiertos()
         wnd = self.session.findById("wnd[0]")
-        for _nav_try in range(3):
-            try:
-                self.session.findById(self._ID_TCODE_BOX).text = "/NMM02"
-                wnd.sendVKey(0)
-                self._esperar(T_MEDIO)
-                break
-            except Exception as _nav_e:
-                if _nav_try == 2:
-                    raise
-                print(f"      [MM02] tcode box no accesible (intento {_nav_try+1}), cerrando dialogs...")
-                self._cerrar_dialogs_abiertos()
-                self._esperar(T_MEDIO)
-                wnd = self.session.findById("wnd[0]")
+        self.session.findById(self._ID_TCODE_BOX).text = "/NMM02"
+        wnd.sendVKey(0)
+        self._esperar(T_MEDIO)
         self.session.findById(self._ID_MM02_MATNR).text = zfer
         wnd.sendVKey(0)
         self._esperar(T_MEDIO)

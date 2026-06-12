@@ -85,6 +85,14 @@
   </button>
 </div>
 
+<!-- ── Banner SAP ocupado ─────────────────────────────────────────────── -->
+<div id="sap-ocupado-banner" style="display:none; align-items:center; gap:.7rem;
+     background:#78350f22; border:1px solid #d97706; border-radius:10px;
+     padding:.55rem 1rem; margin-bottom:1rem; font-size:.82rem; color:#fbbf24;">
+  <i class="bi bi-exclamation-triangle-fill"></i>
+  <span id="sap-ocupado-txt"></span>
+</div>
+
 <!-- ── Tabs ──────────────────────────────────────────────────────────────── -->
 <div style="display:flex; gap:.4rem; margin-bottom:1.2rem; border-bottom:1px solid var(--divider); padding-bottom:.6rem;">
   <button id="tab-cola" onclick="_tabSwitch('cola')" class="cola-tab active">
@@ -128,12 +136,25 @@ async function _cargarProxBloque() {
   try {
     const d = await fetch(`${_COLA_URL}/estado`).then(r => r.json());
     const chip = document.getElementById('prox-bloque-chip');
+    // Banner SAP ocupado por otro proyecto
+    const sapBanner = document.getElementById('sap-ocupado-banner');
+    if (d.sap_ocupado_por) {
+      if (sapBanner) {
+        sapBanner.style.display = 'flex';
+        document.getElementById('sap-ocupado-txt').textContent =
+          `SAP en uso por ${d.sap_ocupado_por} — si la hora llega se reprogramará automáticamente para mañana`;
+      }
+    } else {
+      if (sapBanner) sapBanner.style.display = 'none';
+    }
+
     if (d.bloque_num) {
       const timer = d.timer_activo
         ? `<span class="timer-dot timer-on" title="Timer activo"></span>`
         : `<span class="timer-dot timer-off" title="Timer apagado"></span>`;
       const yaPaso = d.ya_paso ? `<span style="color:var(--warn-txt);font-size:.72rem;"> (hora pasada)</span>` : '';
-      chip.innerHTML = `${timer} <b style="color:var(--blq-title);">Bloque ${d.bloque_num}</b>&nbsp;·&nbsp;${d.hora_prog}${yaPaso}&nbsp;·&nbsp;<span style="color:var(--info-txt);">${d.total_pendientes||0} pendientes</span>`;
+      const sapWarn = d.sap_ocupado_por ? `&nbsp;<span style="color:#fbbf24;font-size:.72rem;">⚠ SAP ocupado</span>` : '';
+      chip.innerHTML = `${timer} <b style="color:var(--blq-title);">Bloque ${d.bloque_num}</b>&nbsp;·&nbsp;${d.hora_prog}${yaPaso}${sapWarn}&nbsp;·&nbsp;<span style="color:var(--info-txt);">${d.total_pendientes||0} pendientes</span>`;
     } else {
       chip.innerHTML = `<i class="bi bi-inbox" style="color:var(--muted);"></i> <span style="color:var(--muted);">Sin bloques pendientes</span>`;
     }
@@ -294,8 +315,21 @@ async function _ejecutarBloque(bloqueId) {
   if (card) card.style.opacity = '.6';
   try {
     const d = await fetch(`${_COLA_URL}/bloque/${bloqueId}/ejecutar`, {method:'POST'}).then(r=>r.json());
-    if (d.ok) { setTimeout(_colaRefrescar, 2000); }
-    else { alert(d.error||'No se puede ejecutar'); if(card) card.style.opacity='1'; }
+    if (d.ok) {
+      setTimeout(_colaRefrescar, 2000);
+    } else {
+      if (card) card.style.opacity = '1';
+      // Mostrar banner de aviso en vez de alert bloqueante
+      const banner = document.getElementById('sap-ocupado-banner');
+      const txt    = document.getElementById('sap-ocupado-txt');
+      if (banner && txt) {
+        txt.textContent = d.error || 'No se puede ejecutar ahora';
+        banner.style.display = 'flex';
+        setTimeout(() => { if (!d.sap_ocupado) banner.style.display='none'; }, 6000);
+      } else {
+        alert(d.error || 'No se puede ejecutar ahora');
+      }
+    }
   } catch(e) { alert('Error de red'); if(card) card.style.opacity='1'; }
 }
 

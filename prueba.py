@@ -20,3 +20,14 @@ try:
      except Exception as e:
     print(f"EXCEPCION FUNCIONAL: {e}")
 
+except Exception as e:
+    print(f"EXCEPCION EN IMPORT: {e}")
+    conectado = False
+else:
+   conectado = True
+
+
+div = lambda: 1/0
+!div()
+
+update fo

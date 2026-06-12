@@ -2171,6 +2171,67 @@ def _get_conn_local():
     return pyodbc.connect(_DB_LOCAL_STR, autocommit=True)
 
 
+def _buscar_zfer_simetrico_odata(zfer_base: str) -> str | None:
+    """Busca el ZFER simétrico en ODATA usando la misma lógica de api_simetria_buscar.
+    Retorna el MATERIAL del simétrico o None si no se encuentra."""
+    try:
+        attrs = q_atributos(zfer_base)
+        if not attrs or "_error" in attrs:
+            return None
+        piece_code      = (attrs.get("Z_PIECE_TYPE","") or "").split(",")[0].strip().zfill(3)
+        pieza_contraria = _PARES_SIMETRIA.get(piece_code)
+        if not pieza_contraria:
+            return None
+
+        criterios = {
+            "Z_VEHICLE_MODEL":          attrs.get("Z_VEHICLE_MODEL",          ""),
+            "Z_SUBPRODUCT":             attrs.get("Z_SUBPRODUCT",             ""),
+            "Z_FORMULA_CODE":           attrs.get("Z_FORMULA_CODE",           ""),
+            "Z_COLOR":                  attrs.get("Z_COLOR",                  ""),
+            "Z_SHADE_BAND":             attrs.get("Z_SHADE_BAND",             ""),
+            "Z_AGP_LEVEL":              attrs.get("Z_AGP_LEVEL",              ""),
+            "Z_BEHAVIOR_DIFFERENTIALS": attrs.get("Z_BEHAVIOR_DIFFERENTIALS", ""),
+            "Z_COMMERCIAL_THICKNESS":   attrs.get("Z_COMMERCIAL_THICKNESS",   ""),
+            "Z_AGP_VERSION":            attrs.get("Z_AGP_VERSION",            ""),
+        }
+        intersects, params_i = [], []
+        for atnam, val in criterios.items():
+            if not val: continue
+            if atnam == "Z_COMMERCIAL_THICKNESS":
+                intersects.append(
+                    f"SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
+                    f"WHERE CENTRO='CO01' AND ATNAM='{atnam}' AND CAST(ATFLV AS VARCHAR(50))=?"
+                )
+            else:
+                intersects.append(
+                    f"SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
+                    f"WHERE CENTRO='CO01' AND ATNAM='{atnam}' AND ATWRT=?"
+                )
+            params_i.append(val)
+        intersects.append(
+            "SELECT MATERIAL FROM dbo.ODATA_ZFER_CLASS_001 "
+            "WHERE CENTRO='CO01' AND ATNAM='Z_PIECE_TYPE' AND ATWRT LIKE ?"
+        )
+        params_i.append(f"%{pieza_contraria}%")
+        if len(intersects) < 2:
+            return None
+
+        sql = f"""
+            SELECT TOP 1 m.MATERIAL
+            FROM ({chr(10).join(intersects).replace(chr(10), ' INTERSECT ')}) m
+            JOIN dbo.ODATA_ZFER_HEAD h ON h.MATERIAL=m.MATERIAL AND h.CENTRO='CO01'
+            WHERE m.MATERIAL <> ? AND UPPER(ISNULL(h.STATUS,'')) != 'ZZ'
+            ORDER BY TRY_CAST(m.MATERIAL AS BIGINT) DESC
+        """
+        conn = get_conn()
+        row  = conn.cursor().execute(sql, *params_i, zfer_base).fetchone()
+        conn.close()
+        return str(row[0]).strip() if row else None
+    except Exception as e:
+        print(f"[GESTOR] _buscar_zfer_simetrico_odata({zfer_base}): {e}")
+        return None
+
+
 def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
     """
     Inserta en itg.GestorAuto_jobs_auto + itg.GestorAuto_bom_zfer_local.
@@ -2216,20 +2277,35 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
 
         # Atributos del ZFER simétrico (si aplica)
         zfor_sim = None; zpla_sim = None; pieza_sim = None
+
+        # Si tiene_sim pero zfer_sim es NULL en M5_RUTASZFER → buscarlo en ODATA (fallback)
+        if tiene_sim and not zfer_sim:
+            try:
+                zfer_sim = _buscar_zfer_simetrico_odata(zfer_base)
+            except Exception: pass
+
         if tiene_sim and zfer_sim:
             try:
                 attrs_sim = q_atributos(zfer_sim)
                 pieza_sim = (attrs_sim.get("Z_PIECE_TYPE","") or "").strip().zfill(3)[:3] or None
-                # zfor y zpla del simétrico desde ODATA_ZFER_HEAD
+            except Exception: pass
+            try:
                 head_sim = q_zfer_head(zfer_sim)
-                if head_sim and not isinstance(head_sim, dict) and "_error" not in (head_sim or {}):
-                    pass  # head_sim es un dict
                 if isinstance(head_sim, dict) and "_error" not in head_sim:
                     zfor_sim = str(head_sim.get("ZFOR","") or "").strip() or None
+                    zpla_sim = str(head_sim.get("ZPLA","") or "").strip() or None
             except Exception: pass
-            # zpla del simétrico: buscamos en M5_RUTASZFER si tiene zpla guardado
-            # o usamos el mismo zpla del job principal
-            zpla_sim = zpla or None
+            # ZPLA del simétrico desde M5_RUTASZFER si lo tiene, si no usa el del job
+            if not zpla_sim:
+                try:
+                    with _get_conn_local() as cn:
+                        r2 = cn.cursor().execute(
+                            "SELECT zpla FROM itg.M5_RUTASZFER WHERE zfer=?", zfer_sim
+                        ).fetchone()
+                        if r2: zpla_sim = str(r2[0] or "").strip() or None
+                except Exception: pass
+            if not zpla_sim:
+                zpla_sim = zpla or None
 
         with _get_conn_local() as cn:
             cur = cn.cursor()
@@ -2569,11 +2645,33 @@ def _cola_archivar_y_limpiar(bloque_id: int, ejecutado_por: str = "sistema"):
         print(f"[COLA] error archivando bloque {bloque_id}: {e}")
 
 
-def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
-    """Saca los items PENDIENTE del bloque y los envía a SAP."""
+def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema", modo: str = "programado"):
+    """
+    Saca los items PENDIENTE del bloque y los envía a SAP.
+    modo='programado' → reprograma para mañana si SAP está ocupado.
+    modo='manual'     → aborta sin reprogramar (el API ya avisó al usuario).
+    """
     import importlib
     ok_n, err_n = 0, 0   # inicializar ANTES de cualquier try para evitar UnboundLocalError
+
+    # ── Lock Python: solo 1 bloque puede ejecutar SAP a la vez ────────────
+    if not _sap_bloque_lock.acquire(blocking=False):
+        print(f"[COLA] bloque {bloque_id}: otro bloque ya está ejecutando SAP — {'reprogramando' if modo=='programado' else 'abortando (manual)'}")
+        if modo == "programado":
+            _cola_reprogramar_manana(bloque_id)
+        _scheduler_disparados.discard(bloque_id)
+        return
+
     try:
+        # ── Verificar que SAP no lo esté usando otro proyecto ──────────────
+        ocupado_por = _sap_lock_ocupado_por_otro()
+        if ocupado_por:
+            print(f"[COLA] bloque {bloque_id}: SAP ocupado por '{ocupado_por}' — {'reprogramando' if modo=='programado' else 'abortando (manual)'}")
+            if modo == "programado":
+                _cola_reprogramar_manana(bloque_id)
+            _scheduler_disparados.discard(bloque_id)
+            return
+
         with _get_conn_local() as cn:
             cur = cn.cursor()
             cur.execute("UPDATE itg.M5_BLOQUES SET estado='EJECUTANDO' WHERE id=?", bloque_id)
@@ -2597,6 +2695,9 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                  "acero_dir": r[11] or "", "cambiar_hr": bool(r[12]), "zhal": r[13] or "",
                  "subproducto": r[14] or "",
                  "_cola_id": r[0]} for r in rows]
+
+        # Publicar en SAP_QUEUE_LOCK para que otros proyectos sepan que SAP está ocupado
+        _sap_lock_insertar_items(cola)
 
         try:
             sap = importlib.import_module("sap_auto")
@@ -2635,6 +2736,7 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
 
             for item in cola:
                 # ── Cada item tiene su propio try/except — un error nunca detiene los demás ──
+                _sap_lock_item_ejecutando(item["_cola_id"])
                 try:
                     tipo = item["tipo"].upper()
                     if tipo == "FORMULA":
@@ -2776,6 +2878,7 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
                 if estado_item == "OK" and tipo in ("FORMULA", "FORMULA_CON_ACERO", "FORMULA_SIN_SIN", "FORMULA_CON_CON") and res:
                     _guardar_gestor_auto(item, res, 0)
 
+                _sap_lock_item_borrar(item["_cola_id"])
                 if estado_item == "OK": ok_n += 1
                 else:                  err_n += 1
 
@@ -2792,32 +2895,161 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
             except Exception:
                 pass
 
-        _scheduler_disparados.discard(bloque_id)
-        with _get_conn_local() as cn:
-            cur2 = cn.cursor()
-            cur2.execute("""
-                UPDATE itg.M5_BLOQUES
-                SET estado='COMPLETADO', ejecutado_el=?, ok_count=?, error_count=?
-                WHERE id=?
-            """, _dt.now(), ok_n, err_n, bloque_id)
-            # Si no quedó ningún bloque PENDIENTE, crear uno nuevo para mañana 7am
-            cur2.execute("SELECT COUNT(*) FROM itg.M5_BLOQUES WHERE estado='PENDIENTE'")
-            if cur2.fetchone()[0] == 0:
-                from datetime import timedelta as _td
-                manana7 = (_dt.now() + _td(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
-                cur2.execute("SELECT ISNULL(MAX(bloque_num),0)+1 FROM itg.M5_BLOQUES")
-                nuevo_num = cur2.fetchone()[0]
-                cur2.execute(
-                    "INSERT INTO itg.M5_BLOQUES (bloque_num, hora_prog, timer_activo) VALUES (?,?,1)",
-                    nuevo_num, manana7
-                )
-        # Mover ejecutados de M5_Cola → M5_LogEjecuciones y limpiar cola temporal
-        _cola_archivar_y_limpiar(bloque_id, ejecutado_por)
-        print(f"[COLA] bloque {bloque_id} completado: OK={ok_n} ERR={err_n}")
+        # ── Siempre (normal o error de módulo): cerrar el bloque ──────────
+        try:
+            with _get_conn_local() as cn:
+                cur2 = cn.cursor()
+                cur2.execute("""
+                    UPDATE itg.M5_BLOQUES
+                    SET estado='COMPLETADO', ejecutado_el=?, ok_count=?, error_count=?
+                    WHERE id=?
+                """, _dt.now(), ok_n, err_n, bloque_id)
+                cur2.execute("SELECT COUNT(*) FROM itg.M5_BLOQUES WHERE estado='PENDIENTE'")
+                if cur2.fetchone()[0] == 0:
+                    from datetime import timedelta as _td
+                    manana7 = (_dt.now() + _td(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
+                    cur2.execute("SELECT ISNULL(MAX(bloque_num),0)+1 FROM itg.M5_BLOQUES")
+                    nuevo_num = cur2.fetchone()[0]
+                    cur2.execute(
+                        "INSERT INTO itg.M5_BLOQUES (bloque_num, hora_prog, timer_activo) VALUES (?,?,1)",
+                        nuevo_num, manana7
+                    )
+            _cola_archivar_y_limpiar(bloque_id, ejecutado_por)
+            print(f"[COLA] bloque {bloque_id} completado: OK={ok_n} ERR={err_n}")
+        except Exception as fin_ex:
+            print(f"[COLA] error al cerrar bloque {bloque_id}: {fin_ex}")
 
     except Exception as e:
-        _scheduler_disparados.discard(bloque_id)
+        # Error en DB al leer items, al publicar lock, o cualquier falla antes de SAP
         print(f"[COLA] error ejecutando bloque {bloque_id}: {e}")
+        try:
+            with _get_conn_local() as cn:
+                cn.cursor().execute(
+                    "UPDATE itg.M5_BLOQUES SET estado='ERROR' WHERE id=? AND estado='EJECUTANDO'",
+                    bloque_id
+                )
+        except Exception:
+            pass
+
+    finally:
+        # Siempre: limpiar lock SAP, quitar de disparados, liberar lock Python
+        _sap_lock_limpiar_proyecto()
+        _scheduler_disparados.discard(bloque_id)
+        try:
+            _sap_bloque_lock.release()
+        except RuntimeError:
+            pass  # ya estaba liberado (early return antes del acquire)
+
+
+# ── SAP_QUEUE_LOCK — coordinación con otros proyectos ────────────────────────
+_SAP_LOCK_PROYECTO = "INTELIGENCE"
+
+_SAP_LOCK_STALE_MIN    = 30   # filas PENDIENTE/EJECUTANDO con más de este tiempo → colgadas, se borran
+_SAP_LOCK_FINALIZANDO_SEG = 5   # buffer cortesía: FINALIZANDO se respeta este tiempo, luego se borra
+
+def _sap_lock_ocupado_por_otro() -> str:
+    """Retorna el nombre del proyecto que tiene el SAP, o '' si está libre.
+    - PENDIENTE / EJECUTANDO → ocupado (limpia si lleva más de _SAP_LOCK_STALE_MIN minutos)
+    - FINALIZANDO            → ocupado solo si lleva menos de _SAP_LOCK_FINALIZANDO_SEG segundos
+    - COMPLETADO             → ignorado (no bloquea)
+    """
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            # Borrar filas colgadas de otros proyectos (crash sin cleanup)
+            cur.execute("""
+                DELETE FROM itg.SAP_QUEUE_LOCK
+                WHERE proyecto != ?
+                  AND (
+                    (estado IN ('PENDIENTE','EJECUTANDO','COMPLETADO')
+                     AND DATEDIFF(MINUTE, desde, GETDATE()) > ?)
+                    OR
+                    (estado = 'FINALIZANDO'
+                     AND DATEDIFF(SECOND, desde, GETDATE()) > ?)
+                  )
+            """, _SAP_LOCK_PROYECTO, _SAP_LOCK_STALE_MIN, _SAP_LOCK_FINALIZANDO_SEG)
+            row = cur.execute("""
+                SELECT TOP 1 proyecto FROM itg.SAP_QUEUE_LOCK
+                WHERE proyecto != ?
+                  AND (
+                    estado IN ('PENDIENTE','EJECUTANDO')
+                    OR (estado = 'FINALIZANDO'
+                        AND DATEDIFF(SECOND, desde, GETDATE()) <= ?)
+                  )
+            """, _SAP_LOCK_PROYECTO, _SAP_LOCK_FINALIZANDO_SEG).fetchone()
+        return str(row[0]) if row else ""
+    except Exception as e:
+        print(f"[SAP_LOCK] error verificando: {e}")
+        return ""
+
+def _sap_lock_insertar_items(items: list):
+    """Inserta todos los items del bloque como PENDIENTE en SAP_QUEUE_LOCK.
+    item_ref = str(_cola_id) para que sea consistente con _sap_lock_item_ejecutando/_borrar."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            for it in items:
+                cur.execute("""
+                    INSERT INTO itg.SAP_QUEUE_LOCK (proyecto, item_ref, estado, desde)
+                    VALUES (?, ?, 'PENDIENTE', GETDATE())
+                """, _SAP_LOCK_PROYECTO, str(it["_cola_id"]))
+    except Exception as e:
+        print(f"[SAP_LOCK] error insertando items: {e}")
+
+def _sap_lock_item_ejecutando(cola_id: int):
+    """Marca el item como EJECUTANDO."""
+    try:
+        with _get_conn_local() as cn:
+            cn.cursor().execute("""
+                UPDATE itg.SAP_QUEUE_LOCK SET estado='EJECUTANDO', desde=GETDATE()
+                WHERE proyecto=? AND item_ref=? AND estado='PENDIENTE'
+            """, _SAP_LOCK_PROYECTO, str(cola_id))
+    except Exception as e:
+        print(f"[SAP_LOCK] error marcando EJECUTANDO: {e}")
+
+def _sap_lock_item_borrar(cola_id: int):
+    """Marca el item como COMPLETADO (no lo borra — la tabla debe estar visible durante toda la ejecución).
+    La limpieza real ocurre en _sap_lock_limpiar_proyecto() al finalizar el bloque."""
+    try:
+        with _get_conn_local() as cn:
+            cn.cursor().execute("""
+                UPDATE itg.SAP_QUEUE_LOCK SET estado='COMPLETADO'
+                WHERE proyecto=? AND item_ref=?
+            """, _SAP_LOCK_PROYECTO, str(cola_id))
+    except Exception as e:
+        print(f"[SAP_LOCK] error marcando COMPLETADO: {e}")
+
+def _sap_lock_limpiar_proyecto():
+    """Marca todos los registros de INTELIGENCE como FINALIZANDO.
+    _sap_lock_ocupado_por_otro los respeta por 20 segundos (buffer de cortesía),
+    luego el stale-cleanup los elimina automáticamente."""
+    try:
+        with _get_conn_local() as cn:
+            cn.cursor().execute("""
+                UPDATE itg.SAP_QUEUE_LOCK SET estado='FINALIZANDO'
+                WHERE proyecto=?
+            """, _SAP_LOCK_PROYECTO)
+    except Exception as e:
+        print(f"[SAP_LOCK] error marcando FINALIZANDO: {e}")
+
+def _cola_reprogramar_manana(bloque_id: int):
+    """Reprograma un bloque para mañana misma hora y lo marca como PENDIENTE con motivo."""
+    try:
+        from datetime import timedelta as _td2
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("SELECT hora_prog FROM itg.M5_BLOQUES WHERE id=?", bloque_id)
+            row = cur.fetchone()
+            hora_actual = row[0] if row else _dt.now()
+            nueva_hora  = hora_actual + _td2(days=1)
+            cur.execute("""
+                UPDATE itg.M5_BLOQUES
+                SET estado='PENDIENTE', hora_prog=?, timer_activo=1
+                WHERE id=?
+            """, nueva_hora, bloque_id)
+        print(f"[COLA] bloque {bloque_id} reprogramado para {nueva_hora.strftime('%d/%m/%Y %H:%M')} (SAP ocupado)")
+    except Exception as e:
+        print(f"[COLA] error reprogramando bloque: {e}")
 
 
 def _cola_limpiar_al_inicio():
@@ -2847,11 +3079,16 @@ def _cola_limpiar_al_inicio():
                       AND estado IN ('PENDIENTE','ERROR')
                 """, *bloques_pegados)
                 print(f"[COLA] reset: {len(bloques_pegados)} bloque(s) pegados reseteados a PENDIENTE")
+            # Limpiar rows de SAP_QUEUE_LOCK que quedaron de un crash anterior
+            cur.execute("DELETE FROM itg.SAP_QUEUE_LOCK WHERE proyecto=?", _SAP_LOCK_PROYECTO)
+            if cur.rowcount:
+                print(f"[COLA] reset: {cur.rowcount} rows de SAP_QUEUE_LOCK limpiadas (residuo de crash)")
     except Exception as e:
         print(f"[COLA] error limpieza inicial: {e}")
 
 
 _scheduler_disparados: set = set()   # IDs ya lanzados en este proceso
+_sap_bloque_lock = threading.Lock()  # solo 1 bloque puede usar SAP a la vez en este proceso
 
 def _cola_scheduler():
     """Hilo de fondo: cada 20s revisa bloques vencidos."""
@@ -2911,6 +3148,8 @@ def api_cola_estado():
             cur.execute("SELECT COUNT(*) FROM itg.M5_BLOQUES WHERE timer_activo=1 AND estado='PENDIENTE'")
             timer_on = cur.fetchone()[0] > 0
 
+        sap_ocupado_por = _sap_lock_ocupado_por_otro()
+
         if bloque:
             hora_str = bloque[2].strftime("%d/%m/%Y %H:%M") if bloque[2] else ""
             ya_paso  = bloque[2] < _dt.now() if bloque[2] else False
@@ -2919,10 +3158,12 @@ def api_cola_estado():
                 "bloque_id": bloque[0], "bloque_num": bloque[1],
                 "hora_prog": hora_str, "ya_paso": ya_paso,
                 "pendientes": bloque[4], "total_pendientes": total,
+                "sap_ocupado_por": sap_ocupado_por,
             })
         return jsonify({"ok": True, "timer_activo": timer_on,
                         "bloque_num": None, "hora_prog": None,
-                        "pendientes": 0, "total_pendientes": total})
+                        "pendientes": 0, "total_pendientes": total,
+                        "sap_ocupado_por": sap_ocupado_por})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "total_pendientes": 0})
 
@@ -3071,6 +3312,7 @@ def api_cola_ejecutar_bloque(bloque_id: int):
     try:
         with _get_conn_local() as cn:
             cur = cn.cursor()
+            # Verificar bloque específico
             cur.execute("""
                 SELECT b.estado, COUNT(c.id) AS n_pend
                 FROM itg.M5_BLOQUES b
@@ -3079,17 +3321,32 @@ def api_cola_ejecutar_bloque(bloque_id: int):
                 GROUP BY b.estado
             """, bloque_id)
             row = cur.fetchone()
-        if not row:
-            return jsonify({"ok": False, "error": "Bloque no encontrado"})
-        estado_bloque, n_pend = row[0], row[1] or 0
-        if estado_bloque == "EJECUTANDO":
-            return jsonify({"ok": False, "error": "El bloque ya está ejecutándose"})
-        if n_pend == 0:
-            return jsonify({"ok": False, "error": "El bloque no tiene ítems pendientes"})
+            if not row:
+                return jsonify({"ok": False, "error": "Bloque no encontrado"})
+            estado_bloque, n_pend = row[0], row[1] or 0
+            if estado_bloque == "EJECUTANDO":
+                return jsonify({"ok": False, "error": "Este bloque ya está ejecutándose"})
+            if n_pend == 0:
+                return jsonify({"ok": False, "error": "El bloque no tiene ítems pendientes"})
+            # Verificar que ningún otro bloque esté EJECUTANDO
+            cur.execute("SELECT TOP 1 bloque_num FROM itg.M5_BLOQUES WHERE estado='EJECUTANDO'")
+            otro = cur.fetchone()
+            if otro:
+                return jsonify({"ok": False, "error": f"El Bloque {otro[0]} ya está ejecutándose — espera a que termine"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+    # Verificar SAP no ocupado por otro proyecto
+    ocupado_por = _sap_lock_ocupado_por_otro()
+    if ocupado_por:
+        return jsonify({"ok": False, "error": f"SAP está siendo usado por {ocupado_por} — intenta más tarde", "sap_ocupado": True})
+
+    # Verificar lock Python (bloque programado corriendo en este proceso)
+    if _sap_bloque_lock.locked():
+        return jsonify({"ok": False, "error": "SAP está procesando otro bloque en este momento — espera a que termine"})
+
     usuario = _usuario_actual() or "sistema"
-    threading.Thread(target=_cola_ejecutar_bloque, args=(bloque_id, usuario), daemon=True).start()
+    threading.Thread(target=_cola_ejecutar_bloque, args=(bloque_id, usuario, "manual"), daemon=True).start()
     return jsonify({"ok": True, "mensaje": f"Bloque {bloque_id} iniciado ({n_pend} ítems)"})
 
 
