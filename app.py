@@ -2195,17 +2195,18 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
         pieza_3d         = str(pieza or "").zfill(3)[:3] if pieza else ""
 
         # Ruta y simetría desde M5_RUTASZFER (del ZFER base)
-        ruta_3dm = None; tiene_sim = False; zfer_sim = None
+        ruta_3dm = None; ruta_destino = None; tiene_sim = False; zfer_sim = None
         try:
             with _get_conn_local() as cn:
                 row = cn.cursor().execute(
-                    "SELECT ruta, tiene_simetria, zfer_simetrico FROM itg.M5_RUTASZFER WHERE zfer=?",
+                    "SELECT ruta, descripcion, tiene_simetria, zfer_simetrico FROM itg.M5_RUTASZFER WHERE zfer=?",
                     zfer_base
                 ).fetchone()
                 if row:
-                    ruta_3dm  = str(row[0] or "").strip() or None
-                    tiene_sim = bool(row[1])
-                    zfer_sim  = str(row[2] or "").strip() or None
+                    ruta_3dm     = str(row[0] or "").strip() or None
+                    ruta_destino = str(row[1] or "").strip() or None  # descripcion = carpeta destino
+                    tiene_sim    = bool(row[2])
+                    zfer_sim     = str(row[3] or "").strip() or None
         except Exception: pass
 
         if not ruta_3dm:
@@ -2239,8 +2240,8 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
                     (vehiculo_nombre, version_vehiculo, vehiculo_codigo,
                      pieza, zfer, zfor, zpla,
                      simetria, pieza_simetria, zfer_simetria, zfor_simetria, zpla_simetria,
-                     ruta_3dm, estado)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     ruta_3dm, ruta_destino, estado)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
                 vehiculo_nombre, version_vehiculo, vehiculo_codigo,
                 pieza_3d,
@@ -2248,7 +2249,7 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
                 str(zfor_nuevo or "") or None,
                 str(zpla or "") or None,
                 simetria_val, pieza_sim, zfer_sim, zfor_sim, zpla_sim,
-                ruta_3dm,
+                ruta_3dm, ruta_destino,
                 "PENDIENTE"
             )
             print(f"[GESTOR] Insertado GestorAuto_jobs_auto zfer={zfer_nuevo} veh='{vehiculo_nombre}' pieza={pieza_3d}")

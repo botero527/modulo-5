@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>CS02 - Cambio Masivo de Componentes</title>
+<HTA:APPLICATION
+    ID="CS02App"
+    APPLICATIONNAME="CS02 Cambio Componentes"
+    BORDER="thin" BORDERSTYLE="normal" CAPTION="yes"
+    CONTEXTMENU="no" INNERBORDER="no"
+    MAXIMIZEBUTTON="yes" MINIMIZEBUTTON="yes"
+    NAVIGABLE="no" SCROLL="no"
+    SHOWINTASKBAR="yes" SINGLEINSTANCE="yes"
+    SYSMENU="yes" VERSION="1.0" WINDOWSTATE="normal"
+/>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; font-family:'Segoe UI',Tahoma,sans-serif; }
+body { background:#1e2230; color:#e0e0e0; height:100vh; display:flex; flex-direction:column; padding:14px; gap:10px; }
+.header { display:flex; align-items:center; gap:12px; padding-bottom:10px; border-bottom:1px solid #3a3f55; }
+.header-title { font-size:17px; font-weight:700; color:#fff; }
+.header-sub   { font-size:11px; color:#8892b0; margin-top:2px; }
+.card { background:#252a3d; border-radius:8px; padding:12px 14px; border:1px solid #3a3f55; }
+.card-title { font-size:11px; font-weight:700; color:#8892b0; text-transform:uppercase; letter-spacing:.8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+.hint { font-size:11px; color:#6272a4; margin-bottom:6px; line-height:1.5; }
+.hint b { color:#8be9fd; }
+textarea#txtDatos { width:100%; height:130px; background:#0f1117; border:1px solid #3a3f55; border-radius:6px; color:#cdd6f4; font-family:'Consolas','Courier New',monospace; font-size:12px; padding:8px; resize:vertical; outline:none; }
+textarea#txtDatos:focus { border-color:#5c6ef8; }
+.stats-row { display:flex; gap:8px; }
+.stat-box  { flex:1; background:#1a1f2e; border-radius:6px; padding:8px 10px; border:1px solid #3a3f55; text-align:center; }
+.stat-num  { font-size:20px; font-weight:700; line-height:1; }
+.stat-lbl  { font-size:10px; color:#8892b0; margin-top:3px; }
+.s-total .stat-num { color:#cdd6f4; }
+.s-ok    .stat-num { color:#50fa7b; }
+.s-alert .stat-num { color:#ffb86c; }
+.s-error .stat-num { color:#ff5555; }
+.progress-wrap { background:#1a1f2e; border-radius:4px; height:7px; overflow:hidden; margin-top:8px; }
+.progress-bar  { height:100%; background:linear-gradient(90deg,#5c6ef8,#7c83fd); width:0%; transition:width .3s; border-radius:4px; }
+.status-line   { font-size:11px; color:#6272a4; margin-top:5px; min-height:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.log-wrap { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+#logArea  { flex:1; background:#0f1117; border:1px solid #3a3f55; border-radius:6px; padding:8px 10px; overflow-y:auto; font-family:'Consolas','Courier New',monospace; font-size:11.5px; line-height:1.65; min-height:0; }
+.l-ok    { color:#50fa7b; }
+.l-alert { color:#ffb86c; }
+.l-error { color:#ff5555; font-weight:700; }
+.l-info  { color:#8be9fd; }
+.l-skip  { color:#6272a4; }
+.l-hdr   { color:#bd93f9; font-weight:700; }
+.btn { border:none; border-radius:6px; padding:7px 18px; font-size:13px; font-weight:700; cursor:pointer; }
+.btn:disabled { opacity:.4; cursor:not-allowed; }
+.btn-start { background:#5c6ef8; color:#fff; padding:7px 30px; }
+.btn-stop  { background:#e05c6a; color:#fff; }
+.btn-sm    { background:#3a3f55; color:#cdd6f4; font-size:11px; padding:4px 10px; border:none; border-radius:5px; cursor:pointer; font-weight:600; }
+.actions-row { display:flex; gap:8px; justify-content:flex-end; align-items:center; }
+.actions-left { flex:1; font-size:11px; color:#6272a4; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">&#9881; CS02 &mdash; Cambio Masivo de Componentes</div>
+    <div class="header-sub">Planta CO01 &nbsp;|&nbsp; Utilizaci&oacute;n 1 &nbsp;|&nbsp; Todas las alternativas</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Datos a procesar</div>
+  <div class="hint">
+    En Excel copia las columnas <b>MAT_CONFIG</b>, <b>POSICION</b> y <b>COMPONENTE</b> (sin encabezado)
+    y pega aqu&iacute; con <b>Ctrl+V</b>. Una fila por l&iacute;nea, separadas por tabulador.
+  </div>
+  <textarea id="txtDatos" placeholder="501055642&#9;9403&#9;303047460
+501134712&#9;9403&#9;303047460
+501155636&#9;9403&#9;303047537"></textarea>
+</div>
+
+<div class="card">
+  <div class="card-title">Progreso</div>
+  <div class="stats-row">
+    <div class="stat-box s-total"><div class="stat-num" id="numTotal">0</div><div class="stat-lbl">Total</div></div>
+    <div class="stat-box s-ok">   <div class="stat-num" id="numOk">0</div>   <div class="stat-lbl">Guardados OK</div></div>
+    <div class="stat-box s-alert"><div class="stat-num" id="numAlert">0</div><div class="stat-lbl">Alertas</div></div>
+    <div class="stat-box s-error"><div class="stat-num" id="numError">0</div><div class="stat-lbl">Errores</div></div>
+  </div>
+  <div class="progress-wrap"><div class="progress-bar" id="progBar"></div></div>
+  <div class="status-line" id="statusLine">Listo.</div>
+</div>
+
+<div class="card log-wrap">
+  <div class="card-title">
+    <span>Log en tiempo real</span>
+    <div style="display:flex;gap:6px;">
+      <button id="btnClear"   class="btn-sm">Limpiar</button>
+      <button id="btnOpenLog" class="btn-sm">Abrir log .txt</button>
+    </div>
+  </div>
+  <div id="logArea"></div>
+</div>
+
+<div class="actions-row">
+  <div class="actions-left" id="lblEstado">Sin datos.</div>
+  <button id="btnStart" class="btn btn-start">&#9654;&nbsp; Iniciar</button>
+  <button id="btnStop"  class="btn btn-stop" disabled>&#9632;&nbsp; Detener</button>
+</div>
+
+<script for="btnStart"   event="onclick" language="VBScript"> Call IniciarProceso() </script>
+<script for="btnStop"    event="onclick" language="VBScript"> g_Detener = True : LogUI "ALERT", "Deteniendo..." </script>
+<script for="btnClear"   event="onclick" language="VBScript"> document.getElementById("logArea").innerHTML = "" </script>
+<script for="btnOpenLog" event="onclick" language="VBScript">
+    If g_sLogFile <> "" And g_fso.FileExists(g_sLogFile) Then
+        CreateObject("WScript.Shell").Run "notepad.exe """ & g_sLogFile & """"
+    Else
+        MsgBox "Ejecute el proceso primero.", vbInformation
+    End If
+</script>
+
+<script language="VBScript">
+Option Explicit
+
+' === GLOBALES ===
+Dim g_Detener, g_sLogFile
+Dim g_nOk, g_nAlert, g_nError, g_nTotal
+Dim g_fso
+
+g_Detener  = False
+g_nOk      = 0
+g_nAlert   = 0
+g_nError   = 0
+g_nTotal   = 0
+g_sLogFile = ""
+Set g_fso  = CreateObject("Scripting.FileSystemObject")
+
+' === EVENTOS: manejados via <script for="id" event="onclick"> arriba ===
+
+' === INICIO ===
+Sub IniciarProceso()
+    Dim sTexto
+    sTexto = Trim(document.getElementById("txtDatos").value)
+
+    If sTexto = "" Then
+        MsgBox "Pegue los datos primero (MAT_CONFIG, POSICION, COMPONENTE sin encabezado).", vbExclamation
+        Exit Sub
+    End If
+
+    ' --- Parsear filas (sin GoTo) ---
+    Dim aLineas() : ReDim aLineas(0)
+    Dim aMat()    : ReDim aMat(0)
+    Dim aPos()    : ReDim aPos(0)
+    Dim aComp()   : ReDim aComp(0)
+    Dim nFilas    : nFilas = 0
+
+    Dim lineas, i, sL, cols
+    lineas = Split(sTexto, vbLf)
+
+    For i = 0 To UBound(lineas)
+        sL = Trim(Replace(lineas(i), vbCr, ""))
+        If sL <> "" Then
+            cols = Split(sL, vbTab)
+            If UBound(cols) >= 2 Then
+                Dim sM, sP, sC
+                sM = Trim(cols(0))
+                sP = Trim(cols(1))
+                sC = Trim(cols(2))
+                If sM <> "" And sP <> "" And sC <> "" Then
+                    ReDim Preserve aMat(nFilas)
+                    ReDim Preserve aPos(nFilas)
+                    ReDim Preserve aComp(nFilas)
+                    aMat(nFilas)  = sM
+                    aPos(nFilas)  = sP
+                    aComp(nFilas) = sC
+                    nFilas = nFilas + 1
+                End If
+            End If
+        End If
+    Next
+
+    If nFilas = 0 Then
+        MsgBox "No se encontraron filas validas." & vbCrLf & vbCrLf & _
+               "Asegurese de:" & vbCrLf & _
+               "1. Copiar SIN encabezado (solo datos)" & vbCrLf & _
+               "2. Las 3 columnas: MAT_CONFIG, POSICION, COMPONENTE" & vbCrLf & _
+               "3. Copiar desde Excel (separado por tabulador)", vbExclamation
+        Exit Sub
+    End If
+
+    ' --- Reset UI ---
+    g_Detener = False
+    g_nOk = 0 : g_nAlert = 0 : g_nError = 0 : g_nTotal = nFilas
+    ActUI nFilas, 0, 0, 0
+    document.getElementById("progBar").style.width = "0%"
+    document.getElementById("btnStart").disabled = True
+    document.getElementById("btnStop").disabled  = False
+    document.getElementById("txtDatos").disabled = True
+
+    ' --- Log file ---
+    If Not g_fso.FolderExists("C:\Temp") Then g_fso.CreateFolder("C:\Temp")
+    Dim ts
+    ts = Year(Now) & Right("00"&Month(Now),2) & Right("00"&Day(Now),2) & _
+         "_" & Right("00"&Hour(Now),2) & Right("00"&Minute(Now),2)
+    g_sLogFile = "C:\Temp\CS02_" & ts & ".txt"
+
+    LogUI "HDR", "==========================================="
+    LogUI "HDR", "  INICIO " & Now & "  |  " & nFilas & " filas"
+    LogUI "HDR", "==========================================="
+
+    ' --- Conectar SAP ---
+    Dim SapGuiAuto, sapApp, sapConn, sapSess
+    On Error Resume Next
+    Set SapGuiAuto = GetObject("SAPGUI")
+    Set sapApp     = SapGuiAuto.GetScriptingEngine
+    Set sapConn    = sapApp.Children(0)
+    Set sapSess    = sapConn.Children(0)
+    If Err.Number <> 0 Then
+        LogUI "ERR", "No se pudo conectar a SAP: " & Err.Description
+        LogUI "ERR", "SAP debe estar abierto con sesion activa y scripting habilitado."
+        Err.Clear : On Error GoTo 0
+        Finalizar : Exit Sub
+    End If
+    On Error GoTo 0
+    LogUI "INFO", "SAP conectado OK."
+
+    ' --- Procesar ---
+    Dim iF
+    For iF = 0 To nFilas - 1
+        If g_Detener Then Exit For
+
+        Dim sMat2, sPos2, sComp2
+        sMat2  = aMat(iF)
+        sPos2  = aPos(iF)
+        sComp2 = aComp(iF)
+
+        ' Normalizar posicion
+        Dim nPosNum
+        On Error Resume Next
+        nPosNum = CLng(sPos2)
+        If Err.Number <> 0 Then
+            LogUI "ALERT", "[" & sMat2 & "] Posicion invalida: """ & sPos2 & """ - omitida"
+            Log "SKIP | " & sMat2 & " | Pos invalida: " & sPos2
+            g_nAlert = g_nAlert + 1
+            ActUI g_nTotal, g_nOk, g_nAlert, g_nError
+            Err.Clear : On Error GoTo 0
+        Else
+            On Error GoTo 0
+            sPos2 = Right("0000" & CStr(nPosNum), 4)
+
+            SetSt "(" & (iF+1) & "/" & nFilas & ")  " & sMat2 & "  Pos:" & sPos2 & "  ->" & sComp2
+            Progreso iF+1, nFilas
+            LogUI "INFO", "--- [" & (iF+1) & "/" & nFilas & "]  Mat:" & sMat2 & "  Pos:" & sPos2 & "  Comp->" & sComp2
+
+            On Error Resume Next
+            Call CS02Mat(sapSess, sMat2, sPos2, sComp2)
+            If Err.Number <> 0 Then
+                LogUI "ERR", "[" & sMat2 & "] Error critico: " & Err.Description
+                Log "ERROR | " & sMat2 & " | " & Err.Description
+                g_nError = g_nError + 1
+                ActUI g_nTotal, g_nOk, g_nAlert, g_nError
+                Err.Clear
+                On Error Resume Next
+                sapSess.findById("wnd[0]/tbar[0]/okcd").text = "/ncs02"
+                sapSess.findById("wnd[0]").sendVKey 0
+                Pausa 1000
+                Err.Clear
+                On Error GoTo 0
+            End If
+            On Error GoTo 0
+        End If
+    Next
+
+    LogUI "HDR", "==========================================="
+    If g_Detener Then
+        LogUI "HDR", "  DETENIDO POR USUARIO"
+    Else
+        LogUI "HDR", "  PROCESO COMPLETADO"
+    End If
+    LogUI "HDR", "  OK:" & g_nOk & "  Alertas:" & g_nAlert & "  Errores:" & g_nError
+    LogUI "HDR", "  Log: " & g_sLogFile
+    LogUI "HDR", "==========================================="
+    Log "FIN | OK:" & g_nOk & " | Alertas:" & g_nAlert & " | Errores:" & g_nError
+    Finalizar
+End Sub
+
+' === CS02: ABRIR MATERIAL Y PROCESAR TODAS SUS ALTERNATIVAS ===
+Sub CS02Mat(sess, sMat, sPos, sComp)
+    ' Navegar CS02
+    sess.findById("wnd[0]").maximize
+    sess.findById("wnd[0]/tbar[0]/okcd").text = "/ncs02"
+    sess.findById("wnd[0]").sendVKey 0
+    Pausa 900
+
+    On Error Resume Next
+    sess.findById("wnd[0]/usr/ctxtRC29N-MATNR").text = sMat
+    If Err.Number <> 0 Then
+        LogUI "ERR", "[" & sMat & "] CS02 no accesible: " & Err.Description
+        Log "ERROR | " & sMat & " | CS02 inaccesible"
+        g_nError = g_nError + 1 : ActUI g_nTotal, g_nOk, g_nAlert, g_nError
+        Err.Clear : On Error GoTo 0 : Exit Sub
+    End If
+    On Error GoTo 0
+
+    sess.findById("wnd[0]/usr/ctxtRC29N-WERKS").text = "CO01"
+    sess.findById("wnd[0]/usr/ctxtRC29N-STLAN").text = "1"
+    sess.findById("wnd[0]/usr/txtRC29N-STLAL").text  = ""
+    sess.findById("wnd[0]").sendVKey 0
+    Pausa 1500
+
+    ' Revisar si hay error (material no existe etc.)
+    Dim sBar : sBar = ""
+    On Error Resume Next : sBar = sess.findById("wnd[0]/sbar").text : On Error GoTo 0
+    If InStr(LCase(sBar),"no existe")>0 Or InStr(LCase(sBar),"not exist")>0 Or _
+       InStr(LCase(sBar),"no hay")>0 Then
+        LogUI "ALERT", "[" & sMat & "] LMat no encontrada: " & sBar
+        Log "ALERTA | " & sMat & " | LMat no existe: " & sBar
+        g_nAlert = g_nAlert + 1 : ActUI g_nTotal, g_nOk, g_nAlert, g_nError
+        Exit Sub
+    End If
+
+    ' Detectar si hay pantalla de seleccion de alternativas
+    Dim tblAlt, bAlt : bAlt = False
+    On Error Resume Next
+    Set tblAlt = sess.findById("wnd[0]/usr/tblSAPLCSDITCS_ALT_MAT")
+    If Err.Number = 0 Then bAlt = True
+    Err.Clear : On Error GoTo 0
+
+    If bAlt Then
+        ' Multiples alternativas
+        Dim nAlts : nAlts = tblAlt.RowCount
+        LogUI "INFO", "[" & sMat & "] " & nAlts & " alternativa(s) encontrada(s)"
+
+        Dim iA
+        For iA = 0 To nAlts - 1
+            If g_Detener Then Exit For
+
+            Dim sAlt : sAlt = CStr(iA+1)
+            On Error Resume Next
+            sAlt = Trim(sess.findById("wnd[0]/usr/tblSAPLCSDITCS_ALT_MAT/txtRC29L-STLAL[0," & iA & "]").text)
+            If Err.Number <> 0 Or Trim(sAlt) = "" Then sAlt = CStr(iA+1)
+            Err.Clear : On Error GoTo 0
+
+            SetSt "Mat:" & sMat & "  Alt:" & sAlt & "  buscando Pos " & sPos
+
+            On Error Resume Next
+            tblAlt.currentCellRow = iA
+            Pausa 200
+            tblAlt.doubleClickCurrentCell
+            Dim bEntro : bEntro = (Err.Number = 0)
+            Dim sErrAlt : sErrAlt = Err.Description
+            Err.Clear : On Error GoTo 0
+
+            If Not bEntro Then
+                LogUI "ALERT", "[" & sMat & "] Alt " & sAlt & ": no se pudo abrir - " & sErrAlt
+                Log "ALERTA | " & sMat & " | Alt " & sAlt & " | no se pudo abrir"
+                g_nAlert = g_nAlert + 1 : ActUI g_nTotal, g_nOk, g_nAlert, g_nError
+            Else
+                Pausa 1300
+                If BuscarYCambiar(sess, sMat, sPos, sComp, sAlt) Then
+                    sess.findById("wnd[0]/tbar[0]/btn[11]").press
+                    Pausa 900
+                    CerrarPopup sess
+                    Dim sSave : sSave = ""
+                    On Error Resume Next : sSave = sess.findById("wnd[0]/sbar").text : On Error GoTo 0
+                    LogUI "OK", "[" & sMat & "] Alt " & sAlt & " Pos " & sPos & " -> " & sComp & "  " & sSave
+                    Log "OK | " & sMat & " | Alt " & sAlt & " | Pos " & sPos & " -> " & sComp & " | " & sSave
+                    g_nOk = g_nOk + 1 : ActUI g_nTotal, g_nOk, g_nAlert, g_nError
+                End If
+            End If
+
+            ' Volver F3
+            sess.findById("wnd[0]").sendVKey 3
+            Pausa 900
+
+            On Error Resume Next
+            Set tblAlt = sess.findById("wnd[0]/usr/tblSAPLCSDITCS_ALT_MAT")
+            If Err.Number <> 0 Then Err.Clear : On Error GoTo 0 : Exit For
+            On Error GoTo 0
+        Next
+
+    Else
+        ' BOM directo (1 sola alternativa)
+        LogUI "INFO", "[" & sMat & "] Entrada directa al BOM"
+        If BuscarYCambiar(sess, sMat, sPos, sComp, "1") Then
+            sess.findById("wnd[0]/tbar[0]/btn[11]").press
+            Pausa 900
+            CerrarPopup sess
+            Dim sSave2 : sSave2 = ""
+            On Error Resume Next : sSave2 = sess.findById("wnd[0]/sbar").text : On Error GoTo 0
+            LogUI "OK", "[" & sMat & "] Pos " & sPos & " -> " & sComp & "  " & sSave2
+            Log "OK | " & sMat & " | Pos " & sPos & " -> " & sComp & " | " & sSave2
+            g_nOk = g_nOk + 1 : ActUI g_nTotal, g_nOk, g_nAlert, g_nError
+        End If
+    End If
+End Sub
+
+' === BUSCAR POSICION EN TABLA BOM Y CAMBIAR COMPONENTE ===
+Function BuscarYCambiar(sess, sMat, sPos, sComp, sAlt)
+    BuscarYCambiar = False
+    Const TBOM = "wnd[0]/usr/tabsTS_ITOV/tabpTCMA/ssubSUBPAGE:SAPLCSDI:0152/tblSAPLCSDITCMAT"
+
+    Dim tbl
+    On Error Resume Next
+    Set tbl = sess.findById(TBOM)
+    If Err.Number <> 0 Then
+        LogUI "ALERT", "[" & sMat & "] Alt " & sAlt & ": tabla BOM no encontrada"
+        Log "ALERTA | " & sMat & " | Alt " & sAlt & " | tabla BOM no encontrada"
+        g_nAlert = g_nAlert + 1 : ActUI g_nTotal, g_nOk, g_nAlert, g_nError
+        Err.Clear : On Error GoTo 0 : Exit Function
+    End If
+    On Error GoTo 0
+
+    Dim nVis : nVis = tbl.RowCount
+    Dim scrMax : scrMax = 0
+    On Error Resume Next : scrMax = tbl.VerticalScrollbar.Maximum : Err.Clear : On Error GoTo 0
+    If nVis = 0 Then nVis = 10
+
+    Dim bFound : bFound = False
+    Dim iScr : iScr = 0
+
+    Do While Not bFound And iScr <= scrMax
+        If iScr > 0 Then
+            On Error Resume Next
+            tbl.VerticalScrollbar.Position = iScr
+            Pausa 300 : Err.Clear : On Error GoTo 0
+        End If
+
+        Dim r
+        For r = 0 To nVis - 1
+            Dim sPF : sPF = ""
+            On Error Resume Next
+            sPF = Trim(sess.findById(TBOM & "/txtRC29P-POSNR[0," & r & "]").text)
+            Err.Clear : On Error GoTo 0
+
+            If sPF <> "" Then
+                On Error Resume Next
+                Dim nPF2 : nPF2 = CLng(sPF)
+                If Err.Number = 0 Then sPF = Right("0000" & CStr(nPF2), 4)
+                Err.Clear : On Error GoTo 0
+            End If
+
+            If sPF = sPos Then
+                bFound = True
+                On Error Resume Next
+                sess.findById(TBOM & "/ctxtRC29P-IDNRK[2," & r & "]").text = sComp
+                sess.findById(TBOM & "/ctxtRC29P-IDNRK[2," & r & "]").setFocus
+                If Err.Number <> 0 Then
+                    LogUI "ALERT", "[" & sMat & "] Alt " & sAlt & " Pos " & sPos & ": error escritura - " & Err.Description
+                    Log "ALERTA | " & sMat & " | Alt " & sAlt & " | Pos " & sPos & " | error escritura"
+                    g_nAlert = g_nAlert + 1 : ActUI g_nTotal, g_nOk, g_nAlert, g_nError
+                    Err.Clear : On Error GoTo 0 : Exit Function
+                End If
+                On Error GoTo 0
+                sess.findById("wnd[0]").sendVKey 0
+                Pausa 500
+                Dim sSbarV : sSbarV = ""
+                On Error Resume Next : sSbarV = sess.findById("wnd[0]/sbar").text : On Error GoTo 0
+                If InStr(LCase(sSbarV),"error") > 0 Then
+                    LogUI "ALERT", "[" & sMat & "] SAP rechazo Pos " & sPos & ": " & sSbarV
+                    Log "ALERTA | " & sMat & " | Alt " & sAlt & " | SAP rechazo: " & sSbarV
+                    g_nAlert = g_nAlert + 1 : ActUI g_nTotal, g_nOk, g_nAlert, g_nError
+                    Exit Function
+                End If
+                BuscarYCambiar = True
+                Exit For
+            End If
+        Next
+
+        If scrMax = 0 Then Exit Do
+        iScr = iScr + nVis
+    Loop
+
+    If Not bFound Then
+        LogUI "ALERT", "[" & sMat & "] Alt " & sAlt & ": Posicion [" & sPos & "] NO encontrada"
+        Log "ALERTA | " & sMat & " | Alt " & sAlt & " | Pos " & sPos & " no encontrada"
+        g_nAlert = g_nAlert + 1 : ActUI g_nTotal, g_nOk, g_nAlert, g_nError
+    End If
+End Function
+
+' === UTILIDADES ===
+Sub CerrarPopup(sess)
+    On Error Resume Next
+    sess.findById("wnd[1]/usr/btnSPOP-OPTION1").press
+    If Err.Number <> 0 Then Err.Clear : sess.findById("wnd[1]").sendVKey 0
+    Err.Clear : On Error GoTo 0
+End Sub
+
+Sub Pausa(ms)
+    On Error Resume Next
+    If IsObject(WScript) Then WScript.Sleep ms
+    On Error GoTo 0
+End Sub
+
+Sub Finalizar()
+    document.getElementById("btnStart").disabled = False
+    document.getElementById("btnStop").disabled  = True
+    document.getElementById("txtDatos").disabled = False
+    document.getElementById("progBar").style.width = "100%"
+    SetSt "Finalizado  OK:" & g_nOk & "  Alertas:" & g_nAlert & "  Errores:" & g_nError
+    document.getElementById("lblEstado").innerText = "OK:" & g_nOk & "  Alertas:" & g_nAlert & "  Errores:" & g_nError
+End Sub
+
+Sub ActUI(nT, nO, nA, nE)
+    document.getElementById("numTotal").innerText = nT
+    document.getElementById("numOk").innerText    = nO
+    document.getElementById("numAlert").innerText = nA
+    document.getElementById("numError").innerText = nE
+End Sub
+
+Sub Progreso(nA, nT)
+    If nT > 0 Then
+        document.getElementById("progBar").style.width = CInt((nA/nT)*100) & "%"
+    End If
+End Sub
+
+Sub SetSt(s)
+    document.getElementById("statusLine").innerText = s
+End Sub
+
+Sub LogUI(sTipo, sMsg)
+    Dim div : Set div = document.getElementById("logArea")
+    Dim sH : sH = Right("0"&Hour(Now),2) & ":" & Right("0"&Minute(Now),2) & ":" & Right("0"&Second(Now),2)
+    Dim sClass, sPre
+    Select Case UCase(sTipo)
+        Case "OK"    : sClass="l-ok"    : sPre="[OK]    "
+        Case "ALERT" : sClass="l-alert" : sPre="[ALERTA]"
+        Case "ERR"   : sClass="l-error" : sPre="[ERROR] "
+        Case "INFO"  : sClass="l-info"  : sPre="[info]  "
+        Case "HDR"   : sClass="l-hdr"   : sPre=""
+        Case Else    : sClass="l-skip"  : sPre="[skip]  "
+    End Select
+    Dim el : Set el = document.createElement("div")
+    el.className = sClass
+    el.innerText = sH & "  " & sPre & "  " & sMsg
+    div.appendChild el
+    div.scrollTop = div.scrollHeight
+    Log sTipo & " | " & sMsg
+End Sub
+
+Sub Log(sMsg)
+    If g_sLogFile = "" Then Exit Sub
+    On Error Resume Next
+    Dim f : Set f = g_fso.OpenTextFile(g_sLogFile, 8, True)
+    If Err.Number = 0 Then f.WriteLine Now & " | " & sMsg : f.Close
+    Err.Clear : On Error GoTo 0
+End Sub
+
+Sub Window_OnLoad()
+    window.resizeTo 760, 680
+    window.moveTo (screen.availWidth-760)\2, (screen.availHeight-680)\2
+End Sub
+</script>
+</body>
+</html>
