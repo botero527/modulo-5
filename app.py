@@ -2243,7 +2243,9 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
         zpla        = getattr(res, "zpla",         "") or ""
 
         # Atributos del ZFER BASE (ya sincronizado en ODATA) — el nuevo aún no está en ODATA
-        zfer_base = item.get("zfer", "")
+        zfer_base    = item.get("zfer", "")
+        bloque_id_it = item.get("_bloque_id")          # para filtrar M5_COLA por bloque correcto
+        formula_it   = item.get("formula_nueva", "") or ""  # para filtrar LOGEJECUCIONES por fórmula
         attrs_base = {}
         try: attrs_base = q_atributos(zfer_base)
         except Exception: pass
@@ -2267,9 +2269,51 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
                     ruta_3dm     = str(row[0] or "").strip() or None
                     ruta_destino = str(row[1] or "").strip() or None  # descripcion = carpeta destino
                     tiene_sim    = bool(row[2])
-                    zfer_sim     = str(row[3] or "").strip() or None
+                    _zs          = str(row[3] or "").strip()
+                    # Evitar que zfer_sim sea el propio base (dato corrupto)
+                    zfer_sim     = _zs if _zs and _zs != zfer_base else None
         except Exception: pass
 
+        if not ruta_3dm:
+            # Fallback: buscar si este ZFER es el simétrico de otro → heredar ruta y marcar simetría
+            try:
+                with _get_conn_local() as cn:
+                    row_inv = cn.cursor().execute(
+                        "SELECT ruta, descripcion, zfer FROM itg.M5_RUTASZFER WHERE zfer_simetrico=?",
+                        zfer_base
+                    ).fetchone()
+                    if row_inv:
+                        ruta_3dm     = str(row_inv[0] or "").strip() or None
+                        ruta_destino = str(row_inv[1] or "").strip() or None
+                        zfer_base_contrario = str(row_inv[2] or "").strip() or None
+                        # Validar que el contrario no sea el mismo ZFER (dato corrupto)
+                        if zfer_base_contrario and zfer_base_contrario == zfer_base:
+                            zfer_base_contrario = None
+                        # Si no tenía simetría marcada, llenar con el ZFER base contrario
+                        if not tiene_sim and zfer_base_contrario:
+                            tiene_sim = True
+                            zfer_sim  = zfer_base_contrario
+                        # Guardar en M5_RUTASZFER para el simétrico (heredado, editable)
+                        if ruta_3dm:
+                            try:
+                                cn.cursor().execute("""
+                                    MERGE itg.M5_RUTASZFER AS t
+                                    USING (SELECT ? AS zfer, ? AS ruta, ? AS descripcion,
+                                                  1 AS tiene_simetria, ? AS zfer_simetrico) AS s
+                                    ON t.zfer = s.zfer
+                                    WHEN MATCHED AND (t.ruta IS NULL OR t.ruta = '') THEN
+                                        UPDATE SET ruta=s.ruta, descripcion=s.descripcion,
+                                                   tiene_simetria=s.tiene_simetria,
+                                                   zfer_simetrico=s.zfer_simetrico
+                                    WHEN NOT MATCHED THEN
+                                        INSERT (zfer, ruta, descripcion, tiene_simetria, zfer_simetrico)
+                                        VALUES (s.zfer, s.ruta, s.descripcion, s.tiene_simetria, s.zfer_simetrico);
+                                """, zfer_base, ruta_3dm, ruta_destino, zfer_base_contrario)
+                                print(f"[GESTOR] ruta heredada guardada en M5_RUTASZFER para {zfer_base}")
+                            except Exception as e_ruta:
+                                print(f"[GESTOR] no se pudo guardar ruta heredada: {e_ruta}")
+                        print(f"[GESTOR] ruta+simetría heredada del base {zfer_base_contrario} para {zfer_base}")
+            except Exception: pass
         if not ruta_3dm:
             print(f"[GESTOR] ruta_3dm vacia para {zfer_base} — insertando con NULL")
 
@@ -2281,8 +2325,35 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
         # Si tiene_sim pero zfer_sim es NULL en M5_RUTASZFER → buscarlo en ODATA (fallback)
         if tiene_sim and not zfer_sim:
             try:
-                zfer_sim = _buscar_zfer_simetrico_odata(zfer_base)
+                _found = _buscar_zfer_simetrico_odata(zfer_base)
+                # Solo aceptar si es diferente al base
+                if _found and _found != zfer_base:
+                    zfer_sim = _found
+                else:
+                    tiene_sim = False  # No hay simétrico real → no marcar SI con NULL
+                    print(f"[GESTOR] simetría descartada para {zfer_base}: ODATA no encontró simétrico válido")
             except Exception: pass
+
+        # Buscar el zfer_nuevo del simétrico SOLO en M5_COLA (mismo bloque activo).
+        # Nunca se busca en M5_LOGEJECUCIONES para evitar coger datos de homologaciones anteriores del mismo ZFER.
+        # Si el simétrico va después en el bloque → queda NULL aquí, el UPDATE retroactivo lo llenará al terminar.
+        zfer_sim_nuevo = None
+        if tiene_sim and zfer_sim:
+            try:
+                with _get_conn_local() as cn:
+                    # Filtrar por bloque_id para coger exactamente el simétrico de esta ejecución
+                    row_s = cn.cursor().execute("""
+                        SELECT TOP 1 zfer_nuevo FROM itg.M5_COLA
+                        WHERE zfer_base=? AND bloque_id=? AND estado='OK' AND zfer_nuevo IS NOT NULL
+                        ORDER BY ejecutado_el DESC
+                    """, zfer_sim, bloque_id_it).fetchone()
+                    if row_s:
+                        zfer_sim_nuevo = str(row_s[0] or "").strip() or None
+            except Exception: pass
+            if zfer_sim_nuevo:
+                print(f"[GESTOR] zfer_simetria resuelto en bloque activo: {zfer_sim} → {zfer_sim_nuevo}")
+            else:
+                print(f"[GESTOR] zfer_simetria pendiente: {zfer_sim} no procesado aún en este bloque — retroactivo lo llenará")
 
         if tiene_sim and zfer_sim:
             try:
@@ -2324,12 +2395,57 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
                 str(zfer_nuevo or ""),
                 str(zfor_nuevo or "") or None,
                 str(zpla or "") or None,
-                simetria_val, pieza_sim, zfer_sim, zfor_sim, zpla_sim,
+                simetria_val, pieza_sim, zfer_sim_nuevo, zfor_sim, zpla_sim,
                 ruta_3dm, ruta_destino,
                 "PENDIENTE"
             )
             print(f"[GESTOR] Insertado GestorAuto_jobs_auto zfer={zfer_nuevo} veh='{vehiculo_nombre}' pieza={pieza_3d}")
 
+        # ── UPDATE retroactivo: si este zfer_base es el simétrico de otro ZFER ya en GestorAuto,
+        #    actualizar ese row con el zfer_nuevo recién creado ───────────────────────────────────
+        if zfer_nuevo:
+            try:
+                with _get_conn_local() as cn:
+                    cur_r = cn.cursor()
+                    # ¿Quién tiene a zfer_base como su simétrico?
+                    row_orig = cur_r.execute(
+                        "SELECT zfer FROM itg.M5_RUTASZFER WHERE zfer_simetrico=?", zfer_base
+                    ).fetchone()
+                    if row_orig:
+                        zfer_original = str(row_orig[0]).strip()
+                        # M5_COLA filtrado por bloque_id (mismo par de esta ejecución).
+                        # Fallback M5_LOGEJECUCIONES filtrado por formula_nueva (mismo cambio de fórmula).
+                        # Solo buscamos el zfer_nuevo del ORIGINAL para saber qué row de GestorAuto actualizar.
+                        row_on = cur_r.execute("""
+                            SELECT TOP 1 zfer_nuevo FROM itg.M5_COLA
+                            WHERE zfer_base=? AND bloque_id=? AND estado='OK' AND zfer_nuevo IS NOT NULL
+                            ORDER BY ejecutado_el DESC
+                        """, zfer_original, bloque_id_it).fetchone()
+                        if not row_on:
+                            row_on = cur_r.execute("""
+                                SELECT TOP 1 zfer_nuevo FROM itg.M5_LOGEJECUCIONES
+                                WHERE zfer_base=? AND estado='OK' AND zfer_nuevo IS NOT NULL
+                                  AND (? = '' OR formula_nueva = ?)
+                                ORDER BY ejecutado_el DESC
+                            """, zfer_original, formula_it, formula_it).fetchone()
+                        if row_on:
+                            zfer_orig_nuevo = str(row_on[0]).strip()
+                            cur_r.execute("""
+                                UPDATE itg.GestorAuto_jobs_auto
+                                SET zfer_simetria=?, zfor_simetria=?, zpla_simetria=?
+                                WHERE zfer=? AND simetria='SI'
+                                  AND (zfer_simetria IS NULL OR zfer_simetria='')
+                            """, zfer_nuevo,
+                                str(zfor_nuevo or "") or None,
+                                str(zpla or "") or None,
+                                zfer_orig_nuevo)
+                            if cur_r.rowcount:
+                                print(f"[GESTOR] retroactivo OK: GestorAuto zfer={zfer_orig_nuevo} → sim=({zfer_nuevo},{zfor_nuevo},{zpla})")
+            except Exception as e_ret:
+                print(f"[GESTOR] error update retroactivo simetría: {e_ret}")
+
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
             # BOM completo desde ZPPR0008 (leído en tiempo real de SAP post-homologación)
             zfer_key = str(zfer_nuevo or item.get("zfer",""))
             cur.execute("DELETE FROM itg.GestorAuto_bom_zfer_local WHERE zfer=?", zfer_key)
@@ -2694,7 +2810,7 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema", modo: 
                  "nivel": r[8] or "", "tipo_pieza": r[9] or "", "formula_nueva": r[10] or "",
                  "acero_dir": r[11] or "", "cambiar_hr": bool(r[12]), "zhal": r[13] or "",
                  "subproducto": r[14] or "",
-                 "_cola_id": r[0]} for r in rows]
+                 "_cola_id": r[0], "_bloque_id": bloque_id} for r in rows]
 
         # Publicar en SAP_QUEUE_LOCK para que otros proyectos sepan que SAP está ocupado
         _sap_lock_insertar_items(cola)
@@ -2944,93 +3060,70 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema", modo: 
 # ── SAP_QUEUE_LOCK — coordinación con otros proyectos ────────────────────────
 _SAP_LOCK_PROYECTO = "INTELIGENCE"
 
-_SAP_LOCK_STALE_MIN    = 30   # filas PENDIENTE/EJECUTANDO con más de este tiempo → colgadas, se borran
-_SAP_LOCK_FINALIZANDO_SEG = 5   # buffer cortesía: FINALIZANDO se respeta este tiempo, luego se borra
 
 def _sap_lock_ocupado_por_otro() -> str:
     """Retorna el nombre del proyecto que tiene el SAP, o '' si está libre.
-    - PENDIENTE / EJECUTANDO → ocupado (limpia si lleva más de _SAP_LOCK_STALE_MIN minutos)
-    - FINALIZANDO            → ocupado solo si lleva menos de _SAP_LOCK_FINALIZANDO_SEG segundos
-    - COMPLETADO             → ignorado (no bloquea)
+    Sin límite de tiempo — el keepalive mantiene la fila viva durante toda la ejecución
+    (incluso si tarda horas). La fila se borra explícitamente al terminar o al reiniciar.
     """
     try:
         with _get_conn_local() as cn:
-            cur = cn.cursor()
-            # Borrar filas colgadas de otros proyectos (crash sin cleanup)
-            cur.execute("""
-                DELETE FROM itg.SAP_QUEUE_LOCK
-                WHERE proyecto != ?
-                  AND (
-                    (estado IN ('PENDIENTE','EJECUTANDO','COMPLETADO')
-                     AND DATEDIFF(MINUTE, desde, GETDATE()) > ?)
-                    OR
-                    (estado = 'FINALIZANDO'
-                     AND DATEDIFF(SECOND, desde, GETDATE()) > ?)
-                  )
-            """, _SAP_LOCK_PROYECTO, _SAP_LOCK_STALE_MIN, _SAP_LOCK_FINALIZANDO_SEG)
-            row = cur.execute("""
+            row = cn.cursor().execute("""
                 SELECT TOP 1 proyecto FROM itg.SAP_QUEUE_LOCK
                 WHERE proyecto != ?
-                  AND (
-                    estado IN ('PENDIENTE','EJECUTANDO')
-                    OR (estado = 'FINALIZANDO'
-                        AND DATEDIFF(SECOND, desde, GETDATE()) <= ?)
-                  )
-            """, _SAP_LOCK_PROYECTO, _SAP_LOCK_FINALIZANDO_SEG).fetchone()
+            """, _SAP_LOCK_PROYECTO).fetchone()
         return str(row[0]) if row else ""
     except Exception as e:
         print(f"[SAP_LOCK] error verificando: {e}")
         return ""
 
 def _sap_lock_insertar_items(items: list):
-    """Inserta todos los items del bloque como PENDIENTE en SAP_QUEUE_LOCK.
-    item_ref = str(_cola_id) para que sea consistente con _sap_lock_item_ejecutando/_borrar."""
-    try:
-        with _get_conn_local() as cn:
-            cur = cn.cursor()
-            for it in items:
-                cur.execute("""
-                    INSERT INTO itg.SAP_QUEUE_LOCK (proyecto, item_ref, estado, desde)
-                    VALUES (?, ?, 'PENDIENTE', GETDATE())
-                """, _SAP_LOCK_PROYECTO, str(it["_cola_id"]))
-    except Exception as e:
-        print(f"[SAP_LOCK] error insertando items: {e}")
-
-def _sap_lock_item_ejecutando(cola_id: int):
-    """Marca el item como EJECUTANDO."""
+    """Inserta UNA sola fila 'batch' como EJECUTANDO para todo el bloque.
+    El item_ref es 'batch_<primer_cola_id>' y se hace keepalive después de cada item.
+    Una sola fila evita que el stale-cleanup de GESTOR borre filas PENDIENTE
+    que llevan más de 30 min esperando en bloques largos."""
+    if not items:
+        return
+    ref = f"batch_{items[0]['_cola_id']}"
     try:
         with _get_conn_local() as cn:
             cn.cursor().execute("""
-                UPDATE itg.SAP_QUEUE_LOCK SET estado='EJECUTANDO', desde=GETDATE()
-                WHERE proyecto=? AND item_ref=? AND estado='PENDIENTE'
-            """, _SAP_LOCK_PROYECTO, str(cola_id))
+                INSERT INTO itg.SAP_QUEUE_LOCK (proyecto, item_ref, estado, desde)
+                VALUES (?, ?, 'EJECUTANDO', GETDATE())
+            """, _SAP_LOCK_PROYECTO, ref)
     except Exception as e:
-        print(f"[SAP_LOCK] error marcando EJECUTANDO: {e}")
+        print(f"[SAP_LOCK] error insertando batch lock: {e}")
 
-def _sap_lock_item_borrar(cola_id: int):
-    """Marca el item como COMPLETADO (no lo borra — la tabla debe estar visible durante toda la ejecución).
-    La limpieza real ocurre en _sap_lock_limpiar_proyecto() al finalizar el bloque."""
+def _sap_lock_keepalive():
+    """Actualiza desde=GETDATE() en la fila EJECUTANDO del proyecto para resetear el
+    contador de stale-cleanup (evita que GESTOR la borre si un item tarda >30 min)."""
     try:
         with _get_conn_local() as cn:
             cn.cursor().execute("""
-                UPDATE itg.SAP_QUEUE_LOCK SET estado='COMPLETADO'
-                WHERE proyecto=? AND item_ref=?
-            """, _SAP_LOCK_PROYECTO, str(cola_id))
-    except Exception as e:
-        print(f"[SAP_LOCK] error marcando COMPLETADO: {e}")
-
-def _sap_lock_limpiar_proyecto():
-    """Marca todos los registros de INTELIGENCE como FINALIZANDO.
-    _sap_lock_ocupado_por_otro los respeta por 20 segundos (buffer de cortesía),
-    luego el stale-cleanup los elimina automáticamente."""
-    try:
-        with _get_conn_local() as cn:
-            cn.cursor().execute("""
-                UPDATE itg.SAP_QUEUE_LOCK SET estado='FINALIZANDO'
-                WHERE proyecto=?
+                UPDATE itg.SAP_QUEUE_LOCK SET desde=GETDATE()
+                WHERE proyecto=? AND estado='EJECUTANDO'
             """, _SAP_LOCK_PROYECTO)
     except Exception as e:
-        print(f"[SAP_LOCK] error marcando FINALIZANDO: {e}")
+        print(f"[SAP_LOCK] error keepalive: {e}")
+
+def _sap_lock_item_ejecutando(cola_id: int):
+    """Keepalive: resetea desde=GETDATE() para que el stale-cleanup no borre la fila."""
+    _sap_lock_keepalive()
+
+def _sap_lock_item_borrar(cola_id: int):
+    """Keepalive tras completar un item: resetea desde para el próximo."""
+    _sap_lock_keepalive()
+
+def _sap_lock_limpiar_proyecto():
+    """Al finalizar el bloque: borra directamente la fila del batch de INTELIGENCE.
+    (ya no usamos FINALIZANDO — GESTOR tiene su propio stale-cleanup)"""
+    try:
+        with _get_conn_local() as cn:
+            cn.cursor().execute("""
+                DELETE FROM itg.SAP_QUEUE_LOCK WHERE proyecto=?
+            """, _SAP_LOCK_PROYECTO)
+    except Exception as e:
+        print(f"[SAP_LOCK] error limpiando lock: {e}")
 
 def _cola_reprogramar_manana(bloque_id: int):
     """Reprograma un bloque para mañana misma hora y lo marca como PENDIENTE con motivo."""

@@ -2150,9 +2150,12 @@ class AutomatizadorSAP:
                 self._esperar(T_MEDIO)
                 self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
                 self._esperar(T_MEDIO)
-                self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
-                self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
-                self._esperar(T_RAPIDO)
+                try:
+                    self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
+                    self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
+                    self._esperar(T_RAPIDO)
+                except Exception:
+                    pass  # radio no disponible — igual intentar leer el grid
                 doknr_base = str(self.session.findById(_grid_docu).getCellValue(0, "DOKNR") or "").strip()
                 print(f"    MM02 plano: DOKNR SAP base='{doknr_base}'")
             except Exception as e_sap:
@@ -2754,9 +2757,12 @@ class AutomatizadorSAP:
                 self._esperar(T_MEDIO)
                 self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
                 self._esperar(T_MEDIO)
-                self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
-                self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
-                self._esperar(T_RAPIDO)
+                try:
+                    self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
+                    self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
+                    self._esperar(T_RAPIDO)
+                except Exception:
+                    pass  # radio no disponible — igual intentar leer el grid
                 doknr_base = str(self.session.findById(_grid_docu).getCellValue(0, "DOKNR") or "").strip()
                 print(f"    MM02 plano (con SP): DOKNR SAP base='{doknr_base}'")
             except Exception as e_sap:

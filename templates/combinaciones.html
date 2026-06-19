@@ -1292,7 +1292,66 @@ async function _enviarTodoACola() {
     }
     // Los ítems ya vienen enriquecidos con cambiar_hr / acero_dir / zhal por ítem
 
-    if (!confirm(`¿Enviar ${partes.join(" + ")} a la Cola SAP?\n${textoBloque}\n\nSe ejecutará a la hora programada del bloque.`)) {
+    // ── Consultar ruta del ZFER base para mostrar en confirmación ────────────
+    let _rutaInfo = null;
+    try { _rutaInfo = await fetch(`/api/ruta/${ZFER_BASE}`).then(r => r.json()); } catch(e) {}
+    const _tieneRuta   = !!(_rutaInfo && _rutaInfo.ruta);
+    const _tieneSim    = !!(_rutaInfo && _rutaInfo.tiene_simetria);
+    const _zferSim     = (_rutaInfo && _rutaInfo.zfer_simetrico) || "";
+
+    const _confirmar = await new Promise(resolve => {
+      // Construir contenido del modal
+      const rutaChip = _tieneRuta
+        ? `<span style="display:inline-flex;align-items:center;gap:.35rem;background:#14532d33;border:1px solid #16a34a55;color:#86efac;border-radius:6px;padding:.2rem .6rem;font-size:.78rem;font-weight:600;">
+             <span style="font-size:.8rem;">📁</span> Con rutas 3D/destino
+           </span>`
+        : `<span style="display:inline-flex;align-items:center;gap:.35rem;background:#78350f33;border:1px solid #d9770655;color:#fde68a;border-radius:6px;padding:.2rem .6rem;font-size:.78rem;font-weight:600;">
+             <span style="font-size:.8rem;">⚠</span> Sin rutas configuradas
+           </span>`;
+      const simChip = _tieneSim
+        ? `<span style="display:inline-flex;align-items:center;gap:.35rem;background:#78350f33;border:1px solid #d9770655;color:#fde68a;border-radius:6px;padding:.2rem .6rem;font-size:.78rem;font-weight:600;">
+             ⚠ Tiene simetría${_zferSim ? ` — simétrico: <strong style="color:#fbbf24;margin-left:.25rem;">${_zferSim}</strong>` : ""}
+           </span>`
+        : "";
+
+      const overlay = document.createElement("div");
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;";
+      overlay.innerHTML = `
+        <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;width:100%;max-width:460px;font-family:inherit;box-shadow:0 8px 40px rgba(0,0,0,.7);">
+          <div style="padding:1.1rem 1.4rem .7rem;border-bottom:1px solid var(--divider);">
+            <div style="color:var(--muted);font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:.3rem;">Confirmar envío a Cola SAP</div>
+            <div style="color:var(--text);font-size:1rem;font-weight:700;">${partes.join(" + ")}</div>
+          </div>
+          <div style="padding:.9rem 1.4rem;">
+            <div style="color:var(--muted);font-size:.82rem;margin-bottom:.75rem;">
+              <span style="color:var(--text);font-weight:600;">Bloque:</span> ${textoBloque}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.65rem;">
+              ${rutaChip}
+              ${simChip}
+            </div>
+            ${!_tieneRuta ? `<div style="color:#fde68a;font-size:.76rem;line-height:1.5;background:#78350f22;border:1px solid #d9770633;border-radius:6px;padding:.4rem .65rem;margin-bottom:.45rem;">
+              La homologación se ejecutará pero GestorAuto no recibirá rutas 3D.<br>Puedes configurarlas en el panel de Rutas antes de enviar.
+            </div>` : ""}
+            ${_tieneSim ? `<div style="color:#fde68a;font-size:.76rem;line-height:1.5;background:#78350f22;border:1px solid #d9770633;border-radius:6px;padding:.4rem .65rem;">
+              ⚠ <strong>Este ZFER tiene simetría configurada.</strong><br>
+              Para que los datos de simetría queden vinculados en GestorAuto, debes enviar también
+              ${_zferSim ? `el simétrico <strong style="color:#fbbf24;">${_zferSim}</strong>` : "la pieza simétrica"}
+              al <strong>mismo bloque</strong> desde su propia página.<br>
+              <span style="color:var(--muted);">Si no lo envías, los campos de simetría quedarán vacíos en la BD.</span>
+            </div>` : ""}
+          </div>
+          <div style="padding:.7rem 1.4rem 1.1rem;border-top:1px solid var(--divider);display:flex;justify-content:flex-end;gap:.55rem;">
+            <button id="_conf-cancel" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:.42rem 1rem;font-size:.83rem;cursor:pointer;">Cancelar</button>
+            <button id="_conf-ok" style="background:var(--info-bdr);border:none;color:#fff;border-radius:7px;padding:.42rem 1.2rem;font-size:.83rem;font-weight:600;cursor:pointer;">Enviar a Cola →</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      overlay.querySelector("#_conf-ok").onclick     = () => { document.body.removeChild(overlay); resolve(true); };
+      overlay.querySelector("#_conf-cancel").onclick = () => { document.body.removeChild(overlay); resolve(false); };
+    });
+
+    if (!_confirmar) {
       if (statusGlb) statusGlb.textContent = "";
       if (btnEjec) btnEjec.disabled = false;
       return;
@@ -2179,6 +2238,14 @@ function _renderFormulaCards(formulas, opts = {}) {
   document.querySelectorAll(`.${p}chk-fc`).forEach(chk => {
     chk.addEventListener("change", () => {
       _fcActualizarCnt(parseInt(chk.dataset.fidx), p);
+      // Si es panel base y hay simétrico cargado → auto-sincronizar simétrico
+      if (!p && SIM_MATERIAL) {
+        const simChk = document.querySelector(`.schk-fc[data-formula="${chk.dataset.formula}"][data-color="${chk.dataset.color}"]`);
+        if (simChk && simChk.checked !== chk.checked) {
+          simChk.checked = chk.checked;
+          _fcActualizarCnt(parseInt(simChk.dataset.fidx), "s");
+        }
+      }
       _actualizarContadorCola();
     });
   });
@@ -2297,6 +2364,23 @@ function _toggleFC(idx, p = "") {
 function _fcSelAll(idx, checked, p = "") {
   document.querySelectorAll(`.${p}chk-fc-${idx}`).forEach(c => { c.checked = checked; });
   _fcActualizarCnt(idx, p);
+  // Si es panel base y hay simétrico → sincronizar la misma fórmula en simétrico
+  if (!p && SIM_MATERIAL) {
+    const sample = document.querySelector(`.chk-fc-${idx}`);
+    if (sample) {
+      const formula = sample.dataset.formula;
+      const color   = sample.dataset.color;
+      // Encontrar el idx del simétrico con la misma fórmula
+      const simSample = document.querySelector(`.schk-fc[data-formula="${formula}"]`);
+      if (simSample) {
+        const simIdx = parseInt(simSample.dataset.fidx);
+        document.querySelectorAll(`.schk-fc-${simIdx}`).forEach(c => { c.checked = checked; });
+        const simAllChk = document.getElementById(`schk-fc-all-${simIdx}`);
+        if (simAllChk) simAllChk.checked = checked;
+        _fcActualizarCnt(simIdx, "s");
+      }
+    }
+  }
   _actualizarContadorCola();
 }
 
@@ -2714,7 +2798,15 @@ buscarFormulasAlt();
         <i class="bi bi-symmetry-horizontal me-1" style="color:var(--blq-title);"></i>Simetría
       </div>
       <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.82rem; color:var(--text);">
-        <input type="checkbox" id="sim-modal-check" style="accent-color:var(--blq-title); width:14px; height:14px;">
+        <input type="checkbox" id="sim-modal-check" style="accent-color:var(--blq-title); width:14px; height:14px;"
+               onchange="(function(chk){
+                 const me = document.getElementById('sim-modal-encontrado');
+                 const bb = document.getElementById('sim-modal-buscar');
+                 if (chk.checked && !(bb && bb._found) && !('{{ sim_material }}' || '')) {
+                   me.innerHTML = '⚠ Debes buscar la pieza simétrica antes de guardar.';
+                   me.style.color = 'var(--err-txt)'; me.style.display = 'block';
+                 } else if (!chk.checked) { me.style.display = 'none'; }
+               })(this)">
         Esta pieza tiene simetría (par izquierdo/derecho)
       </label>
       <div id="sim-modal-encontrado" style="display:none; margin-top:.6rem; font-size:.78rem;
@@ -2743,15 +2835,17 @@ buscarFormulasAlt();
 <script>
 (function() {
   const _ZFER = "{{ material }}";
-  let _rutaActual = "";
+  let _rutaActual  = "";
+  let _descActual  = "";   // carpeta destino guardada
   let _simActual = { tiene_simetria: false, zfer_simetrico: "", pieza_contraria: "" };
 
   // Cargar ruta + simetría al abrir la página
   fetch(`/api/ruta/${_ZFER}`)
     .then(r => r.json())
     .then(d => {
-      _rutaActual = d.ruta || "";
-      _simActual  = { tiene_simetria: !!d.tiene_simetria, zfer_simetrico: d.zfer_simetrico || "", pieza_contraria: d.pieza_contraria || "" };
+      _rutaActual  = d.ruta         || "";
+      _descActual  = d.descripcion  || "";
+      _simActual   = { tiene_simetria: !!d.tiene_simetria, zfer_simetrico: d.zfer_simetrico || "", pieza_contraria: d.pieza_contraria || "" };
       _rutaRenderizar(d);
       _simetriaRenderizar();
     })
@@ -2852,7 +2946,7 @@ buscarFormulasAlt();
 
   window._rutaEditar = function() {
     document.getElementById("ruta-input").value = _rutaActual;
-    document.getElementById("ruta-desc-input").value = "";
+    document.getElementById("ruta-desc-input").value = _descActual;
     document.getElementById("ruta-modal-msg").textContent = "";
     // Populate simetría in modal
     const mc = document.getElementById("sim-modal-check");
@@ -2916,6 +3010,13 @@ buscarFormulasAlt();
     const zfer_simetrico  = found ? found.zfer : _simActual.zfer_simetrico;
     const pieza_contraria = found ? found.pieza_contraria : _simActual.pieza_contraria;
 
+    // Bloquear si marcó simetría pero no hay ZFER simétrico conocido
+    if (tiene_simetria && !zfer_simetrico) {
+      msg.style.color = "var(--err-txt)";
+      msg.textContent = "⚠ Marcaste simetría pero no hay pieza simétrica encontrada. Usa 'Buscar pieza simétrica' primero, o desmarca la opción.";
+      return;
+    }
+
     try {
       const r = await fetch(`/api/ruta/${_ZFER}`, {
         method:"POST", headers:{"Content-Type":"application/json"},
@@ -2924,6 +3025,7 @@ buscarFormulasAlt();
       const d = await r.json();
       if (d.ok) {
         _rutaActual = ruta;
+        _descActual = desc;
         _simActual  = { tiene_simetria, zfer_simetrico, pieza_contraria };
         _rutaRenderizar({ ruta, descripcion: desc });
         _simetriaRenderizar();
