@@ -2140,10 +2140,27 @@ class AutomatizadorSAP:
                 self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
+                # Confirmar popup de "¿Desea salir sin guardar?" si apareció al navegar
+                try:
+                    _wnd1 = self.session.findById("wnd[1]")
+                    print(f"    MM02 plano: popup detectado al navegar — '{_wnd1.text}', confirmando…")
+                    try:    self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+                    except: _wnd1.sendVKey(0)
+                    self._esperar(T_RAPIDO)
+                except Exception:
+                    pass  # no había popup — normal
                 self.session.findById(self._ID_MM02_MATNR).text = zfer_lectura
                 self.session.findById(self._ID_MM02_MATNR).caretPosition = len(zfer_lectura)
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
+                # Confirmar popup de selección de vistas si apareció
+                try:
+                    self.session.findById("wnd[1]")
+                    try:    self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+                    except: self.session.findById("wnd[1]").sendVKey(0)
+                    self._esperar(T_RAPIDO)
+                except Exception:
+                    pass
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
                 self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
@@ -2747,10 +2764,29 @@ class AutomatizadorSAP:
                 self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
+                # Confirmar popup de "¿Desea salir sin guardar?" si apareció al navegar
+                try:
+                    _wnd1 = self.session.findById("wnd[1]")
+                    _txt  = (_wnd1.text or "").lower()
+                    print(f"    MM02 plano (con SP): popup detectado al navegar — '{_wnd1.text}', confirmando…")
+                    # btn[0]=Sí/OK — aceptar salir sin guardar para continuar con MM02
+                    try:    self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+                    except: _wnd1.sendVKey(0)
+                    self._esperar(T_RAPIDO)
+                except Exception:
+                    pass  # no había popup — normal
                 self.session.findById(self._ID_MM02_MATNR).text = zfer_lectura
                 self.session.findById(self._ID_MM02_MATNR).caretPosition = len(zfer_lectura)
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
+                # Confirmar popup de selección de vistas si apareció
+                try:
+                    self.session.findById("wnd[1]")
+                    try:    self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+                    except: self.session.findById("wnd[1]").sendVKey(0)
+                    self._esperar(T_RAPIDO)
+                except Exception:
+                    pass
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
                 self.session.findById("wnd[0]/tbar[1]/btn[30]").press()

@@ -2232,7 +2232,7 @@ def _buscar_zfer_simetrico_odata(zfer_base: str) -> str | None:
         return None
 
 
-def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
+def _guardar_gestor_auto(item: dict, res, hom_id: int = 0, res_sim=None, sin_datos_simetria: bool = False) -> None:
     """
     Inserta en itg.GestorAuto_jobs_auto + itg.GestorAuto_bom_zfer_local.
     BOM completo desde ODATA_ZFER_BOM. Estado inicial: PENDIENTE.
@@ -2245,7 +2245,8 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
         # Atributos del ZFER BASE (ya sincronizado en ODATA) — el nuevo aún no está en ODATA
         zfer_base    = item.get("zfer", "")
         bloque_id_it = item.get("_bloque_id")          # para filtrar M5_COLA por bloque correcto
-        formula_it   = item.get("formula_nueva", "") or ""  # para filtrar LOGEJECUCIONES por fórmula
+        formula_it   = item.get("formula_nueva", "") or ""  # para filtrar por fórmula exacta
+        color_it     = item.get("color", "") or ""          # para filtrar por color exacto
         attrs_base = {}
         try: attrs_base = q_atributos(zfer_base)
         except Exception: pass
@@ -2334,49 +2335,55 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
                     print(f"[GESTOR] simetría descartada para {zfer_base}: ODATA no encontró simétrico válido")
             except Exception: pass
 
-        # Buscar el zfer_nuevo del simétrico SOLO en M5_COLA (mismo bloque activo).
-        # Nunca se busca en M5_LOGEJECUCIONES para evitar coger datos de homologaciones anteriores del mismo ZFER.
-        # Si el simétrico va después en el bloque → queda NULL aquí, el UPDATE retroactivo lo llenará al terminar.
+        # Buscar el zfer_nuevo del simétrico.
+        # Prioridad 1: res_sim pasado directamente (post-loop, misma fórmula, datos frescos de SAP).
+        # Prioridad 2: M5_COLA filtrado por bloque + formula_nueva (mismo par de esta ejecución).
+        # Nunca se cae a M5_LOGEJECUCIONES para evitar datos de bloques anteriores.
         zfer_sim_nuevo = None
+        zfor_sim_nuevo = None  # del res_sim (valor fresco, no de ODATA)
+        zpla_sim_nuevo = None
         if tiene_sim and zfer_sim:
-            try:
-                with _get_conn_local() as cn:
-                    # Filtrar por bloque_id para coger exactamente el simétrico de esta ejecución
-                    row_s = cn.cursor().execute("""
-                        SELECT TOP 1 zfer_nuevo FROM itg.M5_COLA
-                        WHERE zfer_base=? AND bloque_id=? AND estado='OK' AND zfer_nuevo IS NOT NULL
-                        ORDER BY ejecutado_el DESC
-                    """, zfer_sim, bloque_id_it).fetchone()
-                    if row_s:
-                        zfer_sim_nuevo = str(row_s[0] or "").strip() or None
-            except Exception: pass
-            if zfer_sim_nuevo:
-                print(f"[GESTOR] zfer_simetria resuelto en bloque activo: {zfer_sim} → {zfer_sim_nuevo}")
+            if res_sim is not None:
+                # Camino feliz: el caller (post-loop) ya nos pasó el resultado del simétrico
+                zfer_sim_nuevo = getattr(res_sim, "zfer_nuevo", None) or None
+                zfor_sim_nuevo = getattr(res_sim, "zfor_nuevo", None) or None
+                zpla_sim_nuevo = getattr(res_sim, "zpla",       None) or None
+                if zfer_sim_nuevo:
+                    print(f"[GESTOR] zfer_simetria desde res_sim: {zfer_sim} → {zfer_sim_nuevo}")
             else:
-                print(f"[GESTOR] zfer_simetria pendiente: {zfer_sim} no procesado aún en este bloque — retroactivo lo llenará")
+                try:
+                    with _get_conn_local() as cn:
+                        # Filtrar por bloque_id, formula_nueva Y color para emparejar exactamente
+                        row_s = cn.cursor().execute("""
+                            SELECT TOP 1 zfer_nuevo FROM itg.M5_COLA
+                            WHERE zfer_base=? AND bloque_id=? AND estado='OK' AND zfer_nuevo IS NOT NULL
+                              AND (? = '' OR formula_nueva = ?)
+                              AND (? = '' OR color = ?)
+                            ORDER BY ejecutado_el DESC
+                        """, zfer_sim, bloque_id_it, formula_it, formula_it, color_it, color_it).fetchone()
+                        if row_s:
+                            zfer_sim_nuevo = str(row_s[0] or "").strip() or None
+                except Exception: pass
+                if zfer_sim_nuevo:
+                    print(f"[GESTOR] zfer_simetria desde M5_COLA: {zfer_sim}/{formula_it}/{color_it} → {zfer_sim_nuevo}")
+                else:
+                    print(f"[GESTOR] zfer_simetria: {zfer_sim}/{formula_it}/{color_it} no encontrado en M5_COLA")
 
         if tiene_sim and zfer_sim:
+            # pieza_sim viene del ZFER base simétrico (atributo que no cambia con la homologación)
             try:
                 attrs_sim = q_atributos(zfer_sim)
                 pieza_sim = (attrs_sim.get("Z_PIECE_TYPE","") or "").strip().zfill(3)[:3] or None
             except Exception: pass
-            try:
-                head_sim = q_zfer_head(zfer_sim)
-                if isinstance(head_sim, dict) and "_error" not in head_sim:
-                    zfor_sim = str(head_sim.get("ZFOR","") or "").strip() or None
-                    zpla_sim = str(head_sim.get("ZPLA","") or "").strip() or None
-            except Exception: pass
-            # ZPLA del simétrico desde M5_RUTASZFER si lo tiene, si no usa el del job
-            if not zpla_sim:
-                try:
-                    with _get_conn_local() as cn:
-                        r2 = cn.cursor().execute(
-                            "SELECT zpla FROM itg.M5_RUTASZFER WHERE zfer=?", zfer_sim
-                        ).fetchone()
-                        if r2: zpla_sim = str(r2[0] or "").strip() or None
-                except Exception: pass
-            if not zpla_sim:
-                zpla_sim = zpla or None
+            if sin_datos_simetria:
+                # Este es el ítem secundario del par — no queremos la referencia cruzada de vuelta
+                zfer_sim_nuevo = None
+                zfor_sim_nuevo = None
+                zpla_sim_nuevo = None
+            elif zfer_sim_nuevo:
+                # zfor_sim / zpla_sim: preferir los del res_sim (datos frescos de SAP).
+                zfor_sim = zfor_sim_nuevo
+                zpla_sim = zpla_sim_nuevo
 
         with _get_conn_local() as cn:
             cur = cn.cursor()
@@ -2402,8 +2409,9 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
             print(f"[GESTOR] Insertado GestorAuto_jobs_auto zfer={zfer_nuevo} veh='{vehiculo_nombre}' pieza={pieza_3d}")
 
         # ── UPDATE retroactivo: si este zfer_base es el simétrico de otro ZFER ya en GestorAuto,
-        #    actualizar ese row con el zfer_nuevo recién creado ───────────────────────────────────
-        if zfer_nuevo:
+        #    actualizar ese row con el zfer_nuevo recién creado.
+        #    Se omite para el ítem secundario (sin_datos_simetria) porque el primario ya lo llenó.
+        if zfer_nuevo and not sin_datos_simetria:
             try:
                 with _get_conn_local() as cn:
                     cur_r = cn.cursor()
@@ -2419,8 +2427,10 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
                         row_on = cur_r.execute("""
                             SELECT TOP 1 zfer_nuevo FROM itg.M5_COLA
                             WHERE zfer_base=? AND bloque_id=? AND estado='OK' AND zfer_nuevo IS NOT NULL
+                              AND (? = '' OR formula_nueva = ?)
+                              AND (? = '' OR color = ?)
                             ORDER BY ejecutado_el DESC
-                        """, zfer_original, bloque_id_it).fetchone()
+                        """, zfer_original, bloque_id_it, formula_it, formula_it, color_it, color_it).fetchone()
                         if not row_on:
                             row_on = cur_r.execute("""
                                 SELECT TOP 1 zfer_nuevo FROM itg.M5_LOGEJECUCIONES
@@ -2430,11 +2440,15 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0) -> None:
                             """, zfer_original, formula_it, formula_it).fetchone()
                         if row_on:
                             zfer_orig_nuevo = str(row_on[0]).strip()
+                            # Actualiza si: zfer_simetria está vacío (caso normal base→sym)
+                            #            O: zfer_simetria ya tiene valor pero zfor/zpla están NULL
+                            #               (caso sym→base: base insertó zfer_sim_nuevo pero no zfor/zpla)
                             cur_r.execute("""
                                 UPDATE itg.GestorAuto_jobs_auto
                                 SET zfer_simetria=?, zfor_simetria=?, zpla_simetria=?
                                 WHERE zfer=? AND simetria='SI'
-                                  AND (zfer_simetria IS NULL OR zfer_simetria='')
+                                  AND ((zfer_simetria IS NULL OR zfer_simetria='')
+                                       OR (zfor_simetria IS NULL AND zpla_simetria IS NULL))
                             """, zfer_nuevo,
                                 str(zfor_nuevo or "") or None,
                                 str(zpla or "") or None,
@@ -2483,6 +2497,47 @@ def _migracion_bd_local():
         ("itg.M5_COLA", "subproducto",   "ALTER TABLE itg.M5_COLA ADD subproducto NVARCHAR(20) NULL"),
         ("itg.M5_COLA", "plano_manual",  "ALTER TABLE itg.M5_COLA ADD plano_manual NVARCHAR(100) NULL"),
     ]
+    nuevas_tablas = [
+        """IF OBJECT_ID('itg.M5_AutoColorZfer','U') IS NULL
+           CREATE TABLE itg.M5_AutoColorZfer (
+               id INT IDENTITY(1,1) PRIMARY KEY,
+               zfer_base NVARCHAR(20) NOT NULL,
+               estado NVARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+               cargado_el DATETIME NOT NULL DEFAULT GETDATE()
+           )""",
+        """IF OBJECT_ID('itg.M5_AutoColor_BLOQUES','U') IS NULL
+           CREATE TABLE itg.M5_AutoColor_BLOQUES (
+               id INT IDENTITY(1,1) PRIMARY KEY,
+               bloque_num INT NOT NULL DEFAULT 1,
+               estado NVARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+               hora_prog DATETIME NULL,
+               timer_activo BIT NOT NULL DEFAULT 1,
+               creado_el DATETIME NOT NULL DEFAULT GETDATE(),
+               ejecutado_el DATETIME NULL,
+               ok_count INT NOT NULL DEFAULT 0,
+               error_count INT NOT NULL DEFAULT 0
+           )""",
+        """IF OBJECT_ID('itg.M5_AutoColor_COLA','U') IS NULL
+           CREATE TABLE itg.M5_AutoColor_COLA (
+               id INT IDENTITY(1,1) PRIMARY KEY,
+               bloque_id INT NOT NULL,
+               autocolor_zfer_id INT NULL,
+               zfer_base NVARCHAR(20) NOT NULL,
+               color NVARCHAR(10) NULL,
+               color_nombre NVARCHAR(100) NULL,
+               zpla NVARCHAR(20) NULL,
+               franja NVARCHAR(5) NOT NULL DEFAULT '00',
+               pn_base NVARCHAR(50) NULL,
+               nivel NVARCHAR(10) NULL,
+               tipo_pieza NVARCHAR(10) NULL,
+               cambiar_hr BIT NOT NULL DEFAULT 0,
+               estado NVARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+               zfer_nuevo NVARCHAR(20) NULL,
+               error_msg NVARCHAR(500) NULL,
+               creado_el DATETIME NOT NULL DEFAULT GETDATE(),
+               ejecutado_el DATETIME NULL
+           )""",
+    ]
     try:
         cn  = _get_conn_local()
         cur = cn.cursor()
@@ -2494,6 +2549,8 @@ def _migracion_bd_local():
                 )
                 EXEC('{sql}')
             """)
+        for ddl in nuevas_tablas:
+            cur.execute(ddl)
         cn.close()
     except Exception as e:
         print(f"[MIGRACIÓN] error: {e}")
@@ -2814,6 +2871,8 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema", modo: 
 
         # Publicar en SAP_QUEUE_LOCK para que otros proyectos sepan que SAP está ocupado
         _sap_lock_insertar_items(cola)
+        _sap_lock_stop = threading.Event()
+        threading.Thread(target=_sap_lock_keepalive_loop, args=(_sap_lock_stop,), daemon=True).start()
 
         try:
             sap = importlib.import_module("sap_auto")
@@ -2849,6 +2908,11 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema", modo: 
                 except Exception as e:
                     print(f"[COLA] _tiene_diferencial_06({zfer}): {e}")
                     return False  # ante duda, no asumir con acero
+
+            # Buffer de fórmulas OK → se evalúan después del loop para respetar regla de simetría
+            _gestor_pendientes: list = []  # list of (item, res)
+            _zfers_ok_bloque:   set  = set()   # zfer_base de ítems OK en este bloque
+            _zfers_error_bloque: set = set()   # zfer_base de ítems con ERROR en este bloque
 
             for item in cola:
                 # ── Cada item tiene su propio try/except — un error nunca detiene los demás ──
@@ -2990,13 +3054,76 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema", modo: 
                 except Exception as db_ex:
                     print(f"[COLA] error guardando item {item['_cola_id']}: {db_ex}")
 
-                # Registrar en GestorAuto (server) después de fórmula exitosa
+                # Bufferear para GestorAuto — se evalúa después del loop (ver regla simetría)
                 if estado_item == "OK" and tipo in ("FORMULA", "FORMULA_CON_ACERO", "FORMULA_SIN_SIN", "FORMULA_CON_CON") and res:
-                    _guardar_gestor_auto(item, res, 0)
+                    _gestor_pendientes.append((item, res))
+                    _zfers_ok_bloque.add(item["zfer"])
+                elif tipo in ("FORMULA", "FORMULA_CON_ACERO", "FORMULA_SIN_SIN", "FORMULA_CON_CON"):
+                    _zfers_error_bloque.add(item["zfer"])
 
                 _sap_lock_item_borrar(item["_cola_id"])
                 if estado_item == "OK": ok_n += 1
                 else:                  err_n += 1
+
+            # ── Post-loop: enviar a GestorAuto respetando regla de simetría ─────────────
+            _ya_emparejados_como_sim: set = set()  # (zfer, formula, color) ya insertados como secondary
+            for _g_item, _g_res in _gestor_pendientes:
+                _g_zfer    = _g_item["zfer"]
+                _g_formula = _g_item.get("formula_nueva", "") or ""
+                _g_color   = _g_item.get("color", "") or ""
+                # Buscar si tiene simetría configurada en M5_RUTASZFER
+                _g_sim = None
+                try:
+                    with _get_conn_local() as _cn:
+                        _r = _cn.cursor().execute(
+                            "SELECT zfer_simetrico, tiene_simetria FROM itg.M5_RUTASZFER WHERE zfer=?",
+                            _g_zfer
+                        ).fetchone()
+                        if _r and _r[1]:  # tiene_simetria=True
+                            _zs = str(_r[0] or "").strip()
+                            if _zs and _zs != _g_zfer:
+                                _g_sim = _zs
+                except Exception: pass
+
+                def _match_sim(i):
+                    """True si el ítem es el par simétrico exacto: mismo zfer_sim, fórmula y color."""
+                    return (i["zfer"] == _g_sim
+                            and (i.get("formula_nueva","") or "") == _g_formula
+                            and (i.get("color","") or "") == _g_color)
+
+                _g_key = (_g_zfer, _g_formula, _g_color)
+
+                if not _g_sim:
+                    # Sin simetría configurada → insertar si este ítem quedó OK ✓
+                    _guardar_gestor_auto(_g_item, _g_res, 0)
+                elif _g_key in _ya_emparejados_como_sim:
+                    # Este ítem ya fue referenciado como simétrico de la fila anterior
+                    # → NO insertar fila propia (evita el par inverso B→A)
+                    print(f"[GESTOR] SKIP fila inversa {_g_zfer}/{_g_formula}/{_g_color}: ya fue referenciado como simétrico")
+                else:
+                    # ¿Estaba el par exacto (sim + misma fórmula + mismo color) en este bloque?
+                    _sim_en_bloque = any(_match_sim(i) for i in cola)
+                    if not _sim_en_bloque:
+                        # Par exacto no estaba en este bloque → insertar normalmente ✓
+                        _guardar_gestor_auto(_g_item, _g_res, 0)
+                    else:
+                        # Buscar el res del par exacto en los pendientes
+                        _sim_result = next(
+                            ((gi, gr) for gi, gr in _gestor_pendientes if _match_sim(gi)),
+                            None
+                        )
+                        if _sim_result:
+                            # Ambos OK, par exacto confirmado.
+                            # Solo el primario lleva res_sim; el secundario se marca para no repetir.
+                            _sim_gi, _sim_gr = _sim_result
+                            _sim_key = (_sim_gi["zfer"],
+                                        _sim_gi.get("formula_nueva","") or "",
+                                        _sim_gi.get("color","") or "")
+                            _ya_emparejados_como_sim.add(_sim_key)
+                            _guardar_gestor_auto(_g_item, _g_res, 0, res_sim=_sim_gr)
+                        else:
+                            # Par exacto estaba en bloque pero tuvo ERROR → NO insertar
+                            print(f"[GESTOR] SKIP {_g_zfer}/{_g_formula}/{_g_color}: simétrico {_g_sim} tuvo ERROR — GestorAuto no actualizado")
 
         except Exception as sap_ex:
             # Solo llega aquí si falló la carga del módulo sap_auto en sí
@@ -3048,7 +3175,9 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema", modo: 
             pass
 
     finally:
-        # Siempre: limpiar lock SAP, quitar de disparados, liberar lock Python
+        # Detener hilo keepalive (si fue creado) y limpiar lock SAP
+        try: _sap_lock_stop.set()
+        except NameError: pass
         _sap_lock_limpiar_proyecto()
         _scheduler_disparados.discard(bloque_id)
         try:
@@ -3095,8 +3224,7 @@ def _sap_lock_insertar_items(items: list):
         print(f"[SAP_LOCK] error insertando batch lock: {e}")
 
 def _sap_lock_keepalive():
-    """Actualiza desde=GETDATE() en la fila EJECUTANDO del proyecto para resetear el
-    contador de stale-cleanup (evita que GESTOR la borre si un item tarda >30 min)."""
+    """Actualiza desde=GETDATE() en la fila EJECUTANDO del proyecto."""
     try:
         with _get_conn_local() as cn:
             cn.cursor().execute("""
@@ -3106,12 +3234,20 @@ def _sap_lock_keepalive():
     except Exception as e:
         print(f"[SAP_LOCK] error keepalive: {e}")
 
+def _sap_lock_keepalive_loop(stop_event: threading.Event, intervalo_seg: int = 120):
+    """Hilo daemon: hace keepalive cada `intervalo_seg` segundos hasta que stop_event sea set.
+    Evita que GESTOR (u otro proyecto) borre la fila si un ítem SAP tarda mucho."""
+    while not stop_event.wait(timeout=intervalo_seg):
+        _sap_lock_keepalive()
+    # Un keepalive final al detenerse (por si el último intervalo fue largo)
+    _sap_lock_keepalive()
+
 def _sap_lock_item_ejecutando(cola_id: int):
-    """Keepalive: resetea desde=GETDATE() para que el stale-cleanup no borre la fila."""
+    """Keepalive puntual al iniciar un ítem."""
     _sap_lock_keepalive()
 
 def _sap_lock_item_borrar(cola_id: int):
-    """Keepalive tras completar un item: resetea desde para el próximo."""
+    """Keepalive puntual al terminar un ítem."""
     _sap_lock_keepalive()
 
 def _sap_lock_limpiar_proyecto():
@@ -3366,23 +3502,46 @@ def api_cola_bloques():
             """)
             bloques_rows = cur.fetchall()
             # Fetch items per bloque
-            bloque_ids = [r[0] for r in bloques_rows]
+            # Bloques activos/pendientes → M5_COLA (datos en vivo)
+            # Bloques COMPLETADO → M5_LOGEJECUCIONES (M5_COLA ya fue archivada y borrada)
+            bloque_ids      = [r[0] for r in bloques_rows]
+            bloque_estados  = {r[0]: r[4] for r in bloques_rows}  # id → estado
             items_map: dict = {}
             if bloque_ids:
-                placeholders = ",".join("?" * len(bloque_ids))
-                cur.execute(f"""
-                    SELECT bloque_id, zfer_base, tipo, color, color_nombre, zpla, formula_nueva,
-                           estado, zfer_nuevo, error_msg
-                    FROM itg.M5_COLA WHERE bloque_id IN ({placeholders})
-                    ORDER BY id
-                """, *bloque_ids)
-                for row in cur.fetchall():
-                    bid = row[0]
-                    items_map.setdefault(bid, []).append({
-                        "zfer_base": row[1], "tipo": row[2], "color": row[3],
-                        "color_nombre": row[4], "zpla": row[5], "formula_nueva": row[6],
-                        "estado": row[7], "zfer_nuevo": row[8], "error_msg": row[9],
-                    })
+                # Leer de M5_COLA los que NO están COMPLETADO
+                ids_activos = [bid for bid in bloque_ids if bloque_estados[bid] != "COMPLETADO"]
+                if ids_activos:
+                    ph = ",".join("?" * len(ids_activos))
+                    cur.execute(f"""
+                        SELECT bloque_id, zfer_base, tipo, color, color_nombre, zpla, formula_nueva,
+                               estado, zfer_nuevo, error_msg
+                        FROM itg.M5_COLA WHERE bloque_id IN ({ph})
+                        ORDER BY id
+                    """, *ids_activos)
+                    for row in cur.fetchall():
+                        bid = row[0]
+                        items_map.setdefault(bid, []).append({
+                            "zfer_base": row[1], "tipo": row[2], "color": row[3],
+                            "color_nombre": row[4], "zpla": row[5], "formula_nueva": row[6],
+                            "estado": row[7], "zfer_nuevo": row[8], "error_msg": row[9],
+                        })
+                # Leer de M5_LOGEJECUCIONES los COMPLETADOS (M5_COLA ya está vacía)
+                ids_completados = [bid for bid in bloque_ids if bloque_estados[bid] == "COMPLETADO"]
+                if ids_completados:
+                    ph = ",".join("?" * len(ids_completados))
+                    cur.execute(f"""
+                        SELECT bloque_id, zfer_base, tipo, color, color_nombre, zpla, formula_nueva,
+                               estado, zfer_nuevo, error_msg
+                        FROM itg.M5_LOGEJECUCIONES WHERE bloque_id IN ({ph})
+                        ORDER BY id
+                    """, *ids_completados)
+                    for row in cur.fetchall():
+                        bid = row[0]
+                        items_map.setdefault(bid, []).append({
+                            "zfer_base": row[1], "tipo": row[2], "color": row[3],
+                            "color_nombre": row[4], "zpla": row[5], "formula_nueva": row[6],
+                            "estado": row[7], "zfer_nuevo": row[8], "error_msg": row[9],
+                        })
             bloques = []
             for r in bloques_rows:
                 bloques.append({
@@ -5368,6 +5527,528 @@ def api_mantenimiento_hr_buscar_zfer():
                             "fecha_consulta": data.get("fecha_consulta","")})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── AUTO COLOR — cola paralela para cambio masivo de color por ZFER ───────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+_ac_scheduler_disparados: set = set()
+
+
+def _autocolor_reprogramar_manana(bloque_id: int):
+    try:
+        from datetime import timedelta as _td3
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("SELECT hora_prog FROM itg.M5_AutoColor_BLOQUES WHERE id=?", bloque_id)
+            row = cur.fetchone()
+            hora_base = row[0] if row and row[0] else _dt.now()
+            hora_nueva = (hora_base + _td3(days=1)).replace(hour=hora_base.hour, minute=hora_base.minute, second=0, microsecond=0)
+            cur.execute("""
+                UPDATE itg.M5_AutoColor_BLOQUES
+                SET estado='PENDIENTE', hora_prog=? WHERE id=?
+            """, hora_nueva, bloque_id)
+    except Exception as e:
+        print(f"[AUTOCOLOR] error reprogramando: {e}")
+
+
+def _autocolor_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
+    """Ejecuta un bloque de Auto Color (solo tipo COLOR) usando el mismo motor SAP."""
+    import importlib
+    ok_n, err_n = 0, 0
+
+    if not _sap_bloque_lock.acquire(blocking=False):
+        print(f"[AUTOCOLOR] bloque {bloque_id}: SAP ocupado por otro bloque — reprogramando")
+        _autocolor_reprogramar_manana(bloque_id)
+        _ac_scheduler_disparados.discard(bloque_id)
+        return
+
+    try:
+        ocupado_por = _sap_lock_ocupado_por_otro()
+        if ocupado_por:
+            print(f"[AUTOCOLOR] bloque {bloque_id}: SAP ocupado por '{ocupado_por}' — reprogramando")
+            _autocolor_reprogramar_manana(bloque_id)
+            _ac_scheduler_disparados.discard(bloque_id)
+            return
+
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("UPDATE itg.M5_AutoColor_BLOQUES SET estado='EJECUTANDO' WHERE id=?", bloque_id)
+            cur.execute("""
+                SELECT id, zfer_base, color, color_nombre, zpla, franja,
+                       pn_base, nivel, tipo_pieza, cambiar_hr
+                FROM itg.M5_AutoColor_COLA
+                WHERE bloque_id=? AND estado='PENDIENTE'
+            """, bloque_id)
+            rows = cur.fetchall()
+
+        if not rows:
+            with _get_conn_local() as cn:
+                cn.cursor().execute(
+                    "UPDATE itg.M5_AutoColor_BLOQUES SET estado='COMPLETADO', ejecutado_el=GETDATE() WHERE id=?",
+                    bloque_id
+                )
+            _ac_scheduler_disparados.discard(bloque_id)
+            return
+
+        cola = [{"_id": r[0], "zfer": r[1], "color": r[2], "color_nombre": r[3],
+                 "zpla": r[4], "franja": r[5] or "00", "pn_base": r[6] or "",
+                 "nivel": r[7] or "", "tipo_pieza": r[8] or "",
+                 "cambiar_hr": bool(r[9]),
+                 "_cola_id": r[0], "_bloque_id": bloque_id, "tipo": "COLOR"} for r in rows]
+
+        _sap_lock_insertar_items(cola)
+        _sap_lock_stop = threading.Event()
+        threading.Thread(target=_sap_lock_keepalive_loop, args=(_sap_lock_stop,), daemon=True).start()
+
+        try:
+            sap = importlib.import_module("sap_auto")
+            _AutoSAP = getattr(sap, "AutomatizadorSAP", None)
+            if _AutoSAP:
+                _sap_inst = _AutoSAP()
+                if not _sap_inst.asegurar_sap_abierto():
+                    with _get_conn_local() as cn:
+                        cn.cursor().execute(
+                            "UPDATE itg.M5_AutoColor_BLOQUES SET estado='ERROR' WHERE id=?", bloque_id
+                        )
+                    return
+
+            _proc_color = getattr(sap, "procesar_combinacion", None)
+
+            for item in cola:
+                with _get_conn_local() as cn:
+                    cn.cursor().execute(
+                        "UPDATE itg.M5_AutoColor_COLA SET estado='EJECUTANDO' WHERE id=?", item["_id"]
+                    )
+
+                estado_item = "ERROR"
+                zfer_nuevo  = ""
+                msg_err     = ""
+                try:
+                    if _proc_color:
+                        res = _proc_color(
+                            zfer=item["zfer"],
+                            color=item["color"],
+                            color_nombre=item["color_nombre"],
+                            zpla=item["zpla"],
+                            franja=item["franja"],
+                            pn_base=item["pn_base"],
+                            nivel=item["nivel"],
+                            tipo_pieza=item["tipo_pieza"],
+                            cambiar_hr=item["cambiar_hr"],
+                        )
+                        if res and getattr(res, "estado", "") == "OK":
+                            estado_item = "OK"
+                            zfer_nuevo  = getattr(res, "zfer_nuevo", "") or ""
+                        else:
+                            msg_err = getattr(res, "error", "Error desconocido") if res else "Sin resultado"
+                    else:
+                        msg_err = "procesar_combinacion no encontrada en sap_auto"
+                except Exception as ex:
+                    msg_err = str(ex)
+
+                with _get_conn_local() as cn:
+                    cn.cursor().execute("""
+                        UPDATE itg.M5_AutoColor_COLA
+                        SET estado=?, zfer_nuevo=?, error_msg=?, ejecutado_el=GETDATE()
+                        WHERE id=?
+                    """, estado_item, zfer_nuevo[:20] if zfer_nuevo else None,
+                        msg_err[:500] if msg_err else None, item["_id"])
+
+                _sap_lock_keepalive()
+                if estado_item == "OK": ok_n += 1
+                else:                  err_n += 1
+
+        except Exception as sap_ex:
+            print(f"[AUTOCOLOR] error cargando sap_auto: {sap_ex}")
+        finally:
+            try:    _sap_lock_stop.set()
+            except NameError: pass
+            _sap_lock_limpiar_proyecto()
+
+    except Exception as ex:
+        print(f"[AUTOCOLOR] error general bloque {bloque_id}: {ex}")
+    finally:
+        _sap_bloque_lock.release()
+        _ac_scheduler_disparados.discard(bloque_id)
+
+    try:
+        with _get_conn_local() as cn:
+            cn.cursor().execute("""
+                UPDATE itg.M5_AutoColor_BLOQUES
+                SET estado='COMPLETADO', ejecutado_el=GETDATE(), ok_count=?, error_count=?
+                WHERE id=?
+            """, ok_n, err_n, bloque_id)
+    except Exception as e:
+        print(f"[AUTOCOLOR] error cerrando bloque: {e}")
+
+
+def _ac_scheduler_tick():
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("""
+                SELECT id, hora_prog FROM itg.M5_AutoColor_BLOQUES
+                WHERE estado='PENDIENTE' AND timer_activo=1 AND hora_prog IS NOT NULL
+            """)
+            ahora = _dt.now()
+            vencidos = [r[0] for r in cur.fetchall() if r[1] <= ahora]
+        for bid in vencidos:
+            if bid not in _ac_scheduler_disparados:
+                _ac_scheduler_disparados.add(bid)
+                print(f"[AUTOCOLOR] scheduler: disparando bloque {bid}")
+                threading.Thread(target=_autocolor_ejecutar_bloque, args=(bid,), daemon=True).start()
+    except Exception as e:
+        print(f"[AUTOCOLOR] scheduler error: {e}")
+
+
+def _ac_scheduler():
+    _ac_scheduler_tick()
+    while True:
+        _time.sleep(20)
+        _ac_scheduler_tick()
+
+
+_t_ac = threading.Thread(target=_ac_scheduler, daemon=True)
+_t_ac.start()
+
+
+# ── Auto Color API ────────────────────────────────────────────────────────────
+
+@app.route("/api/auto_color/zfers")
+@login_required
+def api_ac_zfers():
+    """Lista ZFERs registrados + colores disponibles para cada uno."""
+    try:
+        with _get_conn_local() as cn:
+            rows = cn.cursor().execute("""
+                SELECT id, zfer_base, estado, cargado_el FROM itg.M5_AutoColorZfer
+                ORDER BY cargado_el DESC
+            """).fetchall()
+        resultado = []
+        for r in rows:
+            zfer_id, zfer_base, estado, cargado_el = r[0], r[1], r[2], r[3]
+            colores = []
+            try:
+                attrs = q_atributos(zfer_base)
+                if "_error" not in attrs:
+                    formula_code  = attrs.get("Z_FORMULA_CODE", "")
+                    piece_type    = attrs.get("Z_PIECE_TYPE",   "")
+                    shade_band    = attrs.get("Z_SHADE_BAND",   "00") or "00"
+                    differentials = attrs.get("Z_BEHAVIOR_DIFFERENTIALS", "")
+                    partnumber    = attrs.get("Z_AGP_PARTNUMBER", "")
+                    pn_parsed     = _parsear_partnumber(partnumber)
+                    tiene_acero   = "06" in {d.strip() for d in differentials.split(",") if d.strip()}
+                    with ThreadPoolExecutor(max_workers=2) as ex:
+                        fut_var  = ex.submit(q_variantes_por_pn,
+                                             pn_parsed["vehiculo"], pn_parsed["version"],
+                                             pn_parsed["formula"],  pn_parsed["pieza"]) if pn_parsed else None
+                        fut_zpla = ex.submit(q_zplas_compatibles, formula_code, piece_type, shade_band, differentials, tiene_acero)
+                    variantes = (fut_var.result() if fut_var else []) or []
+                    zplas     = fut_zpla.result() or []
+                    if variantes and "_error" in variantes[0]: variantes = []
+                    if zplas     and "_error" in zplas[0]:     zplas     = []
+                    colores_con_zfer = {v["color_raw"]: v for v in variantes if v.get("color_raw")}
+                    colores_con_zpla: dict = {}
+                    for z in zplas:
+                        colores_con_zpla.setdefault(z["color"], []).append(z)
+                    for cod in _COLORES_ACTIVOS:
+                        if cod in colores_con_zfer:
+                            continue
+                        zpla_list = colores_con_zpla.get(cod, [])
+                        if not zpla_list:
+                            continue
+                        colores.append({
+                            "color_codigo": cod,
+                            "color_nombre": COLORES.get(cod, cod),
+                            "zpla":         zpla_list[0]["material"],
+                        })
+                    colores.sort(key=lambda x: x["color_codigo"])
+            except Exception:
+                pass
+            resultado.append({
+                "id":         zfer_id,
+                "zfer_base":  zfer_base,
+                "estado":     estado,
+                "cargado_el": cargado_el.strftime("%d/%m/%Y %H:%M") if cargado_el else "",
+                "colores":    colores,
+                "n_colores":  len(colores),
+            })
+        return jsonify({"ok": True, "zfers": resultado})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/auto_color/zfer", methods=["POST"])
+@login_required
+def api_ac_agregar_zfer():
+    """Agrega un ZFER a la lista de vigilancia."""
+    body = request.get_json(force=True) or {}
+    zfer = str(body.get("zfer", "")).strip()[:20]
+    if not zfer:
+        return jsonify({"ok": False, "error": "ZFER requerido"}), 200
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            # No duplicar si ya está PENDIENTE o EN_COLA
+            existe = cur.execute("""
+                SELECT TOP 1 id FROM itg.M5_AutoColorZfer
+                WHERE zfer_base=? AND estado IN ('PENDIENTE','EN_COLA')
+            """, zfer).fetchone()
+            if existe:
+                return jsonify({"ok": False, "error": f"{zfer} ya está en la lista (estado: PENDIENTE/EN_COLA)"}), 200
+            cur.execute(
+                "INSERT INTO itg.M5_AutoColorZfer (zfer_base, estado) VALUES (?, 'PENDIENTE')",
+                zfer
+            )
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/auto_color/zfer/<int:zfer_id>", methods=["DELETE"])
+@login_required
+def api_ac_eliminar_zfer(zfer_id: int):
+    try:
+        with _get_conn_local() as cn:
+            cn.cursor().execute("DELETE FROM itg.M5_AutoColorZfer WHERE id=?", zfer_id)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/auto_color/enviar/<int:zfer_id>", methods=["POST"])
+@login_required
+def api_ac_enviar(zfer_id: int):
+    """Genera items en M5_AutoColor_COLA para todos los colores disponibles del ZFER."""
+    body    = request.get_json(force=True) or {}
+    usuario = str(body.get("usuario", "web"))[:50]
+    try:
+        with _get_conn_local() as cn:
+            row = cn.cursor().execute(
+                "SELECT zfer_base FROM itg.M5_AutoColorZfer WHERE id=?", zfer_id
+            ).fetchone()
+        if not row:
+            return jsonify({"ok": False, "error": "ZFER no encontrado"}), 200
+        zfer_base = row[0]
+
+        # Obtener atributos + colores disponibles
+        attrs = q_atributos(zfer_base)
+        if "_error" in attrs:
+            return jsonify({"ok": False, "error": f"No se pudo leer atributos del ZFER: {attrs['_error']}"}), 200
+
+        formula_code  = attrs.get("Z_FORMULA_CODE", "")
+        piece_type    = attrs.get("Z_PIECE_TYPE",   "")
+        shade_band    = attrs.get("Z_SHADE_BAND",   "00") or "00"
+        differentials = attrs.get("Z_BEHAVIOR_DIFFERENTIALS", "")
+        partnumber    = attrs.get("Z_AGP_PARTNUMBER", "")
+        nivel         = attrs.get("Z_AGP_LEVEL", "")
+        pn_parsed     = _parsear_partnumber(partnumber)
+        tiene_acero   = "06" in {d.strip() for d in differentials.split(",") if d.strip()}
+
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            fut_var  = ex.submit(q_variantes_por_pn,
+                                 pn_parsed["vehiculo"], pn_parsed["version"],
+                                 pn_parsed["formula"],  pn_parsed["pieza"]) if pn_parsed else None
+            fut_zpla = ex.submit(q_zplas_compatibles, formula_code, piece_type, shade_band, differentials, tiene_acero)
+        variantes = (fut_var.result() if fut_var else []) or []
+        zplas     = fut_zpla.result() or []
+        if variantes and "_error" in variantes[0]: variantes = []
+        if zplas     and "_error" in zplas[0]:     zplas     = []
+
+        colores_con_zfer = {v["color_raw"]: v for v in variantes if v.get("color_raw")}
+        colores_con_zpla: dict = {}
+        for z in zplas:
+            colores_con_zpla.setdefault(z["color"], []).append(z)
+
+        items_a_enviar = []
+        for cod in _COLORES_ACTIVOS:
+            if cod in colores_con_zfer:
+                continue
+            zpla_list = colores_con_zpla.get(cod, [])
+            if not zpla_list:
+                continue
+            items_a_enviar.append({
+                "color":       cod,
+                "color_nombre": COLORES.get(cod, cod),
+                "zpla":        zpla_list[0]["material"],
+            })
+
+        if not items_a_enviar:
+            return jsonify({"ok": False, "error": "No hay colores disponibles para homologar (todos ya existen o sin ZPLA)"}), 200
+
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            # Obtener o crear bloque PENDIENTE
+            bloque_row = cur.execute("""
+                SELECT TOP 1 id, bloque_num, hora_prog FROM itg.M5_AutoColor_BLOQUES
+                WHERE estado='PENDIENTE' ORDER BY hora_prog ASC
+            """).fetchone()
+            if not bloque_row:
+                from datetime import timedelta
+                manana7 = (_dt.now() + timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
+                cur.execute("SELECT ISNULL(MAX(bloque_num),0)+1 FROM itg.M5_AutoColor_BLOQUES")
+                nuevo_num = cur.fetchone()[0]
+                cur.execute("""
+                    INSERT INTO itg.M5_AutoColor_BLOQUES (bloque_num, hora_prog, timer_activo)
+                    OUTPUT INSERTED.id, INSERTED.bloque_num, INSERTED.hora_prog
+                    VALUES (?, ?, 1)
+                """, nuevo_num, manana7)
+                br = cur.fetchone()
+                bloque_id, bloque_num, hora_prog = br[0], br[1], br[2]
+            else:
+                bloque_id, bloque_num, hora_prog = bloque_row[0], bloque_row[1], bloque_row[2]
+
+            for it in items_a_enviar:
+                cur.execute("""
+                    INSERT INTO itg.M5_AutoColor_COLA
+                    (bloque_id, autocolor_zfer_id, zfer_base, color, color_nombre,
+                     zpla, franja, pn_base, nivel, tipo_pieza, cambiar_hr)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,0)
+                """, bloque_id, zfer_id, zfer_base,
+                    it["color"], it["color_nombre"], it["zpla"],
+                    shade_band, partnumber[:50], nivel[:10], piece_type[:10])
+
+            # Marcar ZFER como EN_COLA
+            cur.execute(
+                "UPDATE itg.M5_AutoColorZfer SET estado='EN_COLA' WHERE id=?", zfer_id
+            )
+
+        hora_str = hora_prog.strftime("%d/%m/%Y %H:%M") if hora_prog else ""
+        return jsonify({"ok": True, "n_agregados": len(items_a_enviar),
+                        "bloque_id": bloque_id, "bloque_num": bloque_num, "hora_prog": hora_str})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/auto_color/bloques")
+@login_required
+def api_ac_bloques():
+    """Lista bloques + items de Auto Color."""
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            cur.execute("""
+                SELECT b.id, b.bloque_num, b.hora_prog, b.timer_activo, b.estado,
+                       b.creado_el, b.ejecutado_el, b.ok_count, b.error_count,
+                       COUNT(c.id) AS total,
+                       SUM(CASE WHEN c.estado='PENDIENTE' OR c.estado='EJECUTANDO' THEN 1 ELSE 0 END) AS pendientes
+                FROM itg.M5_AutoColor_BLOQUES b
+                LEFT JOIN itg.M5_AutoColor_COLA c ON c.bloque_id = b.id
+                GROUP BY b.id, b.bloque_num, b.hora_prog, b.timer_activo, b.estado,
+                         b.creado_el, b.ejecutado_el, b.ok_count, b.error_count
+                ORDER BY b.id DESC
+            """)
+            bloques_rows = cur.fetchall()
+
+        bloques = []
+        for r in bloques_rows:
+            bid = r[0]
+            # Cargar items del bloque
+            with _get_conn_local() as cn:
+                items_rows = cn.cursor().execute("""
+                    SELECT id, zfer_base, color, color_nombre, zpla, estado, zfer_nuevo, error_msg, ejecutado_el
+                    FROM itg.M5_AutoColor_COLA WHERE bloque_id=? ORDER BY id
+                """, bid).fetchall()
+            items = [{
+                "id": ir[0], "zfer_base": ir[1], "color": ir[2], "color_nombre": ir[3],
+                "zpla": ir[4], "estado": ir[5], "zfer_nuevo": ir[6] or "",
+                "error_msg": ir[7] or "",
+                "ejecutado_el": ir[8].strftime("%H:%M:%S") if ir[8] else "",
+            } for ir in items_rows]
+            bloques.append({
+                "id":           r[0], "bloque_num": r[1],
+                "hora_prog":    r[2].strftime("%d/%m/%Y %H:%M") if r[2] else "",
+                "timer_activo": bool(r[3]), "estado": r[4],
+                "ok_count":     r[7], "error_count": r[8],
+                "total":        r[9], "pendientes":  r[10],
+                "items":        items,
+            })
+        return jsonify({"ok": True, "bloques": bloques})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/auto_color/ejecutar/<int:bloque_id>", methods=["POST"])
+@login_required
+def api_ac_ejecutar(bloque_id: int):
+    body    = request.get_json(force=True) or {}
+    usuario = str(body.get("usuario", "web"))[:50]
+    try:
+        with _get_conn_local() as cn:
+            row = cn.cursor().execute(
+                "SELECT estado FROM itg.M5_AutoColor_BLOQUES WHERE id=?", bloque_id
+            ).fetchone()
+        if not row:
+            return jsonify({"ok": False, "error": "Bloque no encontrado"}), 200
+        if row[0] == "EJECUTANDO":
+            return jsonify({"ok": False, "error": "Ya en ejecución"}), 200
+
+        ocupado_por = _sap_lock_ocupado_por_otro()
+        if ocupado_por:
+            return jsonify({"ok": False, "error": f"SAP ocupado por '{ocupado_por}' — espera a que termine"}), 200
+        if not _sap_bloque_lock.acquire(blocking=False):
+            return jsonify({"ok": False, "error": "Otro bloque (cola normal) está usando SAP ahora mismo"}), 200
+        _sap_bloque_lock.release()
+
+        if bloque_id not in _ac_scheduler_disparados:
+            _ac_scheduler_disparados.add(bloque_id)
+            threading.Thread(target=_autocolor_ejecutar_bloque, args=(bloque_id, usuario, ), daemon=True).start()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/auto_color/timer/<int:bloque_id>", methods=["POST"])
+@login_required
+def api_ac_timer(bloque_id: int):
+    body   = request.get_json(force=True) or {}
+    activo = 1 if body.get("activo") else 0
+    try:
+        with _get_conn_local() as cn:
+            cn.cursor().execute(
+                "UPDATE itg.M5_AutoColor_BLOQUES SET timer_activo=? WHERE id=?", activo, bloque_id
+            )
+        return jsonify({"ok": True, "timer_activo": bool(activo)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/auto_color/hora/<int:bloque_id>", methods=["POST"])
+@login_required
+def api_ac_hora(bloque_id: int):
+    body = request.get_json(force=True) or {}
+    hora_str = str(body.get("hora_prog", "")).strip()
+    try:
+        from datetime import datetime as _dtp
+        hora_dt = _dtp.strptime(hora_str, "%Y-%m-%dT%H:%M")
+        with _get_conn_local() as cn:
+            cn.cursor().execute(
+                "UPDATE itg.M5_AutoColor_BLOQUES SET hora_prog=?, estado='PENDIENTE', timer_activo=1 WHERE id=? AND estado='PENDIENTE'",
+                hora_dt, bloque_id
+            )
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@app.route("/api/auto_color/bloque/<int:bloque_id>", methods=["DELETE"])
+@login_required
+def api_ac_borrar_bloque(bloque_id: int):
+    try:
+        with _get_conn_local() as cn:
+            cur = cn.cursor()
+            row = cur.execute(
+                "SELECT estado FROM itg.M5_AutoColor_BLOQUES WHERE id=?", bloque_id
+            ).fetchone()
+            if row and row[0] == "EJECUTANDO":
+                return jsonify({"ok": False, "error": "No se puede borrar un bloque en ejecución"}), 200
+            cur.execute("DELETE FROM itg.M5_AutoColor_COLA WHERE bloque_id=?", bloque_id)
+            cur.execute("DELETE FROM itg.M5_AutoColor_BLOQUES WHERE id=?", bloque_id)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
 
 
 @app.after_request

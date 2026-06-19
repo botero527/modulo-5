@@ -94,12 +94,15 @@
 </div>
 
 <!-- ── Tabs ──────────────────────────────────────────────────────────────── -->
-<div style="display:flex; gap:.4rem; margin-bottom:1.2rem; border-bottom:1px solid var(--divider); padding-bottom:.6rem;">
+<div style="display:flex; gap:.4rem; margin-bottom:1.2rem; border-bottom:1px solid var(--divider); padding-bottom:.6rem; flex-wrap:wrap;">
   <button id="tab-cola" onclick="_tabSwitch('cola')" class="cola-tab active">
     <i class="bi bi-clock-history me-1"></i>Cola pendiente
   </button>
   <button id="tab-hist" onclick="_tabSwitch('hist')" class="cola-tab inactive">
     <i class="bi bi-journal-check me-1"></i>Historial de ejecuciones
+  </button>
+  <button id="tab-ac" onclick="_tabSwitch('ac')" class="cola-tab inactive">
+    <i class="bi bi-palette me-1"></i>Color automático
   </button>
 </div>
 
@@ -119,6 +122,60 @@
     <div class="empty-state">
       <i class="bi bi-journal-check"></i>
       <div style="font-size:.9rem;">Haz clic en "Historial" para cargar</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Color automático ───────────────────────────────────────────────── -->
+<div id="tab-pane-ac" style="display:none;">
+
+  <!-- Agregar ZFER -->
+  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:14px; padding:1.1rem 1.4rem; margin-bottom:1.4rem;">
+    <div style="font-weight:700; font-size:.9rem; color:var(--text); margin-bottom:.75rem;">
+      <i class="bi bi-plus-circle me-2" style="color:#7c3aed;"></i>Agregar ZFER a la lista
+    </div>
+    <div style="display:flex; gap:.6rem; align-items:center; flex-wrap:wrap;">
+      <input id="ac-zfer-input" type="text" placeholder="Ej: 700179044"
+             style="background:var(--input-bg); border:1px solid var(--input-bdr); color:var(--text);
+                    border-radius:8px; padding:.35rem .8rem; font-size:.85rem; width:200px; outline:none;"
+             onkeydown="if(event.key==='Enter') _acAgregarZfer()" />
+      <button onclick="_acAgregarZfer()" class="btn-sm-purple">
+        <i class="bi bi-plus me-1"></i>Agregar
+      </button>
+      <span id="ac-add-msg" style="font-size:.8rem; color:var(--muted);"></span>
+    </div>
+  </div>
+
+  <!-- Lista de ZFERs -->
+  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:1.4rem;">
+    <div style="padding:.85rem 1.4rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+      <span style="font-weight:700; font-size:.9rem; color:var(--text);">
+        <i class="bi bi-list-check me-2" style="color:#7c3aed;"></i>ZFERs registrados
+      </span>
+      <button onclick="_acRefrescarZfers()" class="btn-sm-gray" title="Refrescar">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+    <div id="ac-zfers-container">
+      <div class="empty-state"><span class="paso-spinner" style="width:22px;height:22px;border-width:2px;"></span></div>
+    </div>
+  </div>
+
+  <!-- Bloques Auto Color -->
+  <div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.8rem;">
+      <span style="font-weight:700; font-size:.9rem; color:var(--text);">
+        <i class="bi bi-layers me-2" style="color:#7c3aed;"></i>Bloques de ejecución
+      </span>
+      <button onclick="_acRefrescarBloques()" class="btn-sm-gray" title="Refrescar">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+    <div id="ac-bloques-container">
+      <div class="empty-state">
+        <i class="bi bi-palette" style="opacity:.4;"></i>
+        <div style="font-size:.85rem; margin-top:.5rem;">Sin bloques aún — agrega ZFERs y haz clic en Enviar a Cola</div>
+      </div>
     </div>
   </div>
 </div>
@@ -355,18 +412,20 @@ async function _borrarBloque(bloqueId) {
 let _tabActual = 'cola';
 function _tabSwitch(tab) {
   _tabActual = tab;
-  const isCola = tab === 'cola';
-  document.getElementById('tab-pane-cola').style.display = isCola ? '' : 'none';
-  document.getElementById('tab-pane-hist').style.display = isCola ? 'none' : '';
-  const bC = document.getElementById('tab-cola'), bH = document.getElementById('tab-hist');
-  if (isCola) {
-    bC.className = 'cola-tab active';
-    bH.className = 'cola-tab inactive';
-  } else {
-    bH.className = 'cola-tab active-hist';
-    bC.className = 'cola-tab inactive';
-    _cargarHistorial();
-  }
+  document.getElementById('tab-pane-cola').style.display = tab === 'cola' ? '' : 'none';
+  document.getElementById('tab-pane-hist').style.display = tab === 'hist' ? '' : 'none';
+  document.getElementById('tab-pane-ac').style.display   = tab === 'ac'   ? '' : 'none';
+  ['cola','hist','ac'].forEach(t => {
+    const btn = document.getElementById('tab-' + t);
+    if (!btn) return;
+    if (t === tab) {
+      btn.className = t === 'hist' ? 'cola-tab active-hist' : 'cola-tab active';
+    } else {
+      btn.className = 'cola-tab inactive';
+    }
+  });
+  if (tab === 'hist') _cargarHistorial();
+  if (tab === 'ac')   _acCargar();
 }
 
 // ── Historial ─────────────────────────────────────────────────────────────────
@@ -709,4 +768,241 @@ setInterval(() => {
     <div id="rep-cuerpo"></div>
   </div>
 </div>
+
+<!-- ── Auto Color JS ──────────────────────────────────────────────────────── -->
+<script>
+let _acZfers = [];
+
+async function _acCargar() {
+  await Promise.all([_acRefrescarZfers(), _acRefrescarBloques()]);
+}
+
+// ── ZFERs ─────────────────────────────────────────────────────────────────────
+async function _acRefrescarZfers() {
+  const cont = document.getElementById('ac-zfers-container');
+  cont.innerHTML = `<div class="empty-state"><span class="paso-spinner" style="width:22px;height:22px;border-width:2px;"></span></div>`;
+  try {
+    const d = await fetch('/api/auto_color/zfers').then(r => r.json());
+    if (!d.ok) { cont.innerHTML = `<div class="empty-state" style="color:var(--err-txt);">Error: ${d.error}</div>`; return; }
+    _acZfers = d.zfers || [];
+    _acRenderZfers(_acZfers);
+  } catch(e) {
+    cont.innerHTML = `<div class="empty-state" style="color:var(--err-txt);">Error de red</div>`;
+  }
+}
+
+function _acRenderZfers(zfers) {
+  const cont = document.getElementById('ac-zfers-container');
+  if (!zfers.length) {
+    cont.innerHTML = `<div class="empty-state"><i class="bi bi-inbox" style="font-size:2rem; opacity:.4;"></i><div style="margin-top:.5rem; font-size:.85rem;">Sin ZFERs registrados — agrega uno arriba</div></div>`;
+    return;
+  }
+  cont.innerHTML = zfers.map(z => {
+    const estadoChip = z.estado === 'EN_COLA'
+      ? `<span style="background:var(--info-bg);color:var(--info-txt);border:1px solid var(--info-bdr);border-radius:20px;font-size:.7rem;font-weight:700;padding:.1rem .5rem;">En cola</span>`
+      : `<span style="background:var(--tag-neutral-bg);color:var(--tag-neutral-txt);border:1px solid var(--tag-neutral-bdr);border-radius:20px;font-size:.7rem;font-weight:700;padding:.1rem .5rem;">Pendiente</span>`;
+    const coloresHtml = z.colores.length
+      ? z.colores.map(c => `<span style="background:var(--tag-neutral-bg);color:var(--muted);border:1px solid var(--tag-neutral-bdr);border-radius:20px;font-size:.68rem;padding:.05rem .45rem;white-space:nowrap;">${c.color_codigo} — ${c.color_nombre}</span>`).join(' ')
+      : `<span style="color:var(--muted); font-size:.78rem;">Sin colores disponibles</span>`;
+    const puedeEnviar = z.n_colores > 0 && z.estado !== 'EN_COLA';
+    return `
+    <div style="padding:.75rem 1.4rem; border-bottom:1px solid var(--attr-row-border); display:flex; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+      <div style="min-width:110px;">
+        <div style="font-weight:700; color:var(--accent); font-size:.88rem;">${z.zfer_base}</div>
+        <div style="font-size:.72rem; color:var(--muted); margin-top:.15rem;">${z.cargado_el}</div>
+      </div>
+      <div style="flex:1; display:flex; flex-wrap:wrap; gap:.3rem; align-items:center;">
+        ${estadoChip}
+        <span style="font-size:.78rem; color:var(--muted); margin:0 .3rem;">${z.n_colores} color${z.n_colores !== 1 ? 'es' : ''} disponible${z.n_colores !== 1 ? 's' : ''}</span>
+        ${coloresHtml}
+      </div>
+      <div style="display:flex; gap:.4rem; align-items:center; flex-shrink:0;">
+        ${puedeEnviar
+          ? `<button onclick="_acEnviar(${z.id})" class="btn-sm-go"><i class="bi bi-send me-1"></i>Enviar a Cola</button>`
+          : `<button disabled style="opacity:.4; cursor:not-allowed;" class="btn-sm-go"><i class="bi bi-send me-1"></i>Enviar a Cola</button>`}
+        <button onclick="_acEliminar(${z.id})" class="btn-sm-red" title="Eliminar"><i class="bi bi-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function _acAgregarZfer() {
+  const inp = document.getElementById('ac-zfer-input');
+  const msg = document.getElementById('ac-add-msg');
+  const zfer = inp.value.trim();
+  if (!zfer) return;
+  msg.textContent = 'Agregando…';
+  try {
+    const d = await fetch('/api/auto_color/zfer', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ zfer })
+    }).then(r => r.json());
+    if (d.ok) {
+      inp.value = '';
+      msg.textContent = `✓ ${zfer} agregado`;
+      msg.style.color = 'var(--ok-txt)';
+      setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+      _acRefrescarZfers();
+    } else {
+      msg.textContent = d.error || 'Error';
+      msg.style.color = 'var(--err-txt)';
+    }
+  } catch(e) {
+    msg.textContent = 'Error de red';
+    msg.style.color = 'var(--err-txt)';
+  }
+}
+
+async function _acEliminar(zfer_id) {
+  if (!confirm('¿Eliminar este ZFER de la lista?')) return;
+  await fetch(`/api/auto_color/zfer/${zfer_id}`, { method: 'DELETE' });
+  _acRefrescarZfers();
+}
+
+async function _acEnviar(zfer_id) {
+  const z = _acZfers.find(x => x.id === zfer_id);
+  const label = z ? z.zfer_base : zfer_id;
+  if (!confirm(`¿Enviar los ${z ? z.n_colores : ''} colores disponibles de ${label} a la cola de homologación?`)) return;
+  try {
+    const d = await fetch(`/api/auto_color/enviar/${zfer_id}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ usuario: '{{ session.get("usuario","web") }}' })
+    }).then(r => r.json());
+    if (d.ok) {
+      alert(`✓ ${d.n_agregados} colores enviados al Bloque ${d.bloque_num} · ${d.hora_prog}`);
+      await Promise.all([_acRefrescarZfers(), _acRefrescarBloques()]);
+    } else {
+      alert('Error: ' + (d.error || 'desconocido'));
+    }
+  } catch(e) {
+    alert('Error de red');
+  }
+}
+
+// ── Bloques ───────────────────────────────────────────────────────────────────
+async function _acRefrescarBloques() {
+  const cont = document.getElementById('ac-bloques-container');
+  try {
+    const d = await fetch('/api/auto_color/bloques').then(r => r.json());
+    if (!d.ok || !d.bloques.length) {
+      cont.innerHTML = `<div class="empty-state"><i class="bi bi-palette" style="opacity:.4;"></i><div style="font-size:.85rem; margin-top:.5rem;">Sin bloques aún</div></div>`;
+      return;
+    }
+    cont.innerHTML = d.bloques.map(b => _acRenderBloque(b)).join('');
+  } catch(e) {
+    cont.innerHTML = `<div class="empty-state" style="color:var(--err-txt);">Error cargando bloques</div>`;
+  }
+}
+
+function _acRenderBloque(b) {
+  const estadoCls = b.estado === 'COMPLETADO' ? 'bloque-badge-ok'
+                  : b.estado === 'EJECUTANDO' ? 'bloque-badge-eje'
+                  : b.estado === 'ERROR'       ? 'bloque-badge-err'
+                  : 'bloque-badge-pend';
+  const timerHtml = b.estado === 'PENDIENTE'
+    ? `<label class="timer-toggle" title="${b.timer_activo ? 'Desactivar timer' : 'Activar timer'}" onclick="_acToggleTimer(${b.id}, ${!b.timer_activo}, this)">
+         <span class="timer-dot ${b.timer_activo ? 'timer-on' : 'timer-off'}"></span>
+         <span>Timer ${b.timer_activo ? 'activo' : 'inactivo'}</span>
+       </label>
+       <input type="datetime-local" class="hora-input" value="${_acFmtHora(b.hora_prog)}"
+              onchange="_acCambiarHora(${b.id}, this.value)" />` : '';
+  const btnEjec = (b.estado === 'PENDIENTE' || b.estado === 'ERROR')
+    ? `<button onclick="_acEjecutar(${b.id})" class="btn-sm-go"><i class="bi bi-play-fill me-1"></i>Ejecutar ahora</button>` : '';
+  const btnBorrar = b.estado !== 'EJECUTANDO'
+    ? `<button onclick="_acBorrarBloque(${b.id})" class="btn-sm-red"><i class="bi bi-trash me-1"></i>Borrar</button>` : '';
+
+  const itemsHtml = b.items.map(it => {
+    const estHtml = it.estado === 'OK'
+      ? `<span class="item-estado-ok"><i class="bi bi-check-circle-fill me-1"></i>OK → ${it.zfer_nuevo}</span>`
+      : it.estado === 'ERROR'
+      ? `<span class="item-estado-err" title="${it.error_msg}"><i class="bi bi-x-circle-fill me-1"></i>Error</span>`
+      : it.estado === 'EJECUTANDO'
+      ? `<span class="item-estado-pend"><span class="paso-spinner" style="width:10px;height:10px;border-width:2px;margin-right:4px;"></span>Ejecutando…</span>`
+      : `<span class="item-estado-pend"><i class="bi bi-hourglass me-1"></i>Pendiente</span>`;
+    return `<div class="item-row">
+      <span class="item-zfer">${it.zfer_base}</span>
+      <span class="item-color">${it.color} — ${it.color_nombre}</span>
+      <span style="color:var(--muted); font-size:.72rem;">${it.zpla}</span>
+      <span style="flex:1;"></span>
+      ${estHtml}
+    </div>`;
+  }).join('');
+
+  return `<div class="bloque-card">
+    <div class="bloque-header">
+      <div style="display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;">
+        <span style="font-weight:800; font-size:.9rem; color:var(--text);">
+          <i class="bi bi-palette me-1" style="color:#7c3aed;"></i>Bloque ${b.bloque_num}
+        </span>
+        <span class="${estadoCls}">${b.estado}</span>
+        ${b.estado==='COMPLETADO' ? `<span class="bloque-badge-ok">${b.ok_count} OK</span>` : ''}
+        ${b.estado==='COMPLETADO' && b.error_count > 0 ? `<span class="bloque-badge-err">${b.error_count} errores</span>` : ''}
+        <span class="bloque-badge-pend" style="background:transparent;">${b.total} ítems</span>
+        ${timerHtml}
+      </div>
+      <div style="display:flex; gap:.4rem; align-items:center; flex-wrap:wrap;">
+        ${btnEjec} ${btnBorrar}
+      </div>
+    </div>
+    ${itemsHtml}
+  </div>`;
+}
+
+function _acFmtHora(str) {
+  if (!str) return '';
+  // str = "DD/MM/YYYY HH:MM" → "YYYY-MM-DDTHH:MM"
+  const [fecha, hora] = str.split(' ');
+  if (!fecha || !hora) return '';
+  const [d, m, y] = fecha.split('/');
+  return `${y}-${m}-${d}T${hora}`;
+}
+
+async function _acToggleTimer(bid, activo, el) {
+  await fetch(`/api/auto_color/timer/${bid}`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ activo })
+  });
+  _acRefrescarBloques();
+}
+
+async function _acCambiarHora(bid, val) {
+  await fetch(`/api/auto_color/hora/${bid}`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ hora_prog: val })
+  });
+}
+
+async function _acEjecutar(bid) {
+  const d = await fetch(`/api/auto_color/ejecutar/${bid}`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({})
+  }).then(r => r.json());
+  if (!d.ok) { alert('Error: ' + (d.error||'desconocido')); return; }
+  setTimeout(_acRefrescarBloques, 800);
+  setTimeout(_acRefrescarBloques, 3000);
+}
+
+async function _acBorrarBloque(bid) {
+  if (!confirm('¿Borrar este bloque y todos sus ítems?')) return;
+  const d = await fetch(`/api/auto_color/bloque/${bid}`, { method: 'DELETE' }).then(r => r.json());
+  if (!d.ok) { alert('Error: ' + (d.error||'')); return; }
+  _acRefrescarBloques();
+}
+
+// Auto-refresh cuando la pestaña está activa y hay bloques EJECUTANDO
+setInterval(() => {
+  if (document.getElementById('tab-pane-ac')?.style.display !== 'none') {
+    const cont = document.getElementById('ac-bloques-container');
+    if (cont && cont.innerHTML.includes('Ejecutando')) {
+      _acRefrescarBloques();
+    }
+  }
+}, 5000);
+</script>
+
 {% endblock %}

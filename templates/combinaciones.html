@@ -1298,6 +1298,8 @@ async function _enviarTodoACola() {
     const _tieneRuta   = !!(_rutaInfo && _rutaInfo.ruta);
     const _tieneSim    = !!(_rutaInfo && _rutaInfo.tiene_simetria);
     const _zferSim     = (_rutaInfo && _rutaInfo.zfer_simetrico) || "";
+    // ¿Ya incluyó items del simétrico en esta selección?
+    const _simIncluido = _tieneSim && document.querySelectorAll(".schk-fc:checked").length > 0;
 
     const _confirmar = await new Promise(resolve => {
       // Construir contenido del modal
@@ -1309,9 +1311,13 @@ async function _enviarTodoACola() {
              <span style="font-size:.8rem;">⚠</span> Sin rutas configuradas
            </span>`;
       const simChip = _tieneSim
-        ? `<span style="display:inline-flex;align-items:center;gap:.35rem;background:#78350f33;border:1px solid #d9770655;color:#fde68a;border-radius:6px;padding:.2rem .6rem;font-size:.78rem;font-weight:600;">
-             ⚠ Tiene simetría${_zferSim ? ` — simétrico: <strong style="color:#fbbf24;margin-left:.25rem;">${_zferSim}</strong>` : ""}
-           </span>`
+        ? (_simIncluido
+            ? `<span style="display:inline-flex;align-items:center;gap:.35rem;background:#14532d33;border:1px solid #16a34a55;color:#86efac;border-radius:6px;padding:.2rem .6rem;font-size:.78rem;font-weight:600;">
+                 ✓ Simetría incluida${_zferSim ? ` — <strong style="margin-left:.2rem;">${_zferSim}</strong>` : ""}
+               </span>`
+            : `<span style="display:inline-flex;align-items:center;gap:.35rem;background:#78350f33;border:1px solid #d9770655;color:#fde68a;border-radius:6px;padding:.2rem .6rem;font-size:.78rem;font-weight:600;">
+                 ⚠ Tiene simetría${_zferSim ? ` — simétrico: <strong style="color:#fbbf24;margin-left:.25rem;">${_zferSim}</strong>` : ""}
+               </span>`)
         : "";
 
       const overlay = document.createElement("div");
@@ -1333,12 +1339,14 @@ async function _enviarTodoACola() {
             ${!_tieneRuta ? `<div style="color:#fde68a;font-size:.76rem;line-height:1.5;background:#78350f22;border:1px solid #d9770633;border-radius:6px;padding:.4rem .65rem;margin-bottom:.45rem;">
               La homologación se ejecutará pero GestorAuto no recibirá rutas 3D.<br>Puedes configurarlas en el panel de Rutas antes de enviar.
             </div>` : ""}
-            ${_tieneSim ? `<div style="color:#fde68a;font-size:.76rem;line-height:1.5;background:#78350f22;border:1px solid #d9770633;border-radius:6px;padding:.4rem .65rem;">
+            ${(_tieneSim && !_simIncluido) ? `<div style="color:#fde68a;font-size:.76rem;line-height:1.5;background:#78350f22;border:1px solid #d9770633;border-radius:6px;padding:.4rem .65rem;">
               ⚠ <strong>Este ZFER tiene simetría configurada.</strong><br>
-              Para que los datos de simetría queden vinculados en GestorAuto, debes enviar también
-              ${_zferSim ? `el simétrico <strong style="color:#fbbf24;">${_zferSim}</strong>` : "la pieza simétrica"}
-              al <strong>mismo bloque</strong> desde su propia página.<br>
-              <span style="color:var(--muted);">Si no lo envías, los campos de simetría quedarán vacíos en la BD.</span>
+              Para que los datos de simetría queden vinculados en GestorAuto, debes marcar también
+              las fórmulas del simétrico${_zferSim ? ` <strong style="color:#fbbf24;">${_zferSim}</strong>` : ""} en el panel derecho.<br>
+              <span style="color:var(--muted);">Si no las incluyes, los campos de simetría quedarán vacíos en la BD.</span>
+            </div>` : ""}
+            ${(_tieneSim && _simIncluido) ? `<div style="color:#86efac;font-size:.76rem;line-height:1.5;background:#14532d22;border:1px solid #16a34a33;border-radius:6px;padding:.4rem .65rem;">
+              ✓ <strong>Simetría incluida.</strong> Los datos del simétrico${_zferSim ? ` <strong>${_zferSim}</strong>` : ""} se vincularán en GestorAuto automáticamente.
             </div>` : ""}
           </div>
           <div style="padding:.7rem 1.4rem 1.1rem;border-top:1px solid var(--divider);display:flex;justify-content:flex-end;gap:.55rem;">
