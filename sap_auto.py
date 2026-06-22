@@ -201,7 +201,7 @@ class AutomatizadorSAP:
                       "/tblSAPLCTMSCHARS_S")
 
     # ── Init ──────────────────────────────────────────────────────────────────
-
+    
     def __init__(self):
         self.app      = None
         self.conn_sap = None
@@ -763,7 +763,8 @@ class AutomatizadorSAP:
 
                     n_s = sum(1 for v in fases.values() if str(v).strip().upper() == "S")
                     if n_s >= min_fases_s:
-                        print(f"    ZPPR0020 OK: {n_s} fases S (min={min_fases_s}) | ZPLA={zpla}")
+                        print(f"    ZPPR0020 OK: {n_s} fases S (min={min_fases_s}) | ZPLA={zpla} — esperando 20s antes de continuar")
+                        time.sleep(20)
                         return {"ok": True, "zpla": zpla, "fase_error": "",
                                 "detalle": f"{n_s} fases completadas", "fases": fases}
 
