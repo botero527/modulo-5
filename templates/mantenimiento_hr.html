@@ -8,7 +8,7 @@
       <i class="bi bi-tools me-2"></i>Mantenimiento de Hojas de Ruta
     </h1>
     <div style="font-size:.82rem; color:var(--muted); margin-top:.25rem;">
-      ZFERs asignados a HRs con &ge;300 materiales vs. Calendario AGP
+      HRs de producción con ZFERs fuera del Calendario AGP — requieren reasignación
     </div>
   </div>
   <div class="d-flex align-items-center gap-2">
@@ -36,18 +36,6 @@
   <i class="bi bi-exclamation-triangle me-2"></i><span id="mhr-error-msg"></span>
 </div>
 
-<!-- QAS Log chip -->
-<div id="qas-chip" style="display:none; margin-bottom:1rem; padding:.5rem .9rem;
-     background:rgba(234,179,8,.1); border:1px solid rgba(234,179,8,.4); border-radius:10px;
-     display:flex; align-items:center; gap:.8rem; font-size:.82rem;">
-  <i class="bi bi-bug me-1" style="color:#ca8a04;"></i>
-  <span style="color:#ca8a04; font-weight:600;">QAS — Modo pruebas:</span>
-  <span id="qas-count" style="color:var(--text);"></span>
-  <button onclick="limpiarQAS()" style="margin-left:auto; background:none; border:1px solid rgba(234,179,8,.5);
-    color:#ca8a04; border-radius:6px; padding:.2rem .6rem; font-size:.75rem; cursor:pointer;">
-    Limpiar log
-  </button>
-</div>
 
 <!-- Buscador de ZFER -->
 <div class="card mb-4">
@@ -123,29 +111,31 @@ function renderResults(data) {
   lastUpd.textContent = "Última consulta: " + data.fecha_consulta;
 
   // Totales
-  let totalZfers = 0, totalFuera = 0;
-  for (const h of data.hojas_ruta) {
-    totalZfers += h.total_zfer;
-    totalFuera += h.fuera_calendario;
-  }
+  let totalFuera = 0;
+  for (const h of data.hojas_ruta) totalFuera += h.fuera_calendario;
 
   const chips = document.getElementById("mhr-summary-chips");
-  chips.innerHTML = `
-    <div class="stat-chip">
-      <div class="stat-num">${data.total_hrs}</div>
-      <div class="stat-lbl">HRs analizadas</div>
-    </div>
-    <div class="stat-chip">
-      <div class="stat-num">${totalZfers.toLocaleString("es-CO")}</div>
-      <div class="stat-lbl">ZFERs totales</div>
-    </div>
-    <div class="stat-chip" style="${totalFuera > 0 ? 'border-color:var(--err-bdr)' : 'border-color:var(--ok-bdr)'}">
-      <div class="stat-num" style="color:${totalFuera > 0 ? 'var(--err-txt)' : 'var(--ok-txt)'}">
-        ${totalFuera.toLocaleString("es-CO")}
+  if (data.hojas_ruta.length === 0) {
+    chips.innerHTML = `<div class="stat-chip" style="border-color:var(--ok-bdr);">
+      <div class="stat-num" style="color:var(--ok-txt);">✓</div>
+      <div class="stat-lbl">Sin HRs congestionadas</div>
+    </div>`;
+  } else {
+    chips.innerHTML = `
+      <div class="stat-chip" style="border-color:var(--err-bdr);">
+        <div class="stat-num" style="color:var(--err-txt);">${data.total_hrs}</div>
+        <div class="stat-lbl">HRs con problemas</div>
       </div>
-      <div class="stat-lbl">Fuera de calendario</div>
-    </div>
-  `;
+      <div class="stat-chip" style="border-color:var(--err-bdr);">
+        <div class="stat-num" style="color:var(--err-txt);">${totalFuera.toLocaleString("es-CO")}</div>
+        <div class="stat-lbl">ZFERs fuera de calendario</div>
+      </div>
+      <div class="stat-chip">
+        <div class="stat-num" style="font-size:.85rem; color:var(--muted);">${data.fecha_consulta}</div>
+        <div class="stat-lbl">Última consulta</div>
+      </div>
+    `;
+  }
 
   // Cards
   const cardsEl = document.getElementById("mhr-cards");
@@ -175,61 +165,45 @@ function renderResults(data) {
       </span>`;
     }
 
+    const pct = h.total_zfer > 0 ? Math.round((h.fuera_calendario / h.total_zfer) * 100) : 0;
     cardsEl.insertAdjacentHTML("beforeend", `
-      <div class="card mb-3">
+      <div class="card mb-3" style="border-left:4px solid var(--err-bdr);">
         <div class="card-header d-flex align-items-center justify-content-between gap-3"
              style="cursor:pointer;" onclick="toggleCard('${collapseId}', this)">
-          <div class="d-flex align-items-center gap-3 flex-wrap flex-grow-1">
-            <span style="font-family:monospace; font-weight:900; font-size:1rem; color:var(--accent);">${h.id_hruta}</span>
-            <span style="font-size:.85rem; color:var(--text); max-width:520px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+          <div class="d-flex align-items-center gap-3 flex-wrap flex-grow-1 min-width-0">
+            <span style="font-family:monospace; font-weight:900; font-size:.95rem; color:var(--accent); white-space:nowrap;">${h.id_hruta}</span>
+            <span style="font-size:.85rem; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:400px;"
                   title="${h.descripcion}">${h.descripcion}</span>
-            <span class="tag t-neutral" style="font-size:.75rem;">
-              <i class="bi bi-layers me-1"></i>${h.materiales} materiales
+            <span style="font-size:.75rem; color:var(--muted); white-space:nowrap;">
+              <i class="bi bi-layers me-1"></i>${h.materiales} mat.
             </span>
           </div>
           <div class="d-flex align-items-center gap-2 flex-shrink-0">
-            <span style="background:${badgeBg}; color:${badgeTxt}; border:1px solid ${badgeColor};
-                         border-radius:20px; padding:.2rem .75rem; font-size:.8rem; font-weight:700;">
-              ${h.fuera_calendario > 0
-                ? `<i class="bi bi-exclamation-triangle me-1"></i>${h.fuera_calendario} fuera`
-                : `<i class="bi bi-check-circle me-1"></i>OK`}
-            </span>
-            ${h.fuera_calendario > 0 ? `
-               <button onclick="event.stopPropagation();descargarHR('${h.id_hruta}')"
-                 style="background:var(--accent);color:#fff;border:none;border-radius:8px;
-                        padding:.28rem .85rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
-                 <i class="bi bi-download me-1"></i>Excel
-               </button>
-               <button onclick="event.stopPropagation();abrirDiagnostico('${h.id_hruta}', ${h.fuera_calendario})"
-                 id="btn-flujo-${h.id_hruta}"
-                 style="background:linear-gradient(135deg,#dc2626,#7c3aed);color:#fff;border:none;border-radius:8px;
-                        padding:.28rem .85rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
-                 <i class="bi bi-lightning-charge me-1"></i>Flujo Completo
-               </button>` : ""}
+            <div style="text-align:right;">
+              <div style="font-size:1.15rem; font-weight:900; color:var(--err-txt); line-height:1;">${h.fuera_calendario}</div>
+              <div style="font-size:.68rem; color:var(--muted); white-space:nowrap;">fuera (${pct}%)</div>
+            </div>
+            <button onclick="event.stopPropagation();abrirDiagnostico('${h.id_hruta}', ${h.fuera_calendario})"
+              id="btn-flujo-${h.id_hruta}"
+              style="background:linear-gradient(135deg,#dc2626,#7c3aed);color:#fff;border:none;border-radius:8px;
+                     padding:.3rem 1rem;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">
+              <i class="bi bi-lightning-charge me-1"></i>Flujo
+            </button>
             <i class="bi bi-chevron-down" id="chev_${collapseId}"
                style="color:var(--muted); transition:transform .2s;"></i>
           </div>
         </div>
         <div id="${collapseId}" style="display:none;">
           <div class="card-body">
-            <div class="d-flex gap-3 mb-3 flex-wrap" style="font-size:.8rem; color:var(--muted);">
-              <span><b style="color:var(--text);">${h.total_zfer}</b> ZFERs asignados</span>
-              <span><b style="color:var(--ok-txt);">${h.en_calendario}</b> en calendario</span>
-              <span><b style="color:${h.fuera_calendario > 0 ? 'var(--err-txt)' : 'var(--ok-txt)'};">${h.fuera_calendario}</b> fuera de calendario</span>
+            <div class="d-flex gap-4 mb-3 flex-wrap" style="font-size:.8rem;">
+              <span style="color:var(--muted);"><b style="color:var(--text);">${h.total_zfer}</b> asignados</span>
+              <span style="color:var(--muted);"><b style="color:var(--ok-txt);">${h.en_calendario}</b> en calendario</span>
+              <span style="color:var(--muted);"><b style="color:var(--err-txt);">${h.fuera_calendario}</b> fuera</span>
             </div>
-            ${h.fuera_calendario > 0 ? `
             <div class="section-label mb-2">ZFERs fuera de calendario</div>
             <div id="zlist_${h.id_hruta}" style="display:flex; flex-wrap:wrap; gap:4px;">
               ${zfersList}
             </div>
-            ${h.sin_zfor && h.sin_zfor.length > 0 ? `
-            <div style="margin-top:.8rem; padding:.5rem .75rem; background:rgba(234,179,8,.08);
-                 border:1px solid rgba(234,179,8,.3); border-radius:8px; font-size:.78rem; color:#ca8a04;">
-              <i class="bi bi-info-circle me-1"></i>
-              <b>${h.sin_zfor.length} ZFER${h.sin_zfor.length>1?'s':''} sin ZFOR</b> en BD:
-              ${h.sin_zfor.slice(0,10).map(z=>`<span style="font-family:monospace;">${z}</span>`).join(', ')}
-              ${h.sin_zfor.length>10 ? `y ${h.sin_zfor.length-10} más` : ''}
-            </div>` : ''}` : `<div>${zfersList}</div>`}
           </div>
         </div>
       </div>
@@ -265,9 +239,6 @@ function verTodos(btn, id_hruta, ev) {
   ).join("");
 }
 
-function descargarHR(id_hruta) {
-  window.location.href = "/api/mantenimiento_hr/exportar/" + id_hruta;
-}
 
 async function desasignarSAP(id_hruta, btn) {
   if (!confirm(`¿Ejecutar desasignación en SAP para HR ${id_hruta}?\n\nSe generará el Excel y se enviará a ZPPP0084 automáticamente.`)) return;
@@ -701,7 +672,7 @@ async function ejecutarFlujoCompleto(limite) {
       _flujoLog("&#x2716;", "Desasignar fallido: " + (d1.error||"error"), "var(--err-txt)");
       _flujoFin(false); return;
     }
-    _flujoLog("&#x2713;", "Desasignar OK — " + (d1.n_enviados||"") + " ZFERs | " + (d1.mensaje||""), "var(--ok-txt)"); cargarQASLog();
+    _flujoLog("&#x2713;", "Desasignar OK — " + (d1.n_enviados||"") + " ZFERs | " + (d1.mensaje||""), "var(--ok-txt)");
   } catch(e) {
     _flujoLog("&#x2716;", "Desasignar error: " + e.message, "var(--err-txt)");
     _flujoFin(false); return;
@@ -891,30 +862,10 @@ document.addEventListener("DOMContentLoaded", function() {
   if (el) obs.observe(el, {childList:true, characterData:true, subtree:true});
 });
 
-// ── QAS Log ───────────────────────────────────────────────────────────────────
-async function cargarQASLog() {
-  try {
-    const r = await fetch("/api/mantenimiento_hr/qas_log");
-    const d = await r.json();
-    const chip = document.getElementById("qas-chip");
-    const cnt  = document.getElementById("qas-count");
-    if (d.total > 0) {
-      chip.style.display = "flex";
-      cnt.textContent = d.total + " ZFERs ya desasignados en pruebas — se excluirán del próximo Excel.";
-    } else {
-      chip.style.display = "none";
-    }
-  } catch(e) {}
-}
+// ── QAS Log (deshabilitado) ───────────────────────────────────────────────────
+async function cargarQASLog() { /* eliminado */ }
+async function limpiarQAS()   { /* eliminado */ }
 
-async function limpiarQAS() {
-  if (!confirm("¿Limpiar el log de ZFERs desasignados en pruebas QAS?")) return;
-  await fetch("/api/mantenimiento_hr/qas_limpiar", {method:"POST"});
-  cargarQASLog();
-}
-
-// Cargar al inicio
-cargarQASLog();
 
 let _flujoZfersValidos = null;   // ZFERs pre-validados del diagnóstico
 

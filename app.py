@@ -9,6 +9,7 @@ import os
 import mimetypes
 from functools import lru_cache, wraps
 from concurrent.futures import ThreadPoolExecutor
+import autocolor
 
 app = Flask(__name__)
 app.secret_key = "AGP_M5_2025_xK9!mQ#zL"
@@ -2496,48 +2497,11 @@ def _migracion_bd_local():
         ("itg.M5_COLA", "acero_dir",   "ALTER TABLE itg.M5_COLA ADD acero_dir NVARCHAR(10) NULL"),
         ("itg.M5_COLA", "subproducto",   "ALTER TABLE itg.M5_COLA ADD subproducto NVARCHAR(20) NULL"),
         ("itg.M5_COLA", "plano_manual",  "ALTER TABLE itg.M5_COLA ADD plano_manual NVARCHAR(100) NULL"),
+        # Auto Color — columnas agregadas en refactor manual-only
+        ("itg.M5_AutoColor_BLOQUES", "cambiar_hr", "ALTER TABLE itg.M5_AutoColor_BLOQUES ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
+        ("itg.M5_AutoColor_COLA",    "cambiar_hr", "ALTER TABLE itg.M5_AutoColor_COLA ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
     ]
-    nuevas_tablas = [
-        """IF OBJECT_ID('itg.M5_AutoColorZfer','U') IS NULL
-           CREATE TABLE itg.M5_AutoColorZfer (
-               id INT IDENTITY(1,1) PRIMARY KEY,
-               zfer_base NVARCHAR(20) NOT NULL,
-               estado NVARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
-               cargado_el DATETIME NOT NULL DEFAULT GETDATE()
-           )""",
-        """IF OBJECT_ID('itg.M5_AutoColor_BLOQUES','U') IS NULL
-           CREATE TABLE itg.M5_AutoColor_BLOQUES (
-               id INT IDENTITY(1,1) PRIMARY KEY,
-               bloque_num INT NOT NULL DEFAULT 1,
-               estado NVARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
-               hora_prog DATETIME NULL,
-               timer_activo BIT NOT NULL DEFAULT 1,
-               creado_el DATETIME NOT NULL DEFAULT GETDATE(),
-               ejecutado_el DATETIME NULL,
-               ok_count INT NOT NULL DEFAULT 0,
-               error_count INT NOT NULL DEFAULT 0
-           )""",
-        """IF OBJECT_ID('itg.M5_AutoColor_COLA','U') IS NULL
-           CREATE TABLE itg.M5_AutoColor_COLA (
-               id INT IDENTITY(1,1) PRIMARY KEY,
-               bloque_id INT NOT NULL,
-               autocolor_zfer_id INT NULL,
-               zfer_base NVARCHAR(20) NOT NULL,
-               color NVARCHAR(10) NULL,
-               color_nombre NVARCHAR(100) NULL,
-               zpla NVARCHAR(20) NULL,
-               franja NVARCHAR(5) NOT NULL DEFAULT '00',
-               pn_base NVARCHAR(50) NULL,
-               nivel NVARCHAR(10) NULL,
-               tipo_pieza NVARCHAR(10) NULL,
-               cambiar_hr BIT NOT NULL DEFAULT 0,
-               estado NVARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
-               zfer_nuevo NVARCHAR(20) NULL,
-               error_msg NVARCHAR(500) NULL,
-               creado_el DATETIME NOT NULL DEFAULT GETDATE(),
-               ejecutado_el DATETIME NULL
-           )""",
-    ]
+    nuevas_tablas = autocolor.get_migration_sqls()
     try:
         cn  = _get_conn_local()
         cur = cn.cursor()
@@ -4562,10 +4526,55 @@ def api_hojas_ruta_buscar():
 
 # ── Mantenimiento HR ──────────────────────────────────────────────────────────
 
-_MHR_JSON     = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ultimo_mantenimiento_hr.json")
 _MHR_TEMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_mhr")
 _MHR_QAS_LOG  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_mhr", "qas_desasignados.json")
 os.makedirs(_MHR_TEMP_DIR, exist_ok=True)
+
+
+def _mhr_get_hr_fresco(id_hruta: str) -> dict | None:
+    """Consulta BD en tiempo real y retorna dict con zfers_fuera para una HR específica.
+    Retorna None si la HR no existe en ODATA_HR_CONSULTA."""
+    from collections import defaultdict as _dd
+    try:
+        with get_conn() as cn:
+            cur = cn.cursor()
+            cur.execute("""
+                SELECT C.ID_HRUTA, C.DESCRIPCION, C.MATERIALES, M.MATERIAL
+                FROM dbo.ODATA_HR_CONSULTA C
+                JOIN dbo.HR_MATERIALS M ON C.ID_HRUTA = M.ID_HRUTA
+                WHERE C.TIPO_HR = 'PRODUCCION' AND C.ID_HRUTA = ?
+            """, id_hruta)
+            rows = cur.fetchall()
+        if not rows:
+            # HR existe en ODATA pero sin materiales en HR_MATERIALS → retornar con lista vacía
+            with get_conn() as cn:
+                cur = cn.cursor()
+                cur.execute("SELECT ID_HRUTA, DESCRIPCION, MATERIALES FROM dbo.ODATA_HR_CONSULTA WHERE ID_HRUTA = ? AND TIPO_HR='PRODUCCION'", id_hruta)
+                meta_row = cur.fetchone()
+            if not meta_row:
+                return None
+            return {"id_hruta": str(meta_row[0]).strip(), "descripcion": str(meta_row[1] or ""),
+                    "materiales": int(meta_row[2] or 0), "total_zfer": 0,
+                    "en_calendario": 0, "fuera_calendario": 0, "zfers_fuera": []}
+
+        meta = {"id_hruta": str(rows[0][0]).strip(), "descripcion": str(rows[0][1] or ""),
+                "materiales": int(rows[0][2] or 0)}
+        zfers = list({str(r[3]).strip() for r in rows if r[3]})
+
+        cal_cn = pyodbc.connect(_CONN_CALENDARIO, timeout=30)
+        try:
+            cal_cur = cal_cn.cursor()
+            cal_cur.execute("SELECT DISTINCT ZFERcode FROM dbo.TCAL_CALENDARIO_COLOMBIA WHERE ZFERcode IS NOT NULL")
+            en_cal = {str(r[0]).strip() for r in cal_cur.fetchall() if r[0]}
+        finally:
+            cal_cn.close()
+
+        fuera = [z for z in zfers if z not in en_cal]
+        return {**meta, "total_zfer": len(zfers), "en_calendario": len(zfers) - len(fuera),
+                "fuera_calendario": len(fuera), "zfers_fuera": fuera}
+    except Exception as e:
+        print(f"[MHR-FRESCO] ERROR para HR {id_hruta}: {e}")
+        raise
 
 
 def _qas_leer_desasignados() -> set:
@@ -4724,11 +4733,8 @@ def api_mantenimiento_hr_consultar():
         print(f"[MHR] HRs: {len(hrs_meta)} | ZFERs totales: {sum(len(v) for v in zfers_by_hr.values())} | {_time.time()-t0:.1f}s")
 
         if not hrs_meta:
-            result = {"ok": True, "fecha_consulta": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
-                      "total_hrs": 0, "hojas_ruta": []}
-            with open(_MHR_JSON, "w", encoding="utf-8") as f:
-                _json.dump(result, f, ensure_ascii=False)
-            return jsonify(result)
+            return jsonify({"ok": True, "fecha_consulta": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "total_hrs": 0, "hojas_ruta": []})
 
         all_zfers = list({z for zlist in zfers_by_hr.values() for z in zlist})
 
@@ -4765,19 +4771,18 @@ def api_mantenimiento_hr_consultar():
                 "fuera_calendario": len(fuera),
                 "zfers_fuera":     fuera,
             })
-        hojas.sort(key=lambda h: h["materiales"], reverse=True)
+        # Solo mostrar HRs que realmente tienen ZFERs fuera del calendario
+        hojas = [h for h in hojas if h["fuera_calendario"] > 0]
+        hojas.sort(key=lambda h: h["fuera_calendario"], reverse=True)
 
         # 5. ZFOR: se carga al generar Excel/plan (no en consultar — lento con 900+ ZFERs)
         zfor_map = {}  # vacio — se llena en exportar y plan_asignacion
 
         print(f"[MHR] Consulta completa en {_time.time()-t0:.1f}s")
 
-        result = {"ok": True,
-                  "fecha_consulta": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
-                  "total_hrs": len(hojas), "hojas_ruta": hojas}
-        with open(_MHR_JSON, "w", encoding="utf-8") as f:
-            _json.dump(result, f, ensure_ascii=False)
-        return jsonify(result)
+        return jsonify({"ok": True,
+                        "fecha_consulta": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "total_hrs": len(hojas), "hojas_ruta": hojas})
 
     except Exception as e:
         import traceback
@@ -4790,19 +4795,11 @@ def api_mantenimiento_hr_consultar():
 def api_mantenimiento_hr_exportar(id_hruta: str):
     """Descarga Excel de ZFERs fuera de calendario para una HR específica.
     2 columnas: ZFER | Hoja de Ruta (descripción). Solo los fuera de calendario."""
-    import json as _json
     from datetime import datetime as _dt
     try:
-        data = None
-        if os.path.exists(_MHR_JSON):
-            with open(_MHR_JSON, "r", encoding="utf-8") as f:
-                data = _json.load(f)
-        if not data or not data.get("ok"):
-            return jsonify({"ok": False, "error": "No hay datos. Ejecuta la consulta primero."}), 400
-
-        hr = next((h for h in data["hojas_ruta"] if str(h["id_hruta"]) == str(id_hruta)), None)
+        hr = _mhr_get_hr_fresco(id_hruta)
         if not hr:
-            return jsonify({"ok": False, "error": f"HR {id_hruta} no encontrada en el último resultado."}), 404
+            return jsonify({"ok": False, "error": f"HR {id_hruta} no encontrada."}), 404
 
         import openpyxl
         from openpyxl.styles import PatternFill, Font, Alignment
@@ -4877,15 +4874,10 @@ def api_mantenimiento_hr_exportar(id_hruta: str):
 @login_required
 def api_mantenimiento_hr_desasignar(id_hruta: str):
     """Genera el Excel de desasignación y lo sube a SAP vía ZPPP0084."""
-    import json as _json
     try:
-        if not os.path.exists(_MHR_JSON):
-            return jsonify({"ok": False, "error": "No hay datos. Ejecuta la consulta primero."})
-        with open(_MHR_JSON, "r", encoding="utf-8") as f:
-            data = _json.load(f)
-        hr = next((h for h in data.get("hojas_ruta", []) if str(h["id_hruta"]) == str(id_hruta)), None)
+        hr = _mhr_get_hr_fresco(id_hruta)
         if not hr:
-            return jsonify({"ok": False, "error": f"HR {id_hruta} no encontrada en el último resultado."})
+            return jsonify({"ok": False, "error": f"HR {id_hruta} no encontrada."})
         if not hr.get("zfers_fuera"):
             return jsonify({"ok": False, "error": "Esta HR no tiene ZFERs fuera de calendario."})
 
@@ -4974,13 +4966,8 @@ def api_mhr_diagnostico(id_hruta: str):
     3. Tiene HR destino disponible con capacidad (corre plan)
     Retorna: {ok, total, validos, rechazados:[{zfer, motivo}], resumen}
     """
-    import json as _json
     try:
-        if not os.path.exists(_MHR_JSON):
-            return jsonify({"ok": False, "error": "Ejecuta la consulta primero."})
-        with open(_MHR_JSON, "r", encoding="utf-8") as f:
-            data = _json.load(f)
-        hr_origen = next((h for h in data.get("hojas_ruta", []) if str(h["id_hruta"]) == str(id_hruta)), None)
+        hr_origen = _mhr_get_hr_fresco(id_hruta)
         if not hr_origen:
             return jsonify({"ok": False, "error": f"HR {id_hruta} no encontrada."})
 
@@ -5069,13 +5056,8 @@ def api_mhr_plan_asignacion(id_hruta: str):
     Para cada ZFER busca la HR candidata (solo BD, sin SAP) y agrupa en batches
     respetando el límite de 300 materiales por HR.
     """
-    import json as _json
     try:
-        if not os.path.exists(_MHR_JSON):
-            return jsonify({"ok": False, "error": "No hay datos. Ejecuta la consulta primero."})
-        with open(_MHR_JSON, "r", encoding="utf-8") as f:
-            data = _json.load(f)
-        hr_origen = next((h for h in data.get("hojas_ruta", []) if str(h["id_hruta"]) == str(id_hruta)), None)
+        hr_origen = _mhr_get_hr_fresco(id_hruta)
         if not hr_origen:
             return jsonify({"ok": False, "error": f"HR {id_hruta} no encontrada."})
 
@@ -5488,572 +5470,66 @@ def api_mhr_reporte_flujo():
 @app.route("/api/mantenimiento_hr/buscar_zfer")
 @login_required
 def api_mantenimiento_hr_buscar_zfer():
-    """Busca un ZFER en el último resultado: indica si está fuera o en calendario y en qué HR."""
-    import json as _json
+    """Busca un ZFER: indica si está fuera de calendario y en qué HR (consulta BD en tiempo real)."""
+    from datetime import datetime as _dt
     zfer = request.args.get("zfer", "").strip()
     if not zfer:
         return jsonify({"ok": False, "error": "Falta parámetro zfer"})
     try:
-        if not os.path.exists(_MHR_JSON):
-            return jsonify({"ok": False, "error": "No hay datos. Ejecuta la consulta primero."})
-        with open(_MHR_JSON, "r", encoding="utf-8") as f:
-            data = _json.load(f)
-        if not data.get("ok"):
-            return jsonify({"ok": False, "error": "Datos inválidos. Vuelve a consultar."})
+        # 1. ¿En qué HRs de producción está este ZFER?
+        with get_conn() as cn:
+            cur = cn.cursor()
+            cur.execute("""
+                SELECT C.ID_HRUTA, C.DESCRIPCION
+                FROM dbo.ODATA_HR_CONSULTA C
+                JOIN dbo.HR_MATERIALS M ON C.ID_HRUTA = M.ID_HRUTA
+                WHERE C.TIPO_HR = 'PRODUCCION' AND M.MATERIAL = ?
+            """, zfer)
+            hrs_con_zfer = [{"id_hruta": str(r[0]).strip(), "descripcion": str(r[1] or "")} for r in cur.fetchall()]
 
-        resultados = []
-        for hr in data["hojas_ruta"]:
-            fuera = set(hr.get("zfers_fuera", []))
-            en_cal = hr.get("en_calendario", 0)
-            total  = hr.get("total_zfer", 0)
-            if zfer in fuera:
-                resultados.append({"id_hruta": hr["id_hruta"], "descripcion": hr["descripcion"],
-                                    "estado": "fuera"})
-            elif total - en_cal < total:  # puede estar en calendario en esta HR
-                # No tenemos lista de los que SÍ están, pero si no está en fuera y total > 0
-                # significa que puede estar. Marcamos como "en_calendario" tentativamente
-                # Solo lo reportamos si el ZFER efectivamente pertenece a esta HR
-                # (no tenemos la lista completa de en_calendario, solo la de fuera)
-                pass  # no podemos confirmar sin lista completa
-
-        if resultados:
-            return jsonify({"ok": True, "zfer": zfer, "encontrado": True,
-                            "estado": "fuera", "hrs": resultados,
-                            "fecha_consulta": data.get("fecha_consulta","")})
-        else:
+        if not hrs_con_zfer:
             return jsonify({"ok": True, "zfer": zfer, "encontrado": False,
-                            "estado": "en_calendario_o_no_asignado",
-                            "mensaje": "No aparece como FUERA en ninguna HR analizada.",
-                            "fecha_consulta": data.get("fecha_consulta","")})
+                            "estado": "no_asignado", "mensaje": "No está asignado a ninguna HR de producción.",
+                            "fecha_consulta": _dt.now().strftime("%Y-%m-%d %H:%M:%S")})
+
+        # 2. ¿Está en el calendario?
+        cal_cn = pyodbc.connect(_CONN_CALENDARIO, timeout=30)
+        try:
+            cal_cur = cal_cn.cursor()
+            cal_cur.execute("SELECT COUNT(*) FROM dbo.TCAL_CALENDARIO_COLOMBIA WHERE ZFERcode = ?", zfer)
+            en_cal = cal_cur.fetchone()[0] > 0
+        finally:
+            cal_cn.close()
+
+        estado = "en_calendario" if en_cal else "fuera"
+        return jsonify({"ok": True, "zfer": zfer, "encontrado": True, "estado": estado,
+                        "hrs": hrs_con_zfer, "fecha_consulta": _dt.now().strftime("%Y-%m-%d %H:%M:%S")})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ── AUTO COLOR — cola paralela para cambio masivo de color por ZFER ───────────
-# ══════════════════════════════════════════════════════════════════════════════
-
-_ac_scheduler_disparados: set = set()
-
-
-def _autocolor_reprogramar_manana(bloque_id: int):
-    try:
-        from datetime import timedelta as _td3
-        with _get_conn_local() as cn:
-            cur = cn.cursor()
-            cur.execute("SELECT hora_prog FROM itg.M5_AutoColor_BLOQUES WHERE id=?", bloque_id)
-            row = cur.fetchone()
-            hora_base = row[0] if row and row[0] else _dt.now()
-            hora_nueva = (hora_base + _td3(days=1)).replace(hour=hora_base.hour, minute=hora_base.minute, second=0, microsecond=0)
-            cur.execute("""
-                UPDATE itg.M5_AutoColor_BLOQUES
-                SET estado='PENDIENTE', hora_prog=? WHERE id=?
-            """, hora_nueva, bloque_id)
-    except Exception as e:
-        print(f"[AUTOCOLOR] error reprogramando: {e}")
-
-
-def _autocolor_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema"):
-    """Ejecuta un bloque de Auto Color (solo tipo COLOR) usando el mismo motor SAP."""
-    import importlib
-    ok_n, err_n = 0, 0
-
-    if not _sap_bloque_lock.acquire(blocking=False):
-        print(f"[AUTOCOLOR] bloque {bloque_id}: SAP ocupado por otro bloque — reprogramando")
-        _autocolor_reprogramar_manana(bloque_id)
-        _ac_scheduler_disparados.discard(bloque_id)
-        return
-
-    try:
-        ocupado_por = _sap_lock_ocupado_por_otro()
-        if ocupado_por:
-            print(f"[AUTOCOLOR] bloque {bloque_id}: SAP ocupado por '{ocupado_por}' — reprogramando")
-            _autocolor_reprogramar_manana(bloque_id)
-            _ac_scheduler_disparados.discard(bloque_id)
-            return
-
-        with _get_conn_local() as cn:
-            cur = cn.cursor()
-            cur.execute("UPDATE itg.M5_AutoColor_BLOQUES SET estado='EJECUTANDO' WHERE id=?", bloque_id)
-            cur.execute("""
-                SELECT id, zfer_base, color, color_nombre, zpla, franja,
-                       pn_base, nivel, tipo_pieza, cambiar_hr
-                FROM itg.M5_AutoColor_COLA
-                WHERE bloque_id=? AND estado='PENDIENTE'
-            """, bloque_id)
-            rows = cur.fetchall()
-
-        if not rows:
-            with _get_conn_local() as cn:
-                cn.cursor().execute(
-                    "UPDATE itg.M5_AutoColor_BLOQUES SET estado='COMPLETADO', ejecutado_el=GETDATE() WHERE id=?",
-                    bloque_id
-                )
-            _ac_scheduler_disparados.discard(bloque_id)
-            return
-
-        cola = [{"_id": r[0], "zfer": r[1], "color": r[2], "color_nombre": r[3],
-                 "zpla": r[4], "franja": r[5] or "00", "pn_base": r[6] or "",
-                 "nivel": r[7] or "", "tipo_pieza": r[8] or "",
-                 "cambiar_hr": bool(r[9]),
-                 "_cola_id": r[0], "_bloque_id": bloque_id, "tipo": "COLOR"} for r in rows]
-
-        _sap_lock_insertar_items(cola)
-        _sap_lock_stop = threading.Event()
-        threading.Thread(target=_sap_lock_keepalive_loop, args=(_sap_lock_stop,), daemon=True).start()
-
-        try:
-            sap = importlib.import_module("sap_auto")
-            _AutoSAP = getattr(sap, "AutomatizadorSAP", None)
-            if _AutoSAP:
-                _sap_inst = _AutoSAP()
-                if not _sap_inst.asegurar_sap_abierto():
-                    with _get_conn_local() as cn:
-                        cn.cursor().execute(
-                            "UPDATE itg.M5_AutoColor_BLOQUES SET estado='ERROR' WHERE id=?", bloque_id
-                        )
-                    return
-
-            _proc_color = getattr(sap, "procesar_combinacion", None)
-
-            for item in cola:
-                with _get_conn_local() as cn:
-                    cn.cursor().execute(
-                        "UPDATE itg.M5_AutoColor_COLA SET estado='EJECUTANDO' WHERE id=?", item["_id"]
-                    )
-
-                estado_item = "ERROR"
-                zfer_nuevo  = ""
-                msg_err     = ""
-                try:
-                    if _proc_color:
-                        res = _proc_color(
-                            zfer=item["zfer"],
-                            color=item["color"],
-                            color_nombre=item["color_nombre"],
-                            zpla=item["zpla"],
-                            franja=item["franja"],
-                            pn_base=item["pn_base"],
-                            nivel=item["nivel"],
-                            tipo_pieza=item["tipo_pieza"],
-                            cambiar_hr=item["cambiar_hr"],
-                        )
-                        if res and getattr(res, "estado", "") == "OK":
-                            estado_item = "OK"
-                            zfer_nuevo  = getattr(res, "zfer_nuevo", "") or ""
-                        else:
-                            msg_err = getattr(res, "error", "Error desconocido") if res else "Sin resultado"
-                    else:
-                        msg_err = "procesar_combinacion no encontrada en sap_auto"
-                except Exception as ex:
-                    msg_err = str(ex)
-
-                with _get_conn_local() as cn:
-                    cn.cursor().execute("""
-                        UPDATE itg.M5_AutoColor_COLA
-                        SET estado=?, zfer_nuevo=?, error_msg=?, ejecutado_el=GETDATE()
-                        WHERE id=?
-                    """, estado_item, zfer_nuevo[:20] if zfer_nuevo else None,
-                        msg_err[:500] if msg_err else None, item["_id"])
-
-                _sap_lock_keepalive()
-                if estado_item == "OK": ok_n += 1
-                else:                  err_n += 1
-
-        except Exception as sap_ex:
-            print(f"[AUTOCOLOR] error cargando sap_auto: {sap_ex}")
-        finally:
-            try:    _sap_lock_stop.set()
-            except NameError: pass
-            _sap_lock_limpiar_proyecto()
-
-    except Exception as ex:
-        print(f"[AUTOCOLOR] error general bloque {bloque_id}: {ex}")
-    finally:
-        _sap_bloque_lock.release()
-        _ac_scheduler_disparados.discard(bloque_id)
-
-    try:
-        with _get_conn_local() as cn:
-            cn.cursor().execute("""
-                UPDATE itg.M5_AutoColor_BLOQUES
-                SET estado='COMPLETADO', ejecutado_el=GETDATE(), ok_count=?, error_count=?
-                WHERE id=?
-            """, ok_n, err_n, bloque_id)
-    except Exception as e:
-        print(f"[AUTOCOLOR] error cerrando bloque: {e}")
-
-
-def _ac_scheduler_tick():
-    try:
-        with _get_conn_local() as cn:
-            cur = cn.cursor()
-            cur.execute("""
-                SELECT id, hora_prog FROM itg.M5_AutoColor_BLOQUES
-                WHERE estado='PENDIENTE' AND timer_activo=1 AND hora_prog IS NOT NULL
-            """)
-            ahora = _dt.now()
-            vencidos = [r[0] for r in cur.fetchall() if r[1] <= ahora]
-        for bid in vencidos:
-            if bid not in _ac_scheduler_disparados:
-                _ac_scheduler_disparados.add(bid)
-                print(f"[AUTOCOLOR] scheduler: disparando bloque {bid}")
-                threading.Thread(target=_autocolor_ejecutar_bloque, args=(bid,), daemon=True).start()
-    except Exception as e:
-        print(f"[AUTOCOLOR] scheduler error: {e}")
-
-
-def _ac_scheduler():
-    _ac_scheduler_tick()
-    while True:
-        _time.sleep(20)
-        _ac_scheduler_tick()
-
-
-_t_ac = threading.Thread(target=_ac_scheduler, daemon=True)
-_t_ac.start()
-
-
-# ── Auto Color API ────────────────────────────────────────────────────────────
-
-@app.route("/api/auto_color/zfers")
-@login_required
-def api_ac_zfers():
-    """Lista ZFERs registrados + colores disponibles para cada uno."""
-    try:
-        with _get_conn_local() as cn:
-            rows = cn.cursor().execute("""
-                SELECT id, zfer_base, estado, cargado_el FROM itg.M5_AutoColorZfer
-                ORDER BY cargado_el DESC
-            """).fetchall()
-        resultado = []
-        for r in rows:
-            zfer_id, zfer_base, estado, cargado_el = r[0], r[1], r[2], r[3]
-            colores = []
-            try:
-                attrs = q_atributos(zfer_base)
-                if "_error" not in attrs:
-                    formula_code  = attrs.get("Z_FORMULA_CODE", "")
-                    piece_type    = attrs.get("Z_PIECE_TYPE",   "")
-                    shade_band    = attrs.get("Z_SHADE_BAND",   "00") or "00"
-                    differentials = attrs.get("Z_BEHAVIOR_DIFFERENTIALS", "")
-                    partnumber    = attrs.get("Z_AGP_PARTNUMBER", "")
-                    pn_parsed     = _parsear_partnumber(partnumber)
-                    tiene_acero   = "06" in {d.strip() for d in differentials.split(",") if d.strip()}
-                    with ThreadPoolExecutor(max_workers=2) as ex:
-                        fut_var  = ex.submit(q_variantes_por_pn,
-                                             pn_parsed["vehiculo"], pn_parsed["version"],
-                                             pn_parsed["formula"],  pn_parsed["pieza"]) if pn_parsed else None
-                        fut_zpla = ex.submit(q_zplas_compatibles, formula_code, piece_type, shade_band, differentials, tiene_acero)
-                    variantes = (fut_var.result() if fut_var else []) or []
-                    zplas     = fut_zpla.result() or []
-                    if variantes and "_error" in variantes[0]: variantes = []
-                    if zplas     and "_error" in zplas[0]:     zplas     = []
-                    colores_con_zfer = {v["color_raw"]: v for v in variantes if v.get("color_raw")}
-                    colores_con_zpla: dict = {}
-                    for z in zplas:
-                        colores_con_zpla.setdefault(z["color"], []).append(z)
-                    for cod in _COLORES_ACTIVOS:
-                        if cod in colores_con_zfer:
-                            continue
-                        zpla_list = colores_con_zpla.get(cod, [])
-                        if not zpla_list:
-                            continue
-                        colores.append({
-                            "color_codigo": cod,
-                            "color_nombre": COLORES.get(cod, cod),
-                            "zpla":         zpla_list[0]["material"],
-                        })
-                    colores.sort(key=lambda x: x["color_codigo"])
-            except Exception:
-                pass
-            resultado.append({
-                "id":         zfer_id,
-                "zfer_base":  zfer_base,
-                "estado":     estado,
-                "cargado_el": cargado_el.strftime("%d/%m/%Y %H:%M") if cargado_el else "",
-                "colores":    colores,
-                "n_colores":  len(colores),
-            })
-        return jsonify({"ok": True, "zfers": resultado})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 200
-
-
-@app.route("/api/auto_color/zfer", methods=["POST"])
-@login_required
-def api_ac_agregar_zfer():
-    """Agrega un ZFER a la lista de vigilancia."""
-    body = request.get_json(force=True) or {}
-    zfer = str(body.get("zfer", "")).strip()[:20]
-    if not zfer:
-        return jsonify({"ok": False, "error": "ZFER requerido"}), 200
-    try:
-        with _get_conn_local() as cn:
-            cur = cn.cursor()
-            # No duplicar si ya está PENDIENTE o EN_COLA
-            existe = cur.execute("""
-                SELECT TOP 1 id FROM itg.M5_AutoColorZfer
-                WHERE zfer_base=? AND estado IN ('PENDIENTE','EN_COLA')
-            """, zfer).fetchone()
-            if existe:
-                return jsonify({"ok": False, "error": f"{zfer} ya está en la lista (estado: PENDIENTE/EN_COLA)"}), 200
-            cur.execute(
-                "INSERT INTO itg.M5_AutoColorZfer (zfer_base, estado) VALUES (?, 'PENDIENTE')",
-                zfer
-            )
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 200
-
-
-@app.route("/api/auto_color/zfer/<int:zfer_id>", methods=["DELETE"])
-@login_required
-def api_ac_eliminar_zfer(zfer_id: int):
-    try:
-        with _get_conn_local() as cn:
-            cn.cursor().execute("DELETE FROM itg.M5_AutoColorZfer WHERE id=?", zfer_id)
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 200
-
-
-@app.route("/api/auto_color/enviar/<int:zfer_id>", methods=["POST"])
-@login_required
-def api_ac_enviar(zfer_id: int):
-    """Genera items en M5_AutoColor_COLA para todos los colores disponibles del ZFER."""
-    body    = request.get_json(force=True) or {}
-    usuario = str(body.get("usuario", "web"))[:50]
-    try:
-        with _get_conn_local() as cn:
-            row = cn.cursor().execute(
-                "SELECT zfer_base FROM itg.M5_AutoColorZfer WHERE id=?", zfer_id
-            ).fetchone()
-        if not row:
-            return jsonify({"ok": False, "error": "ZFER no encontrado"}), 200
-        zfer_base = row[0]
-
-        # Obtener atributos + colores disponibles
-        attrs = q_atributos(zfer_base)
-        if "_error" in attrs:
-            return jsonify({"ok": False, "error": f"No se pudo leer atributos del ZFER: {attrs['_error']}"}), 200
-
-        formula_code  = attrs.get("Z_FORMULA_CODE", "")
-        piece_type    = attrs.get("Z_PIECE_TYPE",   "")
-        shade_band    = attrs.get("Z_SHADE_BAND",   "00") or "00"
-        differentials = attrs.get("Z_BEHAVIOR_DIFFERENTIALS", "")
-        partnumber    = attrs.get("Z_AGP_PARTNUMBER", "")
-        nivel         = attrs.get("Z_AGP_LEVEL", "")
-        pn_parsed     = _parsear_partnumber(partnumber)
-        tiene_acero   = "06" in {d.strip() for d in differentials.split(",") if d.strip()}
-
-        with ThreadPoolExecutor(max_workers=2) as ex:
-            fut_var  = ex.submit(q_variantes_por_pn,
-                                 pn_parsed["vehiculo"], pn_parsed["version"],
-                                 pn_parsed["formula"],  pn_parsed["pieza"]) if pn_parsed else None
-            fut_zpla = ex.submit(q_zplas_compatibles, formula_code, piece_type, shade_band, differentials, tiene_acero)
-        variantes = (fut_var.result() if fut_var else []) or []
-        zplas     = fut_zpla.result() or []
-        if variantes and "_error" in variantes[0]: variantes = []
-        if zplas     and "_error" in zplas[0]:     zplas     = []
-
-        colores_con_zfer = {v["color_raw"]: v for v in variantes if v.get("color_raw")}
-        colores_con_zpla: dict = {}
-        for z in zplas:
-            colores_con_zpla.setdefault(z["color"], []).append(z)
-
-        items_a_enviar = []
-        for cod in _COLORES_ACTIVOS:
-            if cod in colores_con_zfer:
-                continue
-            zpla_list = colores_con_zpla.get(cod, [])
-            if not zpla_list:
-                continue
-            items_a_enviar.append({
-                "color":       cod,
-                "color_nombre": COLORES.get(cod, cod),
-                "zpla":        zpla_list[0]["material"],
-            })
-
-        if not items_a_enviar:
-            return jsonify({"ok": False, "error": "No hay colores disponibles para homologar (todos ya existen o sin ZPLA)"}), 200
-
-        with _get_conn_local() as cn:
-            cur = cn.cursor()
-            # Obtener o crear bloque PENDIENTE
-            bloque_row = cur.execute("""
-                SELECT TOP 1 id, bloque_num, hora_prog FROM itg.M5_AutoColor_BLOQUES
-                WHERE estado='PENDIENTE' ORDER BY hora_prog ASC
-            """).fetchone()
-            if not bloque_row:
-                from datetime import timedelta
-                manana7 = (_dt.now() + timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
-                cur.execute("SELECT ISNULL(MAX(bloque_num),0)+1 FROM itg.M5_AutoColor_BLOQUES")
-                nuevo_num = cur.fetchone()[0]
-                cur.execute("""
-                    INSERT INTO itg.M5_AutoColor_BLOQUES (bloque_num, hora_prog, timer_activo)
-                    OUTPUT INSERTED.id, INSERTED.bloque_num, INSERTED.hora_prog
-                    VALUES (?, ?, 1)
-                """, nuevo_num, manana7)
-                br = cur.fetchone()
-                bloque_id, bloque_num, hora_prog = br[0], br[1], br[2]
-            else:
-                bloque_id, bloque_num, hora_prog = bloque_row[0], bloque_row[1], bloque_row[2]
-
-            for it in items_a_enviar:
-                cur.execute("""
-                    INSERT INTO itg.M5_AutoColor_COLA
-                    (bloque_id, autocolor_zfer_id, zfer_base, color, color_nombre,
-                     zpla, franja, pn_base, nivel, tipo_pieza, cambiar_hr)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,0)
-                """, bloque_id, zfer_id, zfer_base,
-                    it["color"], it["color_nombre"], it["zpla"],
-                    shade_band, partnumber[:50], nivel[:10], piece_type[:10])
-
-            # Marcar ZFER como EN_COLA
-            cur.execute(
-                "UPDATE itg.M5_AutoColorZfer SET estado='EN_COLA' WHERE id=?", zfer_id
-            )
-
-        hora_str = hora_prog.strftime("%d/%m/%Y %H:%M") if hora_prog else ""
-        return jsonify({"ok": True, "n_agregados": len(items_a_enviar),
-                        "bloque_id": bloque_id, "bloque_num": bloque_num, "hora_prog": hora_str})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 200
-
-
-@app.route("/api/auto_color/bloques")
-@login_required
-def api_ac_bloques():
-    """Lista bloques + items de Auto Color."""
-    try:
-        with _get_conn_local() as cn:
-            cur = cn.cursor()
-            cur.execute("""
-                SELECT b.id, b.bloque_num, b.hora_prog, b.timer_activo, b.estado,
-                       b.creado_el, b.ejecutado_el, b.ok_count, b.error_count,
-                       COUNT(c.id) AS total,
-                       SUM(CASE WHEN c.estado='PENDIENTE' OR c.estado='EJECUTANDO' THEN 1 ELSE 0 END) AS pendientes
-                FROM itg.M5_AutoColor_BLOQUES b
-                LEFT JOIN itg.M5_AutoColor_COLA c ON c.bloque_id = b.id
-                GROUP BY b.id, b.bloque_num, b.hora_prog, b.timer_activo, b.estado,
-                         b.creado_el, b.ejecutado_el, b.ok_count, b.error_count
-                ORDER BY b.id DESC
-            """)
-            bloques_rows = cur.fetchall()
-
-        bloques = []
-        for r in bloques_rows:
-            bid = r[0]
-            # Cargar items del bloque
-            with _get_conn_local() as cn:
-                items_rows = cn.cursor().execute("""
-                    SELECT id, zfer_base, color, color_nombre, zpla, estado, zfer_nuevo, error_msg, ejecutado_el
-                    FROM itg.M5_AutoColor_COLA WHERE bloque_id=? ORDER BY id
-                """, bid).fetchall()
-            items = [{
-                "id": ir[0], "zfer_base": ir[1], "color": ir[2], "color_nombre": ir[3],
-                "zpla": ir[4], "estado": ir[5], "zfer_nuevo": ir[6] or "",
-                "error_msg": ir[7] or "",
-                "ejecutado_el": ir[8].strftime("%H:%M:%S") if ir[8] else "",
-            } for ir in items_rows]
-            bloques.append({
-                "id":           r[0], "bloque_num": r[1],
-                "hora_prog":    r[2].strftime("%d/%m/%Y %H:%M") if r[2] else "",
-                "timer_activo": bool(r[3]), "estado": r[4],
-                "ok_count":     r[7], "error_count": r[8],
-                "total":        r[9], "pendientes":  r[10],
-                "items":        items,
-            })
-        return jsonify({"ok": True, "bloques": bloques})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 200
-
-
-@app.route("/api/auto_color/ejecutar/<int:bloque_id>", methods=["POST"])
-@login_required
-def api_ac_ejecutar(bloque_id: int):
-    body    = request.get_json(force=True) or {}
-    usuario = str(body.get("usuario", "web"))[:50]
-    try:
-        with _get_conn_local() as cn:
-            row = cn.cursor().execute(
-                "SELECT estado FROM itg.M5_AutoColor_BLOQUES WHERE id=?", bloque_id
-            ).fetchone()
-        if not row:
-            return jsonify({"ok": False, "error": "Bloque no encontrado"}), 200
-        if row[0] == "EJECUTANDO":
-            return jsonify({"ok": False, "error": "Ya en ejecución"}), 200
-
-        ocupado_por = _sap_lock_ocupado_por_otro()
-        if ocupado_por:
-            return jsonify({"ok": False, "error": f"SAP ocupado por '{ocupado_por}' — espera a que termine"}), 200
-        if not _sap_bloque_lock.acquire(blocking=False):
-            return jsonify({"ok": False, "error": "Otro bloque (cola normal) está usando SAP ahora mismo"}), 200
-        _sap_bloque_lock.release()
-
-        if bloque_id not in _ac_scheduler_disparados:
-            _ac_scheduler_disparados.add(bloque_id)
-            threading.Thread(target=_autocolor_ejecutar_bloque, args=(bloque_id, usuario, ), daemon=True).start()
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 200
-
-
-@app.route("/api/auto_color/timer/<int:bloque_id>", methods=["POST"])
-@login_required
-def api_ac_timer(bloque_id: int):
-    body   = request.get_json(force=True) or {}
-    activo = 1 if body.get("activo") else 0
-    try:
-        with _get_conn_local() as cn:
-            cn.cursor().execute(
-                "UPDATE itg.M5_AutoColor_BLOQUES SET timer_activo=? WHERE id=?", activo, bloque_id
-            )
-        return jsonify({"ok": True, "timer_activo": bool(activo)})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 200
-
-
-@app.route("/api/auto_color/hora/<int:bloque_id>", methods=["POST"])
-@login_required
-def api_ac_hora(bloque_id: int):
-    body = request.get_json(force=True) or {}
-    hora_str = str(body.get("hora_prog", "")).strip()
-    try:
-        from datetime import datetime as _dtp
-        hora_dt = _dtp.strptime(hora_str, "%Y-%m-%dT%H:%M")
-        with _get_conn_local() as cn:
-            cn.cursor().execute(
-                "UPDATE itg.M5_AutoColor_BLOQUES SET hora_prog=?, estado='PENDIENTE', timer_activo=1 WHERE id=? AND estado='PENDIENTE'",
-                hora_dt, bloque_id
-            )
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 200
-
-
-@app.route("/api/auto_color/bloque/<int:bloque_id>", methods=["DELETE"])
-@login_required
-def api_ac_borrar_bloque(bloque_id: int):
-    try:
-        with _get_conn_local() as cn:
-            cur = cn.cursor()
-            row = cur.execute(
-                "SELECT estado FROM itg.M5_AutoColor_BLOQUES WHERE id=?", bloque_id
-            ).fetchone()
-            if row and row[0] == "EJECUTANDO":
-                return jsonify({"ok": False, "error": "No se puede borrar un bloque en ejecución"}), 200
-            cur.execute("DELETE FROM itg.M5_AutoColor_COLA WHERE bloque_id=?", bloque_id)
-            cur.execute("DELETE FROM itg.M5_AutoColor_BLOQUES WHERE id=?", bloque_id)
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 200
+# ── Integración Auto Color ────────────────────────────────────────────────────
+autocolor.init(
+    get_conn_local            = _get_conn_local,
+    sap_bloque_lock           = _sap_bloque_lock,
+    sap_lock_ocupado_por_otro = _sap_lock_ocupado_por_otro,
+    sap_lock_insertar_items   = _sap_lock_insertar_items,
+    sap_lock_keepalive        = _sap_lock_keepalive,
+    sap_lock_keepalive_loop   = _sap_lock_keepalive_loop,
+    sap_lock_limpiar_proyecto = _sap_lock_limpiar_proyecto,
+    colores_activos           = _COLORES_ACTIVOS,
+    colores_dict              = COLORES,
+    q_atributos               = q_atributos,
+    q_variantes_por_pn        = q_variantes_por_pn,
+    q_zplas_compatibles       = q_zplas_compatibles,
+    parsear_partnumber        = _parsear_partnumber,
+    hr_buscar_candidata       = _hr_buscar_candidata,
+)
+app.register_blueprint(autocolor.bp)
 
 
 @app.after_request
 def _set_content_length(response):
-    # Prevent browser tab from showing infinite spinner on dynamic HTML pages
     if response.content_type and "text/html" in response.content_type:
         if not response.is_streamed:
             response.headers["Content-Length"] = len(response.get_data())
@@ -6061,6 +5537,5 @@ def _set_content_length(response):
 
 
 if __name__ == "__main__":
-    print("\n  AGP Intelligence — MODULO 5")
-    print("  Abre tu navegador en: http://localhost:5000\n")
-    app.run(debug=True, host="0.0.0.0", port=5000, use_reloader=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+

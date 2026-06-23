@@ -127,57 +127,231 @@
 </div>
 
 <!-- ── Color automático ───────────────────────────────────────────────── -->
+<style>
+  /* ── Auto Color tab styles ─────────────────────────────────────────── */
+  .ac-add-bar {
+    display:flex; align-items:center; gap:.7rem; flex-wrap:wrap;
+    background:var(--card-bg); border:1px solid var(--border);
+    border-radius:14px; padding:1rem 1.4rem; margin-bottom:1.4rem;
+  }
+  .ac-add-label {
+    font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.08em; color:var(--muted); white-space:nowrap;
+  }
+  .ac-add-input {
+    flex:1; min-width:160px; max-width:220px;
+    background:var(--input-bg); border:1px solid var(--input-bdr);
+    color:var(--text); border-radius:9px; padding:.4rem 1rem;
+    font-size:.88rem; outline:none; font-family:monospace;
+    transition:border-color .15s;
+  }
+  .ac-add-input:focus { border-color:var(--accent2); }
+  .ac-add-btn {
+    background:var(--accent2); border:none; color:#fff;
+    border-radius:9px; padding:.42rem 1.1rem; font-size:.82rem;
+    font-weight:700; cursor:pointer; transition:opacity .15s; white-space:nowrap;
+  }
+  .ac-add-btn:hover { opacity:.85; }
+  .ac-add-msg { font-size:.78rem; }
+
+  /* ZFER cards grid */
+  .ac-zfers-grid {
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr));
+    gap:.9rem; margin-bottom:1.6rem;
+  }
+  .ac-zfer-card {
+    background:var(--card-bg); border:1px solid var(--border);
+    border-radius:14px; overflow:hidden;
+    transition:border-color .18s, box-shadow .18s;
+    display:flex; flex-direction:column;
+  }
+  .ac-zfer-card:hover { border-color:var(--accent2); box-shadow:0 0 0 1px var(--accent2)22; }
+  .ac-zfer-card.ac-en-cola { border-color:var(--ok-bdr)44; }
+
+  .ac-zfer-top {
+    padding:.85rem 1rem .7rem;
+    display:flex; align-items:flex-start; justify-content:space-between; gap:.5rem;
+  }
+  .ac-zfer-code {
+    font-size:1.05rem; font-weight:800; font-family:monospace;
+    color:var(--accent); letter-spacing:.02em; line-height:1.2;
+  }
+  .ac-zfer-meta { font-size:.72rem; color:var(--muted); margin-top:.2rem; }
+  .ac-zfer-badge-cola {
+    font-size:.68rem; font-weight:700; padding:.15rem .55rem;
+    border-radius:20px; white-space:nowrap;
+    background:var(--ok-bg); color:var(--ok-txt); border:1px solid var(--ok-bdr);
+  }
+  .ac-zfer-badge-pend {
+    font-size:.68rem; font-weight:700; padding:.15rem .55rem;
+    border-radius:20px; white-space:nowrap;
+    background:var(--tag-neutral-bg); color:var(--muted); border:1px solid var(--border);
+  }
+
+  /* Color swatches strip */
+  .ac-swatches {
+    padding:.5rem 1rem .6rem;
+    display:flex; flex-wrap:wrap; gap:.35rem; align-items:center;
+  }
+  .ac-swatch {
+    width:22px; height:22px; border-radius:50%;
+    border:1.5px solid rgba(255,255,255,.12);
+    cursor:default; flex-shrink:0; position:relative;
+    transition:transform .12s;
+  }
+  .ac-swatch:hover { transform:scale(1.25); z-index:1; }
+  .ac-swatch-tip {
+    position:absolute; bottom:calc(100% + 5px); left:50%; transform:translateX(-50%);
+    background:#1c1f26; border:1px solid var(--border);
+    color:var(--text); font-size:.65rem; white-space:nowrap;
+    padding:.2rem .45rem; border-radius:5px; pointer-events:none;
+    opacity:0; transition:opacity .12s;
+  }
+  .ac-swatch:hover .ac-swatch-tip { opacity:1; }
+  .ac-no-colors {
+    font-size:.78rem; color:var(--muted); font-style:italic; padding:.1rem 0;
+  }
+
+  /* Card footer with actions */
+  .ac-zfer-footer {
+    margin-top:auto; padding:.6rem 1rem;
+    border-top:1px solid var(--attr-row-border);
+    display:flex; align-items:center; justify-content:space-between; gap:.5rem;
+  }
+  .ac-count-pill {
+    font-size:.75rem; font-weight:700; color:var(--muted);
+  }
+  .ac-count-pill b { color:var(--text); }
+  .ac-btn-send {
+    background:var(--btn-go-bg); border:1px solid var(--btn-go-bdr);
+    color:var(--btn-go-txt); border-radius:8px; padding:.3rem .85rem;
+    font-size:.78rem; font-weight:700; cursor:pointer; white-space:nowrap;
+    transition:background .13s;
+  }
+  .ac-btn-send:hover { background:var(--btn-go-hov); }
+  .ac-btn-send:disabled { opacity:.35; cursor:not-allowed; }
+  .ac-btn-del {
+    background:transparent; border:1px solid var(--border);
+    color:var(--muted); border-radius:8px; padding:.3rem .6rem;
+    font-size:.78rem; cursor:pointer; transition:border-color .13s, color .13s;
+  }
+  .ac-btn-del:hover { border-color:var(--err-bdr); color:var(--err-txt); }
+
+  /* Section heading */
+  .ac-section-head {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:.8rem; padding-bottom:.5rem;
+    border-bottom:1px solid var(--divider);
+  }
+  .ac-section-title {
+    font-size:.78rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.08em; color:var(--muted); display:flex; align-items:center; gap:.45rem;
+  }
+  .ac-section-title i { color:var(--accent2); font-size:.85rem; }
+
+  /* AC block cards */
+  .ac-bloque-card {
+    background:var(--card-bg); border:1px solid var(--border);
+    border-radius:14px; overflow:hidden; margin-bottom:1rem;
+    border-left:3px solid var(--accent2);
+  }
+  .ac-bloque-card.ac-bc-eje { border-left-color:var(--warn-bdr); }
+  .ac-bloque-card.ac-bc-ok  { border-left-color:var(--ok-bdr); }
+  .ac-bloque-card.ac-bc-err { border-left-color:var(--err-bdr); }
+
+  .ac-bloque-head {
+    padding:.8rem 1.1rem; display:flex; align-items:center;
+    justify-content:space-between; flex-wrap:wrap; gap:.55rem;
+    background:var(--card-hdr-bg);
+  }
+  .ac-bloque-num {
+    font-size:.8rem; font-weight:800; color:var(--accent2);
+    text-transform:uppercase; letter-spacing:.06em;
+  }
+  .ac-bloque-actions { display:flex; gap:.35rem; align-items:center; flex-wrap:wrap; }
+
+  /* Item rows inside block */
+  .ac-item-row {
+    display:grid;
+    grid-template-columns:110px 1fr auto;
+    gap:.5rem; align-items:center;
+    padding:.5rem 1.1rem; border-top:1px solid var(--attr-row-border);
+    font-size:.8rem;
+  }
+  .ac-item-zfer { font-family:monospace; font-weight:700; color:var(--accent); }
+  .ac-item-color { display:flex; align-items:center; gap:.4rem; }
+  .ac-item-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; border:1px solid rgba(255,255,255,.15); }
+  .ac-item-state-ok   { color:var(--ok-txt);  font-size:.72rem; }
+  .ac-item-state-err  { color:var(--err-txt); font-size:.72rem; }
+  .ac-item-state-pend { color:var(--muted);   font-size:.72rem; }
+
+  /* empty AC */
+  .ac-empty {
+    text-align:center; padding:3rem 1rem; color:var(--muted);
+  }
+  .ac-empty-icon {
+    font-size:2.5rem; opacity:.25; display:block; margin-bottom:.7rem;
+  }
+  .ac-empty-text { font-size:.88rem; line-height:1.5; }
+  .ac-empty-hint { font-size:.75rem; margin-top:.3rem; opacity:.6; }
+  .ac-hr-row { display:flex; align-items:center; gap:.6rem; padding:.35rem .5rem; border-radius:7px; transition:background .12s; }
+  .ac-hr-row:hover { background:rgba(255,255,255,.03); }
+</style>
+
 <div id="tab-pane-ac" style="display:none;">
 
-  <!-- Agregar ZFER -->
-  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:14px; padding:1.1rem 1.4rem; margin-bottom:1.4rem;">
-    <div style="font-weight:700; font-size:.9rem; color:var(--text); margin-bottom:.75rem;">
-      <i class="bi bi-plus-circle me-2" style="color:#7c3aed;"></i>Agregar ZFER a la lista
-    </div>
-    <div style="display:flex; gap:.6rem; align-items:center; flex-wrap:wrap;">
-      <input id="ac-zfer-input" type="text" placeholder="Ej: 700179044"
-             style="background:var(--input-bg); border:1px solid var(--input-bdr); color:var(--text);
-                    border-radius:8px; padding:.35rem .8rem; font-size:.85rem; width:200px; outline:none;"
-             onkeydown="if(event.key==='Enter') _acAgregarZfer()" />
-      <button onclick="_acAgregarZfer()" class="btn-sm-purple">
-        <i class="bi bi-plus me-1"></i>Agregar
-      </button>
-      <span id="ac-add-msg" style="font-size:.8rem; color:var(--muted);"></span>
+  <!-- ── Barra de agregar ─────────────────────────────────────────── -->
+  <div class="ac-add-bar">
+    <span class="ac-add-label"><i class="bi bi-plus-circle me-1"></i>Agregar ZFER</span>
+    <input id="ac-zfer-input" type="text" class="ac-add-input"
+           placeholder="700179044" autocomplete="off" spellcheck="false"
+           onkeydown="if(event.key==='Enter') _acAgregarZfer()" />
+    <button onclick="_acAgregarZfer()" class="ac-add-btn">Agregar</button>
+    <span id="ac-add-msg" class="ac-add-msg"></span>
+    <div style="flex:1;"></div>
+    <button onclick="_acRefrescarZfers()" class="btn-sm-gray" title="Refrescar lista">
+      <i class="bi bi-arrow-clockwise"></i>
+    </button>
+  </div>
+
+  <!-- ── ZFERs en vigilancia ──────────────────────────────────────── -->
+  <div class="ac-section-head">
+    <span class="ac-section-title">
+      <i class="bi bi-eye"></i>En vigilancia
+    </span>
+    <span id="ac-zfers-count" style="font-size:.75rem; color:var(--muted);"></span>
+  </div>
+  <div id="ac-zfers-container">
+    <div class="ac-empty">
+      <span class="paso-spinner" style="width:26px;height:26px;border-width:2px;"></span>
     </div>
   </div>
 
-  <!-- Lista de ZFERs -->
-  <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:1.4rem;">
-    <div style="padding:.85rem 1.4rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
-      <span style="font-weight:700; font-size:.9rem; color:var(--text);">
-        <i class="bi bi-list-check me-2" style="color:#7c3aed;"></i>ZFERs registrados
-      </span>
-      <button onclick="_acRefrescarZfers()" class="btn-sm-gray" title="Refrescar">
+  <!-- ── Bloques de ejecución ─────────────────────────────────────── -->
+  <div class="ac-section-head" style="margin-top:.4rem;">
+    <span class="ac-section-title">
+      <i class="bi bi-layers"></i>Bloques de ejecución
+    </span>
+    <div style="display:flex;gap:.4rem;align-items:center;">
+      <button id="ac-btn-historial" onclick="_acToggleHistorial()"
+              style="font-size:.75rem;padding:.25rem .7rem;border-radius:7px;cursor:pointer;
+                     border:1px solid var(--attr-row-border);background:transparent;color:var(--muted);
+                     display:flex;align-items:center;gap:.3rem;transition:all .15s;">
+        <i class="bi bi-clock-history me-1"></i>Historial
+      </button>
+      <button onclick="_acRefrescarBloques()" class="btn-sm-gray" title="Refrescar bloques">
         <i class="bi bi-arrow-clockwise"></i>
       </button>
     </div>
-    <div id="ac-zfers-container">
-      <div class="empty-state"><span class="paso-spinner" style="width:22px;height:22px;border-width:2px;"></span></div>
+  </div>
+  <div id="ac-bloques-container">
+    <div class="ac-empty">
+      <i class="bi bi-palette2 ac-empty-icon"></i>
+      <div class="ac-empty-text">Sin bloques de ejecución</div>
+      <div class="ac-empty-hint">Agrega un ZFER arriba y haz clic en Enviar a Cola</div>
     </div>
   </div>
 
-  <!-- Bloques Auto Color -->
-  <div>
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.8rem;">
-      <span style="font-weight:700; font-size:.9rem; color:var(--text);">
-        <i class="bi bi-layers me-2" style="color:#7c3aed;"></i>Bloques de ejecución
-      </span>
-      <button onclick="_acRefrescarBloques()" class="btn-sm-gray" title="Refrescar">
-        <i class="bi bi-arrow-clockwise"></i>
-      </button>
-    </div>
-    <div id="ac-bloques-container">
-      <div class="empty-state">
-        <i class="bi bi-palette" style="opacity:.4;"></i>
-        <div style="font-size:.85rem; margin-top:.5rem;">Sin bloques aún — agrega ZFERs y haz clic en Enviar a Cola</div>
-      </div>
-    </div>
-  </div>
 </div>
 {% endblock %}
 
@@ -771,6 +945,22 @@ setInterval(() => {
 
 <!-- ── Auto Color JS ──────────────────────────────────────────────────────── -->
 <script>
+// Visual colors for each glass tint code
+const _AC_TINTS = {
+  "00": { bg:"#dce8ea", label:"Incoloro" },
+  "01": { bg:"#c8d4d0", label:"Gris Claro" },
+  "05": { bg:"#b8ccb4", label:"Verde Claro" },
+  "06": { bg:"#b0bfc8", label:"Azul Claro" },
+  "10": { bg:"#9eaaa8", label:"Gris Medio" },
+  "13": { bg:"#8a9490", label:"Gris Medio+" },
+  "18": { bg:"#7a9080", label:"Verde Medio" },
+  "19": { bg:"#909898", label:"Gris Automotriz" },
+  "20": { bg:"#787e80", label:"Gris Oscuro Claro" },
+  "21": { bg:"#505860", label:"Gris Oscuro" },
+  "22": { bg:"#445068", label:"Azul Oscuro" },
+  "23": { bg:"#3a4840", label:"Verde Oscuro" },
+};
+
 let _acZfers = [];
 
 async function _acCargar() {
@@ -780,227 +970,556 @@ async function _acCargar() {
 // ── ZFERs ─────────────────────────────────────────────────────────────────────
 async function _acRefrescarZfers() {
   const cont = document.getElementById('ac-zfers-container');
-  cont.innerHTML = `<div class="empty-state"><span class="paso-spinner" style="width:22px;height:22px;border-width:2px;"></span></div>`;
+  cont.innerHTML = `<div class="ac-empty"><span class="paso-spinner" style="width:24px;height:24px;border-width:2px;"></span></div>`;
   try {
     const d = await fetch('/api/auto_color/zfers').then(r => r.json());
-    if (!d.ok) { cont.innerHTML = `<div class="empty-state" style="color:var(--err-txt);">Error: ${d.error}</div>`; return; }
+    if (!d.ok) {
+      cont.innerHTML = `<div class="ac-empty" style="color:var(--err-txt);">Error: ${d.error}</div>`;
+      return;
+    }
     _acZfers = d.zfers || [];
+    const cnt = document.getElementById('ac-zfers-count');
+    if (cnt) cnt.textContent = _acZfers.length ? `${_acZfers.length} ZFER${_acZfers.length !== 1 ? 's' : ''}` : '';
     _acRenderZfers(_acZfers);
   } catch(e) {
-    cont.innerHTML = `<div class="empty-state" style="color:var(--err-txt);">Error de red</div>`;
+    cont.innerHTML = `<div class="ac-empty" style="color:var(--err-txt);">Error de red</div>`;
   }
+}
+
+function _acSwatchHtml(c) {
+  const tint = _AC_TINTS[c.color_codigo] || { bg:'#888', label: c.color_nombre };
+  return `<div class="ac-swatch" style="background:${tint.bg};" title="${c.color_codigo} — ${c.color_nombre}">
+    <span class="ac-swatch-tip">${c.color_codigo} ${tint.label}</span>
+  </div>`;
 }
 
 function _acRenderZfers(zfers) {
   const cont = document.getElementById('ac-zfers-container');
   if (!zfers.length) {
-    cont.innerHTML = `<div class="empty-state"><i class="bi bi-inbox" style="font-size:2rem; opacity:.4;"></i><div style="margin-top:.5rem; font-size:.85rem;">Sin ZFERs registrados — agrega uno arriba</div></div>`;
+    cont.innerHTML = `<div class="ac-empty">
+      <i class="bi bi-eye-slash ac-empty-icon"></i>
+      <div class="ac-empty-text">Ningún ZFER en vigilancia</div>
+      <div class="ac-empty-hint">Escribe el código arriba y presiona Agregar</div>
+    </div>`;
     return;
   }
-  cont.innerHTML = zfers.map(z => {
-    const estadoChip = z.estado === 'EN_COLA'
-      ? `<span style="background:var(--info-bg);color:var(--info-txt);border:1px solid var(--info-bdr);border-radius:20px;font-size:.7rem;font-weight:700;padding:.1rem .5rem;">En cola</span>`
-      : `<span style="background:var(--tag-neutral-bg);color:var(--tag-neutral-txt);border:1px solid var(--tag-neutral-bdr);border-radius:20px;font-size:.7rem;font-weight:700;padding:.1rem .5rem;">Pendiente</span>`;
-    const coloresHtml = z.colores.length
-      ? z.colores.map(c => `<span style="background:var(--tag-neutral-bg);color:var(--muted);border:1px solid var(--tag-neutral-bdr);border-radius:20px;font-size:.68rem;padding:.05rem .45rem;white-space:nowrap;">${c.color_codigo} — ${c.color_nombre}</span>`).join(' ')
-      : `<span style="color:var(--muted); font-size:.78rem;">Sin colores disponibles</span>`;
-    const puedeEnviar = z.n_colores > 0 && z.estado !== 'EN_COLA';
-    return `
-    <div style="padding:.75rem 1.4rem; border-bottom:1px solid var(--attr-row-border); display:flex; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
-      <div style="min-width:110px;">
-        <div style="font-weight:700; color:var(--accent); font-size:.88rem;">${z.zfer_base}</div>
-        <div style="font-size:.72rem; color:var(--muted); margin-top:.15rem;">${z.cargado_el}</div>
+  cont.innerHTML = `<div class="ac-zfers-grid">${zfers.map(z => {
+    const enCola = z.estado === 'EN_COLA';
+    const badge  = enCola
+      ? `<span class="ac-zfer-badge-cola"><i class="bi bi-check2 me-1"></i>En cola</span>`
+      : `<span class="ac-zfer-badge-pend">Pendiente</span>`;
+    const swatches = z.colores.length
+      ? z.colores.map(c => _acSwatchHtml(c)).join('')
+      : `<span class="ac-no-colors">Sin colores disponibles</span>`;
+    const canSend = z.n_colores > 0 && !enCola;
+    return `<div class="ac-zfer-card ${enCola ? 'ac-en-cola' : ''}">
+      <div class="ac-zfer-top">
+        <div>
+          <div class="ac-zfer-code">${z.zfer_base}</div>
+          <div class="ac-zfer-meta">Cargado ${z.cargado_el}</div>
+        </div>
+        ${badge}
       </div>
-      <div style="flex:1; display:flex; flex-wrap:wrap; gap:.3rem; align-items:center;">
-        ${estadoChip}
-        <span style="font-size:.78rem; color:var(--muted); margin:0 .3rem;">${z.n_colores} color${z.n_colores !== 1 ? 'es' : ''} disponible${z.n_colores !== 1 ? 's' : ''}</span>
-        ${coloresHtml}
-      </div>
-      <div style="display:flex; gap:.4rem; align-items:center; flex-shrink:0;">
-        ${puedeEnviar
-          ? `<button onclick="_acEnviar(${z.id})" class="btn-sm-go"><i class="bi bi-send me-1"></i>Enviar a Cola</button>`
-          : `<button disabled style="opacity:.4; cursor:not-allowed;" class="btn-sm-go"><i class="bi bi-send me-1"></i>Enviar a Cola</button>`}
-        <button onclick="_acEliminar(${z.id})" class="btn-sm-red" title="Eliminar"><i class="bi bi-trash"></i></button>
+      <div class="ac-swatches">${swatches}</div>
+      <div class="ac-zfer-footer">
+        <span class="ac-count-pill">
+          <b>${z.n_colores}</b> color${z.n_colores !== 1 ? 'es' : ''} disponible${z.n_colores !== 1 ? 's' : ''}
+        </span>
+        <div style="display:flex;gap:.35rem;">
+          <button class="ac-btn-send" onclick="_acEnviar(${z.id})" ${canSend ? '' : 'disabled'}>
+            <i class="bi bi-send me-1"></i>Enviar a Cola
+          </button>
+          <button class="ac-btn-del" onclick="_acEliminar(${z.id})" title="Quitar de vigilancia">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
       </div>
     </div>`;
-  }).join('');
+  }).join('')}</div>`;
 }
 
 async function _acAgregarZfer() {
   const inp = document.getElementById('ac-zfer-input');
   const msg = document.getElementById('ac-add-msg');
   const zfer = inp.value.trim();
-  if (!zfer) return;
-  msg.textContent = 'Agregando…';
+  if (!zfer) { inp.focus(); return; }
+  msg.textContent = 'Verificando…'; msg.style.color = 'var(--muted)';
   try {
     const d = await fetch('/api/auto_color/zfer', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ zfer })
     }).then(r => r.json());
     if (d.ok) {
       inp.value = '';
       msg.textContent = `✓ ${zfer} agregado`;
       msg.style.color = 'var(--ok-txt)';
-      setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+      setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3500);
       _acRefrescarZfers();
     } else {
-      msg.textContent = d.error || 'Error';
+      msg.textContent = d.error || 'Error desconocido';
       msg.style.color = 'var(--err-txt)';
     }
   } catch(e) {
-    msg.textContent = 'Error de red';
-    msg.style.color = 'var(--err-txt)';
+    msg.textContent = 'Error de red'; msg.style.color = 'var(--err-txt)';
   }
 }
 
 async function _acEliminar(zfer_id) {
-  if (!confirm('¿Eliminar este ZFER de la lista?')) return;
-  await fetch(`/api/auto_color/zfer/${zfer_id}`, { method: 'DELETE' });
+  const z = _acZfers.find(x => x.id === zfer_id);
+  if (!confirm(`¿Quitar ${z ? z.zfer_base : 'este ZFER'} de la lista de vigilancia?`)) return;
+  await fetch(`/api/auto_color/zfer/${zfer_id}`, { method:'DELETE' });
   _acRefrescarZfers();
 }
 
-async function _acEnviar(zfer_id) {
+function _acEnviar(zfer_id) {
   const z = _acZfers.find(x => x.id === zfer_id);
-  const label = z ? z.zfer_base : zfer_id;
-  if (!confirm(`¿Enviar los ${z ? z.n_colores : ''} colores disponibles de ${label} a la cola de homologación?`)) return;
+  if (!z) return;
+  // Mostrar modal preguntando por hoja de ruta
+  _acMostrarModalHR(z, zfer_id);
+}
+
+function _acMostrarModalHR(z, zfer_id) {
+  const old = document.getElementById('ac-hr-modal');
+  if (old) old.remove();
+
+  // Construir filas de colores con toggle HR individual
+  const coloresRows = z.colores.map(c => {
+    const tint = _AC_TINTS[c.color_codigo] || { bg:'#888' };
+    return `
+    <div class="ac-hr-row" data-cod="${c.color_codigo}">
+      <span style="display:inline-flex;align-items:center;gap:.5rem;flex:1;min-width:0;">
+        <span style="width:13px;height:13px;border-radius:50%;background:${tint.bg};flex-shrink:0;border:1px solid rgba(255,255,255,.15);"></span>
+        <span style="font-size:.8rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          <b>${c.color_codigo}</b> — ${c.color_nombre}
+        </span>
+      </span>
+      <div style="display:flex;gap:.3rem;flex-shrink:0;">
+        <button class="ac-hr-btn ac-hr-si" onclick="_acHRToggle('${c.color_codigo}',true,this)"
+                style="font-size:.72rem;padding:.2rem .55rem;border-radius:6px;cursor:pointer;border:1px solid var(--attr-row-border);background:transparent;color:var(--muted);transition:all .12s;">
+          <i class="bi bi-check2"></i> Sí
+        </button>
+        <button class="ac-hr-btn ac-hr-no" onclick="_acHRToggle('${c.color_codigo}',false,this)"
+                style="font-size:.72rem;padding:.2rem .55rem;border-radius:6px;cursor:pointer;border:1px solid var(--accent);background:rgba(0,194,255,.08);color:var(--accent);transition:all .12s;">
+          <i class="bi bi-x"></i> No
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'ac-hr-modal';
+  modal.style.cssText = `
+    position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.65);backdrop-filter:blur(3px);
+  `;
+  modal.innerHTML = `
+    <div style="background:var(--card-bg);border:1px solid var(--attr-row-border);border-radius:14px;
+                padding:1.6rem 1.8rem;max-width:460px;width:94%;box-shadow:0 8px 40px rgba(0,0,0,.5);
+                max-height:85vh;display:flex;flex-direction:column;">
+
+      <div style="font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:.25rem;">
+        <i class="bi bi-send me-2" style="color:var(--accent);"></i>Enviar a cola — ${z.zfer_base}
+      </div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:1rem;">
+        Indica por cada color si requiere cambio de hoja de ruta tras la homologación.
+      </div>
+
+      <div style="background:var(--bg);border:1px solid var(--attr-row-border);border-radius:10px;
+                  padding:.6rem .8rem;margin-bottom:.8rem;flex-shrink:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
+          <span style="font-size:.75rem;color:var(--muted);">
+            <i class="bi bi-signpost-split me-1" style="color:#7c3aed;"></i>¿Requieren cambio de hoja de ruta?
+          </span>
+          <div style="display:flex;gap:.4rem;">
+            <button onclick="_acHRTodos(true)"
+                    style="font-size:.7rem;padding:.15rem .55rem;border-radius:5px;cursor:pointer;
+                           border:1px solid #7c3aed;background:rgba(124,58,237,.1);color:#a78bfa;">
+              Todos Sí
+            </button>
+            <button onclick="_acHRTodos(false)"
+                    style="font-size:.7rem;padding:.15rem .55rem;border-radius:5px;cursor:pointer;
+                           border:1px solid var(--attr-row-border);background:transparent;color:var(--muted);">
+              Todos No
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:.3rem;margin-bottom:1rem;">
+        ${coloresRows}
+      </div>
+
+      <div style="display:flex;gap:.6rem;justify-content:flex-end;flex-shrink:0;">
+        <button onclick="document.getElementById('ac-hr-modal').remove()"
+                style="background:transparent;border:1px solid var(--attr-row-border);color:var(--muted);
+                       border-radius:8px;padding:.4rem .9rem;font-size:.82rem;cursor:pointer;">
+          Cancelar
+        </button>
+        <button id="ac-hr-confirmar" onclick="_acEnviarConfirmar(${zfer_id})"
+                style="background:var(--accent);color:#000;border:none;border-radius:8px;
+                       padding:.4rem 1.1rem;font-size:.82rem;font-weight:700;cursor:pointer;">
+          <i class="bi bi-send me-1"></i>Confirmar envío
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  // Estado inicial: todos en No
+  window._acHRMap = {};
+  z.colores.forEach(c => { window._acHRMap[c.color_codigo] = false; });
+}
+
+function _acHRToggle(cod, val, btnEl) {
+  window._acHRMap[cod] = val;
+  // Actualizar estilos de los dos botones de esa fila
+  const row = btnEl.closest('.ac-hr-row');
+  if (!row) return;
+  const si = row.querySelector('.ac-hr-si');
+  const no = row.querySelector('.ac-hr-no');
+  if (val) {
+    si.style.borderColor = '#7c3aed'; si.style.background = 'rgba(124,58,237,.15)'; si.style.color = '#a78bfa';
+    no.style.borderColor = 'var(--attr-row-border)'; no.style.background = 'transparent'; no.style.color = 'var(--muted)';
+  } else {
+    no.style.borderColor = 'var(--accent)'; no.style.background = 'rgba(0,194,255,.08)'; no.style.color = 'var(--accent)';
+    si.style.borderColor = 'var(--attr-row-border)'; si.style.background = 'transparent'; si.style.color = 'var(--muted)';
+  }
+}
+
+function _acHRTodos(val) {
+  document.querySelectorAll('.ac-hr-row').forEach(row => {
+    const cod = row.dataset.cod;
+    window._acHRMap[cod] = val;
+    const si = row.querySelector('.ac-hr-si');
+    const no = row.querySelector('.ac-hr-no');
+    if (val) {
+      si.style.borderColor = '#7c3aed'; si.style.background = 'rgba(124,58,237,.15)'; si.style.color = '#a78bfa';
+      no.style.borderColor = 'var(--attr-row-border)'; no.style.background = 'transparent'; no.style.color = 'var(--muted)';
+    } else {
+      no.style.borderColor = 'var(--accent)'; no.style.background = 'rgba(0,194,255,.08)'; no.style.color = 'var(--accent)';
+      si.style.borderColor = 'var(--attr-row-border)'; si.style.background = 'transparent'; si.style.color = 'var(--muted)';
+    }
+  });
+}
+
+async function _acEnviarConfirmar(zfer_id) {
+  const modal = document.getElementById('ac-hr-modal');
+  const btn   = document.getElementById('ac-hr-confirmar');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="paso-spinner" style="width:10px;height:10px;border-width:2px;"></span>'; }
   try {
     const d = await fetch(`/api/auto_color/enviar/${zfer_id}`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ usuario: '{{ session.get("usuario","web") }}' })
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        usuario:      '{{ session.get("usuario","web") }}',
+        hr_por_color: window._acHRMap || {},
+      })
     }).then(r => r.json());
+    if (modal) modal.remove();
     if (d.ok) {
-      alert(`✓ ${d.n_agregados} colores enviados al Bloque ${d.bloque_num} · ${d.hora_prog}`);
       await Promise.all([_acRefrescarZfers(), _acRefrescarBloques()]);
     } else {
       alert('Error: ' + (d.error || 'desconocido'));
     }
   } catch(e) {
+    if (modal) modal.remove();
     alert('Error de red');
   }
 }
 
 // ── Bloques ───────────────────────────────────────────────────────────────────
+let _acMostrarHistorial = false;
+
 async function _acRefrescarBloques() {
   const cont = document.getElementById('ac-bloques-container');
   try {
     const d = await fetch('/api/auto_color/bloques').then(r => r.json());
-    if (!d.ok || !d.bloques.length) {
-      cont.innerHTML = `<div class="empty-state"><i class="bi bi-palette" style="opacity:.4;"></i><div style="font-size:.85rem; margin-top:.5rem;">Sin bloques aún</div></div>`;
+    if (!d.ok) { cont.innerHTML = `<div class="ac-empty" style="color:var(--err-txt);">Error cargando bloques</div>`; return; }
+
+    const activos    = (d.bloques || []).filter(b => b.estado === 'PENDIENTE' || b.estado === 'EJECUTANDO');
+    const historial  = (d.bloques || []).filter(b => b.estado === 'COMPLETADO' || b.estado === 'ERROR');
+
+    // Actualizar contador del botón historial
+    const btnHist = document.getElementById('ac-btn-historial');
+    if (btnHist) btnHist.innerHTML = `<i class="bi bi-clock-history me-1"></i>Historial <span style="background:rgba(255,255,255,.12);border-radius:10px;padding:.05rem .4rem;font-size:.68rem;margin-left:.2rem;">${historial.length}</span>`;
+
+    const bloques = _acMostrarHistorial ? historial : activos;
+
+    if (!bloques.length) {
+      cont.innerHTML = _acMostrarHistorial
+        ? `<div class="ac-empty"><i class="bi bi-clock-history ac-empty-icon"></i><div class="ac-empty-text">Sin ejecuciones anteriores</div></div>`
+        : `<div class="ac-empty"><i class="bi bi-palette2 ac-empty-icon"></i><div class="ac-empty-text">Sin bloques pendientes</div><div class="ac-empty-hint">Agrega un ZFER y envíalo a la cola</div></div>`;
       return;
     }
-    cont.innerHTML = d.bloques.map(b => _acRenderBloque(b)).join('');
+    cont.innerHTML = bloques.map(b => _acRenderBloque(b)).join('');
   } catch(e) {
-    cont.innerHTML = `<div class="empty-state" style="color:var(--err-txt);">Error cargando bloques</div>`;
+    cont.innerHTML = `<div class="ac-empty" style="color:var(--err-txt);">Error cargando bloques</div>`;
   }
 }
 
+function _acToggleHistorial() {
+  _acMostrarHistorial = !_acMostrarHistorial;
+  const btn = document.getElementById('ac-btn-historial');
+  if (btn) {
+    btn.style.borderColor = _acMostrarHistorial ? 'var(--accent)' : 'var(--attr-row-border)';
+    btn.style.color       = _acMostrarHistorial ? 'var(--accent)' : 'var(--muted)';
+    btn.style.background  = _acMostrarHistorial ? 'rgba(0,194,255,.08)' : 'transparent';
+  }
+  _acRefrescarBloques();
+}
+
+function _acBloqueClase(estado) {
+  if (estado === 'EJECUTANDO') return 'ac-bc-eje';
+  if (estado === 'COMPLETADO') return 'ac-bc-ok';
+  if (estado === 'ERROR')      return 'ac-bc-err';
+  return '';
+}
+function _acBloqueEstadoBadge(b) {
+  if (b.estado === 'EJECUTANDO') return `<span class="bloque-badge-eje"><span class="paso-spinner" style="width:8px;height:8px;border-width:1.5px;margin-right:4px;"></span>Ejecutando</span>`;
+  if (b.estado === 'COMPLETADO') return `<span class="bloque-badge-ok">✓ Completado</span>`;
+  if (b.estado === 'ERROR')      return `<span class="bloque-badge-err">✗ Error</span>`;
+  return `<span class="bloque-badge-pend">Pendiente</span>`;
+}
+
 function _acRenderBloque(b) {
-  const estadoCls = b.estado === 'COMPLETADO' ? 'bloque-badge-ok'
-                  : b.estado === 'EJECUTANDO' ? 'bloque-badge-eje'
-                  : b.estado === 'ERROR'       ? 'bloque-badge-err'
-                  : 'bloque-badge-pend';
-  const timerHtml = b.estado === 'PENDIENTE'
-    ? `<label class="timer-toggle" title="${b.timer_activo ? 'Desactivar timer' : 'Activar timer'}" onclick="_acToggleTimer(${b.id}, ${!b.timer_activo}, this)">
-         <span class="timer-dot ${b.timer_activo ? 'timer-on' : 'timer-off'}"></span>
-         <span>Timer ${b.timer_activo ? 'activo' : 'inactivo'}</span>
-       </label>
-       <input type="datetime-local" class="hora-input" value="${_acFmtHora(b.hora_prog)}"
-              onchange="_acCambiarHora(${b.id}, this.value)" />` : '';
-  const btnEjec = (b.estado === 'PENDIENTE' || b.estado === 'ERROR')
-    ? `<button onclick="_acEjecutar(${b.id})" class="btn-sm-go"><i class="bi bi-play-fill me-1"></i>Ejecutar ahora</button>` : '';
-  const btnBorrar = b.estado !== 'EJECUTANDO'
+  const btnReport = (b.estado === 'COMPLETADO' || b.estado === 'ERROR')
+    ? `<button onclick="_acVerReporte(${b.id})"
+              style="font-size:.75rem;padding:.25rem .7rem;border-radius:7px;cursor:pointer;
+                     border:1px solid #7c3aed;background:rgba(124,58,237,.12);color:#a78bfa;
+                     display:flex;align-items:center;gap:.3rem;white-space:nowrap;transition:all .15s;">
+        <i class="bi bi-bar-chart-line"></i> Reporte
+      </button>` : '';
+  const btnRun = (b.estado === 'PENDIENTE' || b.estado === 'ERROR')
+    ? `<button onclick="_acEjecutar(${b.id})" class="btn-sm-go"><i class="bi bi-play-fill me-1"></i>Ejecutar</button>` : '';
+  const btnReset = b.estado === 'EJECUTANDO'
+    ? `<button onclick="_acResetBloque(${b.id})" title="El servidor se apagó mientras ejecutaba — resetear para poder reintentar o borrar"
+              style="font-size:.75rem;padding:.25rem .65rem;border-radius:7px;cursor:pointer;
+                     border:1px solid var(--warn-bdr,#d97706);background:rgba(217,119,6,.1);
+                     color:#fbbf24;display:flex;align-items:center;gap:.3rem;white-space:nowrap;">
+        <i class="bi bi-arrow-counterclockwise"></i> Resetear
+      </button>` : '';
+  const btnDel = b.estado !== 'EJECUTANDO'
     ? `<button onclick="_acBorrarBloque(${b.id})" class="btn-sm-red"><i class="bi bi-trash me-1"></i>Borrar</button>` : '';
 
+  const hrBadge = b.cambiar_hr
+    ? `<span style="background:rgba(124,58,237,.15);color:#a78bfa;border:1px solid rgba(124,58,237,.35);
+                   border-radius:20px;font-size:.68rem;font-weight:600;padding:.1rem .5rem;white-space:nowrap;">
+         <i class="bi bi-signpost-split me-1"></i>Con HR
+       </span>`
+    : `<span style="background:var(--tag-neutral-bg);color:var(--muted);border:1px solid var(--tag-neutral-bdr);
+                   border-radius:20px;font-size:.68rem;padding:.1rem .5rem;white-space:nowrap;">Sin HR</span>`;
+
+  const total   = b.total || 0;
+  const done    = (b.ok_count||0) + (b.error_count||0);
+  const pct     = total > 0 ? Math.round(done / total * 100) : 0;
+  const progBar = total > 0 ? `
+    <div style="flex:1;height:4px;background:var(--pct-bar-bg);border-radius:3px;overflow:hidden;min-width:60px;">
+      <div style="height:100%;width:${pct}%;background:${b.error_count>0?'var(--err-bdr)':'var(--ok-bdr)'};border-radius:3px;transition:width .4s;"></div>
+    </div>
+    <span style="font-size:.7rem;color:var(--muted);white-space:nowrap;">${done}/${total}</span>` : '';
+
   const itemsHtml = b.items.map(it => {
-    const estHtml = it.estado === 'OK'
-      ? `<span class="item-estado-ok"><i class="bi bi-check-circle-fill me-1"></i>OK → ${it.zfer_nuevo}</span>`
-      : it.estado === 'ERROR'
-      ? `<span class="item-estado-err" title="${it.error_msg}"><i class="bi bi-x-circle-fill me-1"></i>Error</span>`
-      : it.estado === 'EJECUTANDO'
-      ? `<span class="item-estado-pend"><span class="paso-spinner" style="width:10px;height:10px;border-width:2px;margin-right:4px;"></span>Ejecutando…</span>`
-      : `<span class="item-estado-pend"><i class="bi bi-hourglass me-1"></i>Pendiente</span>`;
-    return `<div class="item-row">
-      <span class="item-zfer">${it.zfer_base}</span>
-      <span class="item-color">${it.color} — ${it.color_nombre}</span>
-      <span style="color:var(--muted); font-size:.72rem;">${it.zpla}</span>
-      <span style="flex:1;"></span>
-      ${estHtml}
+    const tint = _AC_TINTS[it.color] || { bg:'#888' };
+    let stateHtml;
+    if      (it.estado === 'OK')         stateHtml = `<span class="ac-item-state-ok"><i class="bi bi-check-circle-fill me-1"></i>${it.zfer_nuevo||'OK'}</span>`;
+    else if (it.estado === 'ERROR')      stateHtml = `<span class="ac-item-state-err" title="${it.error_msg}"><i class="bi bi-x-circle-fill me-1"></i>Error</span>`;
+    else if (it.estado === 'EJECUTANDO') stateHtml = `<span class="ac-item-state-pend"><span class="paso-spinner" style="width:9px;height:9px;border-width:1.5px;margin-right:4px;"></span>Ejecutando…</span>`;
+    else                                 stateHtml = `<span class="ac-item-state-pend"><i class="bi bi-hourglass me-1"></i>Pendiente</span>`;
+    return `<div class="ac-item-row">
+      <span class="ac-item-zfer">${it.zfer_base}</span>
+      <span class="ac-item-color">
+        <span class="ac-item-dot" style="background:${tint.bg};"></span>
+        <span style="color:var(--muted);font-size:.75rem;">${it.color} — ${it.color_nombre}</span>
+      </span>
+      ${stateHtml}
     </div>`;
   }).join('');
 
-  return `<div class="bloque-card">
-    <div class="bloque-header">
-      <div style="display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;">
-        <span style="font-weight:800; font-size:.9rem; color:var(--text);">
-          <i class="bi bi-palette me-1" style="color:#7c3aed;"></i>Bloque ${b.bloque_num}
-        </span>
-        <span class="${estadoCls}">${b.estado}</span>
-        ${b.estado==='COMPLETADO' ? `<span class="bloque-badge-ok">${b.ok_count} OK</span>` : ''}
-        ${b.estado==='COMPLETADO' && b.error_count > 0 ? `<span class="bloque-badge-err">${b.error_count} errores</span>` : ''}
-        <span class="bloque-badge-pend" style="background:transparent;">${b.total} ítems</span>
-        ${timerHtml}
+  return `<div class="ac-bloque-card ${_acBloqueClase(b.estado)}">
+    <div class="ac-bloque-head">
+      <div style="display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;">
+        <span class="ac-bloque-num"><i class="bi bi-palette me-1"></i>AC · Bloque ${b.bloque_num}</span>
+        ${_acBloqueEstadoBadge(b)}
+        ${hrBadge}
+        ${b.estado==='COMPLETADO'&&b.ok_count ? `<span class="bloque-badge-ok">${b.ok_count} OK</span>` : ''}
+        ${b.error_count > 0 ? `<span class="bloque-badge-err">${b.error_count} err</span>` : ''}
+        <span style="font-size:.7rem;color:var(--muted);">${b.total} ítems</span>
+        ${progBar}
       </div>
-      <div style="display:flex; gap:.4rem; align-items:center; flex-wrap:wrap;">
-        ${btnEjec} ${btnBorrar}
-      </div>
+      <div class="ac-bloque-actions">${btnReport}${btnRun}${btnReset}${btnDel}</div>
     </div>
     ${itemsHtml}
   </div>`;
 }
 
-function _acFmtHora(str) {
-  if (!str) return '';
-  // str = "DD/MM/YYYY HH:MM" → "YYYY-MM-DDTHH:MM"
-  const [fecha, hora] = str.split(' ');
-  if (!fecha || !hora) return '';
-  const [d, m, y] = fecha.split('/');
-  return `${y}-${m}-${d}T${hora}`;
-}
-
-async function _acToggleTimer(bid, activo, el) {
-  await fetch(`/api/auto_color/timer/${bid}`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ activo })
-  });
-  _acRefrescarBloques();
-}
-
-async function _acCambiarHora(bid, val) {
-  await fetch(`/api/auto_color/hora/${bid}`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ hora_prog: val })
-  });
-}
-
 async function _acEjecutar(bid) {
   const d = await fetch(`/api/auto_color/ejecutar/${bid}`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({})
+    method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'
   }).then(r => r.json());
   if (!d.ok) { alert('Error: ' + (d.error||'desconocido')); return; }
-  setTimeout(_acRefrescarBloques, 800);
+  setTimeout(_acRefrescarBloques, 700);
   setTimeout(_acRefrescarBloques, 3000);
 }
-
-async function _acBorrarBloque(bid) {
-  if (!confirm('¿Borrar este bloque y todos sus ítems?')) return;
-  const d = await fetch(`/api/auto_color/bloque/${bid}`, { method: 'DELETE' }).then(r => r.json());
+async function _acResetBloque(bid) {
+  if (!confirm('¿Resetear este bloque?\n\nEl bloque pasará a ERROR y los ítems pendientes quedarán listos para reintentar.\n\nUsa esto cuando el servidor se apagó mientras ejecutaba.')) return;
+  const d = await fetch(`/api/auto_color/bloque/${bid}/reset`, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' }).then(r => r.json());
   if (!d.ok) { alert('Error: ' + (d.error||'')); return; }
   _acRefrescarBloques();
 }
 
-// Auto-refresh cuando la pestaña está activa y hay bloques EJECUTANDO
+async function _acBorrarBloque(bid) {
+  if (!confirm('¿Borrar este bloque y todos sus ítems?')) return;
+  const d = await fetch(`/api/auto_color/bloque/${bid}`, { method:'DELETE' }).then(r => r.json());
+  if (!d.ok) { alert('Error: ' + (d.error||'')); return; }
+  _acRefrescarBloques();
+}
+
+// ── Reporte visual ────────────────────────────────────────────────────────────
+async function _acVerReporte(bloque_id) {
+  const old = document.getElementById('ac-reporte-modal');
+  if (old) old.remove();
+
+  // Skeleton mientras carga
+  const modal = document.createElement('div');
+  modal.id = 'ac-reporte-modal';
+  modal.style.cssText = `position:fixed;inset:0;z-index:9999;display:flex;align-items:center;
+    justify-content:center;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);`;
+  modal.innerHTML = `<div style="background:var(--card-bg);border-radius:18px;padding:2rem;
+    width:min(720px,96vw);max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.6);
+    border:1px solid var(--attr-row-border);">
+    <div style="text-align:center;padding:2rem;color:var(--muted);">
+      <span class="paso-spinner" style="width:28px;height:28px;border-width:3px;"></span>
+    </div></div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  try {
+    const d = await fetch(`/api/auto_color/bloque/${bloque_id}/reporte`).then(r => r.json());
+    if (!d.ok) { modal.remove(); alert('Error: ' + d.error); return; }
+    const b = d.bloque, items = d.items;
+    const pct = b.total > 0 ? Math.round(b.ok_count / b.total * 100) : 0;
+    const dur = b.duracion_seg != null ? _acFmtDur(b.duracion_seg) : '—';
+
+    // Donut SVG
+    const r = 52, cx = 64, cy = 64, circ = 2 * Math.PI * r;
+    const okArc  = circ * (b.ok_count / (b.total || 1));
+    const errArc = circ * (b.error_count / (b.total || 1));
+    const donut = `<svg width="128" height="128" viewBox="0 0 128 128">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="14"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#22c55e" stroke-width="14"
+              stroke-dasharray="${okArc} ${circ}" stroke-dashoffset="${circ/4}"
+              stroke-linecap="round" style="transition:stroke-dasharray .8s ease;"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#ef4444" stroke-width="14"
+              stroke-dasharray="${errArc} ${circ}" stroke-dashoffset="${circ/4 - okArc}"
+              stroke-linecap="round" style="transition:stroke-dasharray .8s ease;"/>
+      <text x="${cx}" y="${cy - 6}" text-anchor="middle" fill="white"
+            font-size="22" font-weight="800" font-family="system-ui">${pct}%</text>
+      <text x="${cx}" y="${cy + 14}" text-anchor="middle" fill="rgba(255,255,255,.45)"
+            font-size="10" font-family="system-ui">éxito</text>
+    </svg>`;
+
+    // Tarjetas de colores
+    const cards = items.map(it => {
+      const tint   = _AC_TINTS[it.color] || { bg:'#888' };
+      const isOk   = it.estado === 'OK';
+      const isErr  = it.estado === 'ERROR';
+      const bdr    = isOk ? '#22c55e' : isErr ? '#ef4444' : 'rgba(255,255,255,.08)';
+      const icon   = isOk ? `<i class="bi bi-check-circle-fill" style="color:#22c55e;font-size:.9rem;"></i>`
+                   : isErr ? `<i class="bi bi-x-circle-fill" style="color:#ef4444;font-size:.9rem;"></i>`
+                   : `<i class="bi bi-hourglass" style="color:var(--muted);font-size:.9rem;"></i>`;
+      const sub    = isOk
+        ? `<span style="font-size:.7rem;color:#4ade80;margin-top:.2rem;display:block;">→ ${it.zfer_nuevo}</span>`
+        : isErr
+        ? `<span style="font-size:.68rem;color:#fca5a5;margin-top:.2rem;display:block;word-break:break-word;" title="${it.error_msg}">${it.error_msg.slice(0,60)}${it.error_msg.length>60?'…':''}</span>`
+        : '';
+      return `<div style="background:var(--bg);border:1px solid ${bdr};border-radius:11px;
+                          padding:.7rem .85rem;display:flex;flex-direction:column;gap:.15rem;
+                          transition:transform .15s;" onmouseover="this.style.transform='translateY(-2px)'"
+                          onmouseout="this.style.transform=''">
+        <div style="display:flex;align-items:center;gap:.5rem;">
+          <span style="width:14px;height:14px;border-radius:50%;background:${tint.bg};flex-shrink:0;
+                       border:1.5px solid rgba(255,255,255,.2);box-shadow:0 0 6px ${tint.bg}66;"></span>
+          <span style="font-size:.78rem;font-weight:700;color:var(--text);">${it.color}</span>
+          <span style="flex:1;font-size:.72rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.color_nombre}</span>
+          ${icon}
+        </div>
+        ${sub}
+        ${it.ejecutado_el ? `<span style="font-size:.65rem;color:rgba(255,255,255,.2);margin-top:.1rem;">${it.ejecutado_el}</span>` : ''}
+      </div>`;
+    }).join('');
+
+    const hrBadge = b.cambiar_hr
+      ? `<span style="background:rgba(124,58,237,.2);color:#a78bfa;border:1px solid rgba(124,58,237,.4);
+                     border-radius:20px;font-size:.72rem;padding:.15rem .6rem;">
+           <i class="bi bi-signpost-split me-1"></i>Con cambio de HR
+         </span>`
+      : `<span style="background:rgba(255,255,255,.05);color:var(--muted);border:1px solid rgba(255,255,255,.08);
+                     border-radius:20px;font-size:.72rem;padding:.15rem .6rem;">Sin cambio de HR</span>`;
+
+    const inner = modal.querySelector('div');
+    inner.innerHTML = `
+      <!-- Header -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.4rem;">
+        <div>
+          <div style="font-size:1.05rem;font-weight:800;color:var(--text);letter-spacing:-.01em;">
+            <i class="bi bi-bar-chart-line me-2" style="color:#7c3aed;"></i>Reporte AC · Bloque ${b.num}
+          </div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:.25rem;">
+            ${b.creado_el} &nbsp;·&nbsp; ${dur} &nbsp;·&nbsp; ${hrBadge}
+          </div>
+        </div>
+        <button onclick="document.getElementById('ac-reporte-modal').remove()"
+                style="background:rgba(255,255,255,.06);border:none;color:var(--muted);border-radius:8px;
+                       width:32px;height:32px;cursor:pointer;font-size:1rem;flex-shrink:0;">✕</button>
+      </div>
+
+      <!-- Stats + Donut -->
+      <div style="display:grid;grid-template-columns:128px 1fr;gap:1.2rem;align-items:center;
+                  background:rgba(255,255,255,.03);border-radius:14px;padding:1.2rem 1.4rem;margin-bottom:1.4rem;
+                  border:1px solid rgba(255,255,255,.06);">
+        ${donut}
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;">
+          ${_acStatBox(b.total,     'Total',    '#e2e8f0', 'bi-layers')}
+          ${_acStatBox(b.ok_count,  'Exitosos', '#4ade80', 'bi-check-circle-fill')}
+          ${_acStatBox(b.error_count,'Errores', '#f87171', 'bi-x-circle-fill')}
+        </div>
+      </div>
+
+      <!-- Grid de colores -->
+      <div style="font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.06em;
+                  text-transform:uppercase;margin-bottom:.6rem;">Resultados por color</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.6rem;">
+        ${cards}
+      </div>
+    `;
+  } catch(e) {
+    modal.remove(); alert('Error de red');
+  }
+}
+
+function _acStatBox(val, label, color, icon) {
+  return `<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:.8rem .9rem;
+                      border:1px solid rgba(255,255,255,.06);text-align:center;">
+    <div style="font-size:1.6rem;font-weight:800;color:${color};line-height:1;">${val}</div>
+    <div style="font-size:.7rem;color:var(--muted);margin-top:.25rem;display:flex;align-items:center;
+                justify-content:center;gap:.3rem;">
+      <i class="bi ${icon}" style="color:${color};opacity:.7;"></i>${label}
+    </div>
+  </div>`;
+}
+
+function _acFmtDur(s) {
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60), ss = s % 60;
+  return m < 60 ? `${m}m ${ss}s` : `${Math.floor(m/60)}h ${m%60}m`;
+}
+
+// Auto-refresh mientras haya bloques ejecutando
 setInterval(() => {
-  if (document.getElementById('tab-pane-ac')?.style.display !== 'none') {
+  const pane = document.getElementById('tab-pane-ac');
+  if (pane && pane.style.display !== 'none') {
     const cont = document.getElementById('ac-bloques-container');
-    if (cont && cont.innerHTML.includes('Ejecutando')) {
-      _acRefrescarBloques();
-    }
+    if (cont && cont.innerHTML.includes('Ejecutando')) _acRefrescarBloques();
   }
 }, 5000);
 </script>

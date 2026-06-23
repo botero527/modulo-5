@@ -763,7 +763,20 @@ class AutomatizadorSAP:
 
                     n_s = sum(1 for v in fases.values() if str(v).strip().upper() == "S")
                     if n_s >= min_fases_s:
-                        print(f"    ZPPR0020 OK: {n_s} fases S (min={min_fases_s}) | ZPLA={zpla} — esperando 20s antes de continuar")
+                        print(f"    ZPPR0020 OK: {n_s} fases S (min={min_fases_s}) | ZPLA={zpla} — seleccionando fila y presionando Continuar...")
+                        # Seleccionar la fila y presionar Continuar (F7/btn[7])
+                        grid_obj = resultado.get("_grid")
+                        fila_idx = resultado.get("_fila", 0)
+                        try:
+                            if grid_obj is not None:
+                                grid_obj.setCurrentCell(fila_idx, "")
+                                grid_obj.selectedRows = str(fila_idx)
+                                self._esperar(T_RAPIDO)
+                            ses2.findById("wnd[0]/tbar[1]/btn[7]").press()
+                            print(f"    ZPPR0020: Continuar (F7) presionado — esperando 20s...")
+                            self._esperar(T_RAPIDO)
+                        except Exception as e_cont:
+                            print(f"    [WARN] ZPPR0020 Continuar: {e_cont}")
                         time.sleep(20)
                         return {"ok": True, "zpla": zpla, "fase_error": "",
                                 "detalle": f"{n_s} fases completadas", "fases": fases}
@@ -836,6 +849,8 @@ class AutomatizadorSAP:
         if grid is None:
             print("    [WARN] ZPPR0020: grid no encontrado.")
             return resultado
+
+        resultado["_grid"] = grid   # para poder seleccionar la fila luego
 
         # Nombres confirmados por log real: MAT_ZFER, MAT_ZPLA, PHASE1..PHASE18
         _COLS_ZFER = ("MAT_ZFER", "ZFER", "MATNR_ZFER", "ZFER_NEW", "MATNR", "MATERIAL")
@@ -914,6 +929,7 @@ class AutomatizadorSAP:
                     except Exception:
                         pass
                 resultado["fases"] = fases
+                resultado["_fila"] = i   # índice de fila para selección posterior
                 n_s = sum(1 for v in fases.values() if v.upper() == "S")
                 n_e = sum(1 for v in fases.values() if v.upper() == "E")
                 print(f"    ZPPR0020 fila {i} (col={col_zfer}): ZPLA={zpla_val} | S={n_s} | E={n_e} | fases={fases}")
@@ -2759,39 +2775,38 @@ class AutomatizadorSAP:
                         "/subDOCU:SAPLCV140:0204")
             _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
 
+            def _confirmar_popups(ses=None, n=3):
+                """Cierra hasta n popups wnd[1] consecutivos con btn[0] (Sí/OK)."""
+                s = ses or self.session
+                for _ in range(n):
+                    try:
+                        wnd1 = s.findById("wnd[1]")
+                        txt = (wnd1.text or "")
+                        print(f"    MM02 plano (con SP): popup '{txt}' → confirmando Sí/OK")
+                        try:    s.findById("wnd[1]/tbar[0]/btn[0]").press()
+                        except: wnd1.sendVKey(0)
+                        self._esperar(T_RAPIDO)
+                    except Exception:
+                        break  # no hay más popups
+
             # ── 1. Leer DOKNR del ZFER BASE desde SAP (primario) ─────────────
             doknr_base = ""
             try:
                 self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
-                # Confirmar popup de "¿Desea salir sin guardar?" si apareció al navegar
-                try:
-                    _wnd1 = self.session.findById("wnd[1]")
-                    _txt  = (_wnd1.text or "").lower()
-                    print(f"    MM02 plano (con SP): popup detectado al navegar — '{_wnd1.text}', confirmando…")
-                    # btn[0]=Sí/OK — aceptar salir sin guardar para continuar con MM02
-                    try:    self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
-                    except: _wnd1.sendVKey(0)
-                    self._esperar(T_RAPIDO)
-                except Exception:
-                    pass  # no había popup — normal
+                _confirmar_popups()   # popup "¿salir sin guardar?" o similar
                 self.session.findById(self._ID_MM02_MATNR).text = zfer_lectura
                 self.session.findById(self._ID_MM02_MATNR).caretPosition = len(zfer_lectura)
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
-                # Confirmar popup de selección de vistas si apareció
-                try:
-                    self.session.findById("wnd[1]")
-                    try:    self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
-                    except: self.session.findById("wnd[1]").sendVKey(0)
-                    self._esperar(T_RAPIDO)
-                except Exception:
-                    pass
+                _confirmar_popups()   # popup selección de vistas / niveles org.
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
+                _confirmar_popups()   # segundo popup si SAP lo pide
                 self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
                 self._esperar(T_MEDIO)
+                _confirmar_popups()   # popup tras btn[30]
                 self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
                 self._esperar(T_MEDIO)
                 try:
@@ -2834,11 +2849,14 @@ class AutomatizadorSAP:
             self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
+            _confirmar_popups()
             self.session.findById(self._ID_MM02_MATNR).text = zfer
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
+            _confirmar_popups()
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
+            _confirmar_popups()
 
             try:
                 self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
@@ -2846,6 +2864,7 @@ class AutomatizadorSAP:
                 _warn(f"btn[30] no disponible en ZFER nuevo {zfer} — omitiendo cambio de plano")
                 return False
             self._esperar(T_MEDIO)
+            _confirmar_popups()
             self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
             self._esperar(T_MEDIO)
             self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
@@ -4333,11 +4352,11 @@ def procesar_combinacion(zfer_base: str, color_codigo: str, color_nombre: str,
                          zpla: str = "", nivel: str = "", tipo_pieza: str = "",
                          step_callback=None) -> ResultadoItem:
     auto = AutomatizadorSAP()
-    if not auto.conectar():
+    if not auto.asegurar_sap_abierto():
         r = ResultadoItem(
             batch_id=str(uuid.uuid4())[:8], zfer_base=zfer_base,
             color_codigo=color_codigo, estado="ERROR",
-            error="SAP GUI no disponible — verifica que SAP esté abierto y scripting habilitado.",
+            error="SAP GUI no disponible — no se pudo abrir sesion automaticamente.",
             fecha_inicio=datetime.datetime.now(), fecha_fin=datetime.datetime.now(),
         )
         return r
@@ -4352,7 +4371,7 @@ def leer_bom_material(material: str) -> dict:
     retorna {"ok": True, "posiciones": [int,...], "filas": [{pos,nombre},...], "error": ""}
     """
     auto = AutomatizadorSAP()
-    if not auto.conectar():
+    if not auto.asegurar_sap_abierto():
         return {"ok": False, "posiciones": [], "filas": [],
                 "error": "SAP GUI no disponible — verifica que SAP esté abierto y scripting habilitado."}
     return auto.zppr0008_leer_bom_completo(material)
@@ -4367,7 +4386,7 @@ def procesar_combinacion_formula_con_acero(
         step_callback=None) -> "ResultadoItem":
     """Entrada pública para flujo sin acero → con acero."""
     auto = AutomatizadorSAP()
-    if not auto.conectar():
+    if not auto.asegurar_sap_abierto():
         r = ResultadoItem(
             batch_id=str(uuid.uuid4())[:8], zfer_base=zfer_base,
             color_codigo=color_codigo, estado="ERROR",
@@ -4392,7 +4411,7 @@ def procesar_combinacion_formula_mismo_acero(
         step_callback=None) -> "ResultadoItem":
     """Entrada pública para flujo mismo acero (sin→sin o con→con)."""
     auto = AutomatizadorSAP()
-    if not auto.conectar():
+    if not auto.asegurar_sap_abierto():
         r = ResultadoItem(
             batch_id=str(uuid.uuid4())[:8], zfer_base=zfer_base,
             color_codigo=color_codigo, estado="ERROR",
@@ -4416,7 +4435,7 @@ def procesar_combinacion_formula_sin_acero(
         subproducto: str = "", plano_manual: str = "",
         step_callback=None) -> ResultadoItem:
     auto = AutomatizadorSAP()
-    if not auto.conectar():
+    if not auto.asegurar_sap_abierto():
         r = ResultadoItem(
             batch_id=str(uuid.uuid4())[:8], zfer_base=zfer_base,
             color_codigo=color_codigo, estado="ERROR",
@@ -4437,7 +4456,7 @@ def cambiar_hoja_ruta(zfer_nuevo: str, id_hruta: str) -> dict:
     Retorna {"ok": True/False, "error": str}
     """
     auto = AutomatizadorSAP()
-    if not auto.conectar():
+    if not auto.asegurar_sap_abierto():
         return {"ok": False, "error": "SAP GUI no disponible"}
     auto.ca02_desasignar_hr(zfer_nuevo)
     ok_asi = auto.ca02_asignar_hr(zfer_nuevo, id_hruta)
