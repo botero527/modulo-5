@@ -2151,45 +2151,44 @@ class AutomatizadorSAP:
                         "/subDOCU:SAPLCV140:0204")
             _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
 
-            # ── 1. Leer DOKNR del ZFER BASE desde SAP (primario) ─────────────
+            # ── 1. Leer DOKNR del ZFER BASE desde SAP ────────────────────────
+            def _cerrar_popups(paso, n=4):
+                """Cierra hasta n popups wnd[1] consecutivos (Sí/OK)."""
+                for _ in range(n):
+                    try:
+                        _w = self.session.findById("wnd[1]")
+                        print(f"    MM02 plano: popup [{paso}] '{_w.text}' → confirmando")
+                        try:    self.session.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+                        except:
+                            try:    self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
+                            except: _w.sendVKey(0)
+                        self._esperar(T_RAPIDO)
+                    except Exception:
+                        break
+
             doknr_base = ""
             try:
                 self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
-                # Confirmar popup de "¿Desea salir sin guardar?" si apareció al navegar
-                try:
-                    _wnd1 = self.session.findById("wnd[1]")
-                    print(f"    MM02 plano: popup detectado al navegar — '{_wnd1.text}', confirmando…")
-                    try:    self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
-                    except: _wnd1.sendVKey(0)
-                    self._esperar(T_RAPIDO)
-                except Exception:
-                    pass  # no había popup — normal
+                _cerrar_popups("NMM02")
                 self.session.findById(self._ID_MM02_MATNR).text = zfer_lectura
                 self.session.findById(self._ID_MM02_MATNR).caretPosition = len(zfer_lectura)
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
-                # Confirmar popup de selección de vistas si apareció
-                try:
-                    self.session.findById("wnd[1]")
-                    try:    self.session.findById("wnd[1]/tbar[0]/btn[0]").press()
-                    except: self.session.findById("wnd[1]").sendVKey(0)
-                    self._esperar(T_RAPIDO)
-                except Exception:
-                    pass
-                self.session.findById("wnd[0]").sendVKey(0)
-                self._esperar(T_MEDIO)
+                _cerrar_popups("material")
                 self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
                 self._esperar(T_MEDIO)
+                _cerrar_popups("btn30")
                 self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
                 self._esperar(T_MEDIO)
+                _cerrar_popups("tabZU04")
                 try:
                     self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
                     self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
                     self._esperar(T_RAPIDO)
                 except Exception:
-                    pass  # radio no disponible — igual intentar leer el grid
+                    pass
                 doknr_base = str(self.session.findById(_grid_docu).getCellValue(0, "DOKNR") or "").strip()
                 print(f"    MM02 plano: DOKNR SAP base='{doknr_base}'")
             except Exception as e_sap:
@@ -2225,20 +2224,22 @@ class AutomatizadorSAP:
             self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
+            _cerrar_popups("NMM02-escritura")
             self.session.findById(self._ID_MM02_MATNR).text = zfer
+            self.session.findById(self._ID_MM02_MATNR).caretPosition = len(zfer)
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
-            self.session.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_MEDIO)
-
+            _cerrar_popups("material-escritura")
             try:
                 self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
             except Exception:
                 _warn(f"btn[30] no disponible en ZFER nuevo {zfer} — omitiendo cambio de plano")
                 return False
             self._esperar(T_MEDIO)
+            _cerrar_popups("btn30-escritura")
             self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
             self._esperar(T_MEDIO)
+            _cerrar_popups("tabZU04-escritura")
             self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
             self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
             self._esperar(T_RAPIDO)
@@ -2776,15 +2777,18 @@ class AutomatizadorSAP:
             _grid_docu = _subZU04 + "/subDOC_ALV:SAPLCV140:0206/cntlALV_CUST_DOC/shellcont/shell"
 
             def _confirmar_popups(ses=None, n=3):
-                """Cierra hasta n popups wnd[1] consecutivos con btn[0] (Sí/OK)."""
+                """Cierra hasta n popups wnd[1] consecutivos con Sí/OK.
+                Intenta primero btnSPOP-OPTION1 (popup 3-botones), luego tbar btn[0]."""
                 s = ses or self.session
                 for _ in range(n):
                     try:
                         wnd1 = s.findById("wnd[1]")
                         txt = (wnd1.text or "")
                         print(f"    MM02 plano (con SP): popup '{txt}' → confirmando Sí/OK")
-                        try:    s.findById("wnd[1]/tbar[0]/btn[0]").press()
-                        except: wnd1.sendVKey(0)
+                        try:    s.findById("wnd[1]/usr/btnSPOP-OPTION1").press()
+                        except:
+                            try:    s.findById("wnd[1]/tbar[0]/btn[0]").press()
+                            except: wnd1.sendVKey(0)
                         self._esperar(T_RAPIDO)
                     except Exception:
                         break  # no hay más popups
@@ -2795,20 +2799,18 @@ class AutomatizadorSAP:
                 self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
-                _confirmar_popups()   # popup "¿salir sin guardar?" o similar
+                _confirmar_popups("NMM02")
                 self.session.findById(self._ID_MM02_MATNR).text = zfer_lectura
                 self.session.findById(self._ID_MM02_MATNR).caretPosition = len(zfer_lectura)
                 self.session.findById("wnd[0]").sendVKey(0)
                 self._esperar(T_MEDIO)
-                _confirmar_popups()   # popup selección de vistas / niveles org.
-                self.session.findById("wnd[0]").sendVKey(0)
-                self._esperar(T_MEDIO)
-                _confirmar_popups()   # segundo popup si SAP lo pide
+                _confirmar_popups("material")
                 self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
                 self._esperar(T_MEDIO)
-                _confirmar_popups()   # popup tras btn[30]
+                _confirmar_popups("btn30")
                 self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
                 self._esperar(T_MEDIO)
+                _confirmar_popups("tabZU04")
                 try:
                     self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()
                     self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").select()
@@ -2849,22 +2851,19 @@ class AutomatizadorSAP:
             self.session.findById(self._ID_TCODE_BOX).text = "/nmm02"
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
-            _confirmar_popups()
+            _confirmar_popups("NMM02-escritura")
             self.session.findById(self._ID_MM02_MATNR).text = zfer
+            self.session.findById(self._ID_MM02_MATNR).caretPosition = len(zfer)
             self.session.findById("wnd[0]").sendVKey(0)
             self._esperar(T_MEDIO)
-            _confirmar_popups()
-            self.session.findById("wnd[0]").sendVKey(0)
-            self._esperar(T_MEDIO)
-            _confirmar_popups()
-
+            _confirmar_popups("material-escritura")
             try:
                 self.session.findById("wnd[0]/tbar[1]/btn[30]").press()
             except Exception:
                 _warn(f"btn[30] no disponible en ZFER nuevo {zfer} — omitiendo cambio de plano")
                 return False
             self._esperar(T_MEDIO)
-            _confirmar_popups()
+            _confirmar_popups("btn30-escritura")
             self.session.findById("wnd[0]/usr/tabsTABSPR1/tabpZU04").select()
             self._esperar(T_MEDIO)
             self.session.findById(_subZU04 + "/subBUTTON:SAPLCV140:0203/radGF_ALLE").setFocus()

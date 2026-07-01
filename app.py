@@ -1674,7 +1674,7 @@ def api_sap_verificar_duplicados():
                     GROUP BY MATERIAL
                 ) b
                 JOIN dbo.ODATA_ZFER_HEAD h ON h.MATERIAL = b.MATERIAL
-                WHERE h.STATUS IS NULL AND h.CENTRO = 'CO01'
+                WHERE UPPER(ISNULL(h.STATUS,'')) != 'ZZ' AND h.CENTRO = 'CO01'
                   AND b.FORMULA IN ({placeholders_f})
                   AND b.COLOR   IN ({placeholders_c})
             """
@@ -1706,6 +1706,17 @@ def api_sap_verificar_duplicados():
                         "tipo_pieza":   tipo_pieza})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/cache/clear", methods=["POST"])
+@login_required
+def api_cache_clear():
+    """Invalida el cache en memoria de variantes/atributos. Útil tras homologaciones SAP."""
+    q_variantes_por_pn.cache_clear()
+    q_atributos.cache_clear()
+    q_zplas_compatibles.cache_clear()
+    q_formulas_por_pieza.cache_clear()
+    return jsonify({"ok": True, "msg": "Cache invalidado"})
 
 
 @app.route("/api/sap/ejecutar_cola", methods=["POST"])
@@ -2385,6 +2396,21 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0, res_sim=None, sin_dat
                 # zfor_sim / zpla_sim: preferir los del res_sim (datos frescos de SAP).
                 zfor_sim = zfor_sim_nuevo
                 zpla_sim = zpla_sim_nuevo
+                # Si res_sim no estaba disponible (bloque anterior), zfor/zpla son None.
+                # Intentar recuperarlos desde la fila ya existente en GestorAuto_jobs_auto.
+                if not zfor_sim and not zpla_sim:
+                    try:
+                        with _get_conn_local() as _cn2:
+                            _row_ga = _cn2.cursor().execute(
+                                "SELECT TOP 1 zfor, zpla FROM itg.GestorAuto_jobs_auto WHERE zfer=? ORDER BY id DESC",
+                                zfer_sim_nuevo
+                            ).fetchone()
+                            if _row_ga:
+                                zfor_sim = str(_row_ga[0] or "").strip() or None
+                                zpla_sim = str(_row_ga[1] or "").strip() or None
+                                if zfor_sim or zpla_sim:
+                                    print(f"[GESTOR] zfor/zpla simetria recuperados de GestorAuto: zfor={zfor_sim} zpla={zpla_sim}")
+                    except Exception: pass
 
         with _get_conn_local() as cn:
             cur = cn.cursor()
@@ -2484,6 +2510,30 @@ def _guardar_gestor_auto(item: dict, res, hom_id: int = 0, res_sim=None, sin_dat
                 )
                 print(f"[GESTOR] BOM COMPLETO {len(bom_completo)} posiciones para {zfer_key}")
 
+            # BOM del ZFER simétrico (res_sim), si existe y tiene zfer_nuevo
+            if res_sim is not None and not sin_datos_simetria:
+                zfer_sim_nuevo = str(getattr(res_sim, "zfer_nuevo", "") or "").strip()
+                if zfer_sim_nuevo:
+                    cur.execute("DELETE FROM itg.GestorAuto_bom_zfer_local WHERE zfer=?", zfer_sim_nuevo)
+                    bom_sap_sim     = getattr(res_sim, "bom_sap",     []) or []
+                    bom_detalle_sim = getattr(res_sim, "bom_detalle",  []) or []
+                    if bom_sap_sim:
+                        bom_sim = [(zfer_sim_nuevo, str(b.get("pos","")).strip(),
+                                    str(b.get("clase","")).strip(), None)
+                                   for b in bom_sap_sim if str(b.get("pos","")).strip()]
+                    else:
+                        bom_sim = [(zfer_sim_nuevo, str(b.get("posnr","")).strip(),
+                                    str(b.get("clase_destino","")).strip(), None)
+                                   for b in bom_detalle_sim if str(b.get("posnr","")).strip()]
+                    if bom_sim:
+                        cur.executemany(
+                            "INSERT INTO itg.GestorAuto_bom_zfer_local (zfer, posicion, clase, descripcion) VALUES (?,?,?,?)",
+                            bom_sim
+                        )
+                        print(f"[GESTOR] BOM SIMÉTRICO {len(bom_sim)} posiciones para {zfer_sim_nuevo}")
+                    else:
+                        print(f"[GESTOR] BOM SIMÉTRICO vacío para {zfer_sim_nuevo} (sin bom_sap ni bom_detalle en res_sim)")
+
     except Exception as e:
         print(f"[GESTOR] Error: {e}")
 
@@ -2497,6 +2547,8 @@ def _migracion_bd_local():
         ("itg.M5_COLA", "acero_dir",   "ALTER TABLE itg.M5_COLA ADD acero_dir NVARCHAR(10) NULL"),
         ("itg.M5_COLA", "subproducto",   "ALTER TABLE itg.M5_COLA ADD subproducto NVARCHAR(20) NULL"),
         ("itg.M5_COLA", "plano_manual",  "ALTER TABLE itg.M5_COLA ADD plano_manual NVARCHAR(100) NULL"),
+        ("itg.M5_COLA", "zfor_nuevo",    "ALTER TABLE itg.M5_COLA ADD zfor_nuevo NVARCHAR(20) NULL"),
+        ("itg.M5_LOGEJECUCIONES", "zfor_nuevo", "ALTER TABLE itg.M5_LOGEJECUCIONES ADD zfor_nuevo NVARCHAR(20) NULL"),
         # Auto Color — columnas agregadas en refactor manual-only
         ("itg.M5_AutoColor_BLOQUES", "cambiar_hr", "ALTER TABLE itg.M5_AutoColor_BLOQUES ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
         ("itg.M5_AutoColor_COLA",    "cambiar_hr", "ALTER TABLE itg.M5_AutoColor_COLA ADD cambiar_hr BIT NOT NULL DEFAULT 0"),
@@ -2765,10 +2817,10 @@ def _cola_archivar_y_limpiar(bloque_id: int, ejecutado_por: str = "sistema"):
                 INSERT INTO itg.M5_LOGEJECUCIONES
                     (bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
                      pn_base, nivel, tipo_pieza, formula_nueva, acero_dir,
-                     zfer_nuevo, estado, error_msg, ejecutado_el, ejecutado_por)
+                     zfer_nuevo, zfor_nuevo, estado, error_msg, ejecutado_el, ejecutado_por)
                 SELECT bloque_id, zfer_base, tipo, color, color_nombre, zpla, franja,
                        pn_base, nivel, tipo_pieza, formula_nueva, acero_dir,
-                       zfer_nuevo, estado, error_msg,
+                       zfer_nuevo, zfor_nuevo, estado, error_msg,
                        ISNULL(ejecutado_el, GETDATE()), ?
                 FROM itg.M5_COLA
                 WHERE bloque_id = ? AND estado IN ('OK','ERROR')
@@ -2778,6 +2830,10 @@ def _cola_archivar_y_limpiar(bloque_id: int, ejecutado_por: str = "sistema"):
             cur.execute("DELETE FROM itg.M5_COLA WHERE bloque_id=?", bloque_id)
             # NO borrar el bloque — queda COMPLETADO para que el usuario vea el reporte
             print(f"[COLA] bloque {bloque_id}: {archivados} archivados → M5_LogEjecuciones, bloque queda COMPLETADO")
+            # Invalidar cache de variantes para que la siguiente carga de combinaciones
+            # muestre los ZFERs recién creados como EXISTE y no como DISPONIBLE.
+            q_variantes_por_pn.cache_clear()
+            q_atributos.cache_clear()
     except Exception as e:
         print(f"[COLA] error archivando bloque {bloque_id}: {e}")
 
@@ -3012,9 +3068,11 @@ def _cola_ejecutar_bloque(bloque_id: int, ejecutado_por: str = "sistema", modo: 
                     with _get_conn_local() as cn:
                         cn.cursor().execute("""
                             UPDATE itg.M5_COLA
-                            SET estado=?, ejecutado_el=?, zfer_nuevo=?, error_msg=?
+                            SET estado=?, ejecutado_el=?, zfer_nuevo=?, zfor_nuevo=?, error_msg=?
                             WHERE id=?
-                        """, estado_item, _dt.now(), zfer_nuevo or None, error_msg or None, item["_cola_id"])
+                        """, estado_item, _dt.now(), zfer_nuevo or None,
+                            getattr(res, "zfor_nuevo", None) or None if res else None,
+                            error_msg or None, item["_cola_id"])
                 except Exception as db_ex:
                     print(f"[COLA] error guardando item {item['_cola_id']}: {db_ex}")
 
@@ -3749,6 +3807,48 @@ def api_indicadores_data():
             """)
             top_zfer = [{"zfer_base": r[0], "total": r[1]} for r in cur.fetchall()]
 
+            # ── Esta semana vs semana anterior ──────────────────────────────
+            def _kpi_periodo(sql_where):
+                cur.execute(f"""
+                    SELECT
+                        SUM(CASE WHEN estado='OK'    THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN estado='ERROR' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN tipo='COLOR'        AND estado='OK' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='OK' THEN 1 ELSE 0 END)
+                    FROM itg.M5_LOGEJECUCIONES WHERE {sql_where}
+                """)
+                r = cur.fetchone()
+                return {"ok": r[0] or 0, "error": r[1] or 0, "colores_ok": r[2] or 0, "formulas_ok": r[3] or 0}
+
+            esta_semana    = _kpi_periodo("ejecutado_el >= DATEADD(week, DATEDIFF(week,0,GETDATE()), 0)")
+            semana_ant     = _kpi_periodo("ejecutado_el >= DATEADD(week, DATEDIFF(week,0,GETDATE())-1, 0) AND ejecutado_el < DATEADD(week, DATEDIFF(week,0,GETDATE()), 0)")
+            este_mes       = _kpi_periodo("ejecutado_el >= DATEADD(month, DATEDIFF(month,0,GETDATE()), 0)")
+            mes_ant        = _kpi_periodo("ejecutado_el >= DATEADD(month, DATEDIFF(month,0,GETDATE())-1, 0) AND ejecutado_el < DATEADD(month, DATEDIFF(month,0,GETDATE()), 0)")
+
+            # ── Por mes — últimos 12 meses ──────────────────────────────────
+            cur.execute("""
+                SELECT
+                    YEAR(ejecutado_el)*100 + MONTH(ejecutado_el) AS mes_key,
+                    MIN(CAST(ejecutado_el AS DATE)) AS fecha_inicio,
+                    SUM(CASE WHEN tipo='COLOR'        AND estado='OK'    THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN tipo='COLOR'        AND estado='ERROR' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='OK'   THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN tipo LIKE 'FORMULA%' AND estado='ERROR' THEN 1 ELSE 0 END)
+                FROM itg.M5_LOGEJECUCIONES
+                WHERE ejecutado_el >= DATEADD(month, -12, GETDATE())
+                GROUP BY YEAR(ejecutado_el)*100 + MONTH(ejecutado_el)
+                ORDER BY mes_key
+            """)
+            por_mes = [
+                {
+                    "mes_key": r[0],
+                    "fecha_inicio": str(r[1]),
+                    "colores_ok": r[2] or 0, "colores_error": r[3] or 0,
+                    "formulas_ok": r[4] or 0, "formulas_error": r[5] or 0,
+                }
+                for r in cur.fetchall()
+            ]
+
             # ── Últimas 10 ejecuciones ──────────────────────────────────────
             cur.execute("""
                 SELECT TOP 10
@@ -3771,17 +3871,68 @@ def api_indicadores_data():
 
         return jsonify({
             "ok": True,
-            "total_ok": total_ok,
-            "total_error": total_error,
-            "colores_ok": colores_ok,
-            "colores_error": colores_error,
-            "formulas_ok": formulas_ok,
-            "formulas_error": formulas_error,
-            "por_dia": por_dia,
-            "por_semana": por_semana,
-            "top_zfer": top_zfer,
-            "recientes": recientes,
+            "total_ok": total_ok, "total_error": total_error,
+            "colores_ok": colores_ok, "colores_error": colores_error,
+            "formulas_ok": formulas_ok, "formulas_error": formulas_error,
+            "por_dia": por_dia, "por_semana": por_semana, "por_mes": por_mes,
+            "esta_semana": esta_semana, "semana_anterior": semana_ant,
+            "este_mes": este_mes, "mes_anterior": mes_ant,
+            "top_zfer": top_zfer, "recientes": recientes,
         })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/indicadores/drill")
+@login_required
+def api_indicadores_drill():
+    """
+    Retorna hasta 50 ejecuciones filtradas para el panel de drill-down.
+    Params: tipo (COLOR|FORMULA), estado (OK|ERROR), fecha (YYYY-MM-DD), zfer_base
+    """
+    tipo      = request.args.get("tipo", "").strip().upper()
+    estado    = request.args.get("estado", "").strip().upper()
+    fecha     = request.args.get("fecha", "").strip()   # "YYYY-MM-DD" o "YYYY-MM" para mes
+    zfer_base = request.args.get("zfer_base", "").strip()
+    try:
+        conditions = []
+        params     = []
+        if tipo:
+            if tipo == "FORMULA":
+                conditions.append("tipo LIKE 'FORMULA%'")
+            else:
+                conditions.append("tipo=?")
+                params.append(tipo)
+        if estado:
+            conditions.append("estado=?")
+            params.append(estado)
+        if fecha:
+            if len(fecha) == 7:   # "YYYY-MM" → mes completo
+                conditions.append("FORMAT(ejecutado_el,'yyyy-MM')=?")
+                params.append(fecha)
+            else:                  # "YYYY-MM-DD" → día exacto
+                conditions.append("CAST(ejecutado_el AS DATE)=?")
+                params.append(fecha)
+        if zfer_base:
+            conditions.append("zfer_base=?")
+            params.append(zfer_base)
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        with _get_conn_local() as cn:
+            rows = cn.cursor().execute(f"""
+                SELECT TOP 50
+                    zfer_base, zfer_nuevo, tipo, estado, color_nombre,
+                    formula_nueva, ejecutado_el, error_msg
+                FROM itg.M5_LOGEJECUCIONES
+                {where}
+                ORDER BY ejecutado_el DESC
+            """, *params).fetchall()
+        return jsonify({"ok": True, "rows": [
+            {"zfer_base": r[0] or "", "zfer_nuevo": r[1] or "", "tipo": r[2] or "",
+             "estado": r[3] or "", "color_nombre": r[4] or "", "formula_nueva": r[5] or "",
+             "ejecutado_el": r[6].strftime("%d/%m/%Y %H:%M") if r[6] else "",
+             "error_msg": (r[7] or "")[:200]}
+            for r in rows
+        ]})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
@@ -3826,9 +3977,14 @@ def api_cola_bloque_reporte(bloque_id: int):
                 FROM itg.M5_BLOQUES WHERE id=?
             """, bloque_id)
             br = cur.fetchone()
-            cur.execute("""
+            # Detectar si ya existe la columna zfor_nuevo (migración puede estar pendiente)
+            cur.execute("SELECT COUNT(1) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='M5_LogEjecuciones' AND COLUMN_NAME='zfor_nuevo'")
+            tiene_zfor = cur.fetchone()[0] > 0
+            _zfor_sel = "ISNULL(zfor_nuevo,'')" if tiene_zfor else "'' AS zfor_nuevo"
+            cur.execute(f"""
                 SELECT zfer_base, tipo, color, color_nombre, zpla, franja,
-                       formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg, ejecutado_el
+                       formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg, ejecutado_el,
+                       {_zfor_sel}
                 FROM itg.M5_LOGEJECUCIONES WHERE bloque_id=?
                 ORDER BY ejecutado_el
             """, bloque_id)
@@ -3836,7 +3992,8 @@ def api_cola_bloque_reporte(bloque_id: int):
         items = [{"zfer_base": r[0], "tipo": r[1], "color": r[2], "color_nombre": r[3],
                   "zpla": r[4], "franja": r[5] or "00", "formula_nueva": r[6], "tipo_pieza": r[7],
                   "zfer_nuevo": r[8], "estado": r[9], "error_msg": r[10],
-                  "ejecutado_el": r[11].strftime("%d/%m/%Y %H:%M:%S") if r[11] else ""}
+                  "ejecutado_el": r[11].strftime("%d/%m/%Y %H:%M:%S") if r[11] else "",
+                  "zfor_nuevo": r[12] or ""}
                  for r in rows]
         ok_n  = sum(1 for i in items if i["estado"] == "OK")
         err_n = sum(1 for i in items if i["estado"] == "ERROR")
@@ -3873,7 +4030,7 @@ def api_cola_bloque_excel(bloque_id: int):
             cur.execute("""
                 SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
                 WHERE TABLE_NAME='M5_LogEjecuciones'
-                AND COLUMN_NAME IN ('pn_base','acero_dir','ejecutado_por','nivel')
+                AND COLUMN_NAME IN ('pn_base','acero_dir','ejecutado_por','nivel','zfor_nuevo')
             """)
             existing_cols = {r[0] for r in cur.fetchall()}
             def _col(name, alias=None, default="''"):
@@ -3888,7 +4045,8 @@ def api_cola_bloque_excel(bloque_id: int):
             cur.execute(f"""
                 SELECT zfer_base, tipo, color, color_nombre, zpla, franja,
                        formula_nueva, tipo_pieza, zfer_nuevo, estado, error_msg,
-                       ejecutado_el, {sel_extra}
+                       ejecutado_el, {sel_extra},
+                       {_col('zfor_nuevo', default="''")}
                 FROM itg.M5_LOGEJECUCIONES WHERE bloque_id=?
                 ORDER BY tipo, ejecutado_el
             """, bloque_id)
@@ -3947,7 +4105,7 @@ def api_cola_bloque_excel(bloque_id: int):
 
         COLS = ["#", "ZFER Base", "PN Base", "Tipo", "Dirección Acero",
                 "Color (cód.)", "Color Nombre", "Fórmula Nueva", "Tipo Pieza",
-                "ZPLA", "Franja", "Nivel", "ZFER Nuevo", "Estado",
+                "ZPLA", "Franja", "Nivel", "ZFER Nuevo", "ZFOR Nuevo", "Estado",
                 "Hora Ejecución", "Operador", "Advertencias / Error"]
 
         def _header_row(ws, title_color=C_NAVY):
@@ -3973,7 +4131,7 @@ def api_cola_bloque_excel(bloque_id: int):
             vals = [row_num - 1, r[0] or "", r[12] or "", r[1] or "",
                     r[13] or "", r[2] or "", r[3] or "", r[6] or "",
                     r[7] or "", r[4] or "", r[5] or "00", r[15] or "",
-                    r[8] or "", r[9] or "", ts, r[14] or "", msg]
+                    r[8] or "", r[16] or "", r[9] or "", ts, r[14] or "", msg]
 
             for col_idx, val in enumerate(vals, 1):
                 cell = ws.cell(row=row_num, column=col_idx, value=val)
@@ -3988,8 +4146,8 @@ def api_cola_bloque_excel(bloque_id: int):
                 else:
                     cell.fill = row_fill
                     cell.font = _font("C9D1D9", sz=9)
-                # Columna Estado con color especial
-                if col_idx == 14:
+                # Columna Estado con color especial (ahora es col 15)
+                if col_idx == 15:
                     cell.font = txt_font
                     cell.font = Font(color=txt_font.color, bold=True, size=9, name="Calibri")
                     cell.alignment = ctr
@@ -3999,7 +4157,7 @@ def api_cola_bloque_excel(bloque_id: int):
             for i, r in enumerate(subset):
                 _write_row(ws, i + 2, r, alt=(i % 2 == 1))
             # Ajuste de anchos fijos (mejor que autofit)
-            widths = [4, 14, 22, 18, 16, 10, 22, 14, 12, 14, 8, 8, 14, 10, 20, 18, 45]
+            widths = [4, 14, 22, 18, 16, 10, 22, 14, 12, 14, 8, 8, 14, 14, 10, 20, 18, 45]
             for ci, w in enumerate(widths, 1):
                 ws.column_dimensions[get_column_letter(ci)].width = w
 

@@ -2,418 +2,549 @@
 {% block title %}Indicadores — AGP Intelligence{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <div>
-    <h1 style="font-size:1.55rem; font-weight:900; color:var(--accent); margin:0; letter-spacing:.3px;">
+    <h1 style="font-size:1.55rem; font-weight:900; color:var(--accent); margin:0;">
       <i class="bi bi-bar-chart-line-fill me-2"></i>Indicadores de Homologación
     </h1>
-    <div style="font-size:.82rem; color:var(--muted); margin-top:.25rem;">
-      Colombia — CO01 &nbsp;·&nbsp; Actualización automática cada 60 s
+    <div style="font-size:.82rem; color:var(--muted); margin-top:.2rem;">
+      Colombia — CO01 &nbsp;·&nbsp; <span id="ind-last-update">Cargando…</span>
     </div>
   </div>
-  <div class="d-flex align-items-center gap-2">
-    <span id="ind-last-update" style="font-size:.76rem; color:var(--muted);"></span>
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <!-- Filtro activo badge -->
+    <div id="filtro-activo-badge" style="display:none; background:rgba(31,111,235,.15); border:1px solid var(--accent); border-radius:20px; padding:.25rem .75rem; font-size:.78rem; color:var(--accent); display:none; align-items:center; gap:.4rem;">
+      <i class="bi bi-funnel-fill"></i>
+      <span id="filtro-activo-txt"></span>
+      <button onclick="limpiarFiltro()" style="background:none; border:none; color:var(--accent); cursor:pointer; padding:0; font-size:.85rem; line-height:1;" title="Quitar filtro">✕</button>
+    </div>
     <button onclick="cargarIndicadores()" class="tag t-neutral" style="cursor:pointer; border:none; padding:.32rem .75rem; font-size:.8rem;">
       <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
     </button>
   </div>
 </div>
 
-<!-- ── KPI Cards ──────────────────────────────────────────────────────────── -->
-<div class="row g-3 mb-4">
-
-  <div class="col-6 col-md-3">
-    <div class="card h-100" style="border-color:var(--ok-bdr);">
-      <div class="card-body p-3 d-flex flex-column align-items-start gap-1">
-        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--ok-txt); font-weight:700;">
-          <i class="bi bi-check-circle-fill me-1"></i>Total OK
-        </div>
-        <div id="kpi-total-ok" style="font-size:2.4rem; font-weight:900; color:var(--ok-txt); line-height:1;">—</div>
-        <div style="font-size:.75rem; color:var(--muted);">Ejecuciones exitosas (histórico)</div>
-      </div>
-    </div>
+<!-- ── Selector periodo + vista ──────────────────────────────────────────────── -->
+<div class="d-flex gap-2 mb-4 flex-wrap align-items-center">
+  <div class="d-flex gap-1" style="background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:3px;">
+    <button onclick="setPeriodo('historico')" id="btn-p-historico" class="_ptab active-ptab"><i class="bi bi-infinity me-1"></i>Histórico</button>
+    <button onclick="setPeriodo('semana')"    id="btn-p-semana"    class="_ptab"><i class="bi bi-calendar-week me-1"></i>Esta semana</button>
+    <button onclick="setPeriodo('mes')"       id="btn-p-mes"       class="_ptab"><i class="bi bi-calendar-month me-1"></i>Este mes</button>
   </div>
-
-  <div class="col-6 col-md-3">
-    <div class="card h-100" style="border-color:var(--err-bdr);">
-      <div class="card-body p-3 d-flex flex-column align-items-start gap-1">
-        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--err-txt); font-weight:700;">
-          <i class="bi bi-x-circle-fill me-1"></i>Total Error
-        </div>
-        <div id="kpi-total-error" style="font-size:2.4rem; font-weight:900; color:var(--err-txt); line-height:1;">—</div>
-        <div style="font-size:.75rem; color:var(--muted);">Ejecuciones con error (histórico)</div>
-      </div>
-    </div>
+  <div style="width:1px; height:24px; background:var(--border);"></div>
+  <div class="d-flex gap-1" style="background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:3px;">
+    <button onclick="setVista('dia')"    id="btn-vista-dia" class="_vtab active-vtab"><i class="bi bi-calendar-day me-1"></i>Días</button>
+    <button onclick="setVista('semana')" id="btn-vista-sem" class="_vtab"><i class="bi bi-calendar-week me-1"></i>Semanas</button>
+    <button onclick="setVista('mes')"    id="btn-vista-mes" class="_vtab"><i class="bi bi-calendar-month me-1"></i>Meses</button>
   </div>
-
-  <div class="col-6 col-md-3">
-    <div class="card h-100" style="border-color:var(--info-bdr);">
-      <div class="card-body p-3 d-flex flex-column align-items-start gap-1">
-        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--info-txt); font-weight:700;">
-          <i class="bi bi-palette-fill me-1"></i>Colores OK
-        </div>
-        <div id="kpi-colores-ok" style="font-size:2.4rem; font-weight:900; color:var(--info-txt); line-height:1;">—</div>
-        <div style="font-size:.75rem; color:var(--muted);">Cambios de color exitosos</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-6 col-md-3">
-    <div class="card h-100" style="border-color:var(--pur-bdr);">
-      <div class="card-body p-3 d-flex flex-column align-items-start gap-1">
-        <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:1px; color:var(--pur-txt); font-weight:700;">
-          <i class="bi bi-diagram-3-fill me-1"></i>Fórmulas OK
-        </div>
-        <div id="kpi-formulas-ok" style="font-size:2.4rem; font-weight:900; color:var(--pur-txt); line-height:1;">—</div>
-        <div style="font-size:.75rem; color:var(--muted);">Cambios de fórmula exitosos</div>
-      </div>
-    </div>
-  </div>
-
 </div>
 
-<!-- ── Gráficas ───────────────────────────────────────────────────────────── -->
-<div class="row g-3 mb-4">
+<style>
+._ptab, ._vtab {
+  background:none; border:none; border-radius:7px; padding:.3rem .85rem;
+  font-size:.78rem; font-weight:600; cursor:pointer; color:var(--muted);
+  transition:all .15s;
+}
+.active-ptab, .active-vtab {
+  background:var(--accent); color:#fff !important;
+}
+</style>
 
-  <!-- Barras por día -->
+<!-- ── KPI Cards ──────────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4" id="kpi-row">
+  <div class="col-6 col-sm-4 col-lg">
+    <div class="card h-100 kpi-card" id="kpi-card-ok" onclick="filtrarPorTipo(null,'OK')" style="cursor:pointer; border-color:var(--ok-bdr); transition:all .2s;">
+      <div class="card-body p-3">
+        <div class="kpi-label" style="color:var(--ok-txt);"><i class="bi bi-check-circle-fill me-1"></i>Total OK</div>
+        <div class="d-flex align-items-baseline gap-2 flex-wrap mt-1">
+          <div id="kpi-total-ok" class="kpi-num" style="color:var(--ok-txt);">—</div>
+          <div id="kpi-total-ok-trend" class="kpi-trend"></div>
+        </div>
+        <div id="kpi-total-ok-sub" class="kpi-sub">ejecuciones exitosas</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-sm-4 col-lg">
+    <div class="card h-100 kpi-card" id="kpi-card-err" onclick="filtrarPorTipo(null,'ERROR')" style="cursor:pointer; border-color:var(--err-bdr); transition:all .2s;">
+      <div class="card-body p-3">
+        <div class="kpi-label" style="color:var(--err-txt);"><i class="bi bi-x-circle-fill me-1"></i>Con Error</div>
+        <div class="d-flex align-items-baseline gap-2 flex-wrap mt-1">
+          <div id="kpi-total-error" class="kpi-num" style="color:var(--err-txt);">—</div>
+          <div id="kpi-total-error-trend" class="kpi-trend"></div>
+        </div>
+        <div class="kpi-sub">ejecuciones con error</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-sm-4 col-lg">
+    <div class="card h-100" style="border-color:#ca8a04; background:linear-gradient(135deg,rgba(202,138,4,.07),transparent);">
+      <div class="card-body p-3">
+        <div class="kpi-label" style="color:#ca8a04;"><i class="bi bi-speedometer2 me-1"></i>Tasa de Éxito</div>
+        <div class="d-flex align-items-baseline gap-1 mt-1">
+          <div id="kpi-tasa" class="kpi-num" style="color:#ca8a04;">—</div>
+          <div style="font-size:1rem; color:#ca8a04; font-weight:700;">%</div>
+          <div id="kpi-tasa-trend" class="kpi-trend"></div>
+        </div>
+        <div class="kpi-sub">OK / total ejecutado</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-sm-4 col-lg">
+    <div class="card h-100 kpi-card" id="kpi-card-color" onclick="filtrarPorTipo('COLOR','OK')" style="cursor:pointer; border-color:var(--info-bdr); transition:all .2s;">
+      <div class="card-body p-3">
+        <div class="kpi-label" style="color:var(--info-txt);"><i class="bi bi-palette-fill me-1"></i>Colores OK</div>
+        <div class="d-flex align-items-baseline gap-2 flex-wrap mt-1">
+          <div id="kpi-colores-ok" class="kpi-num" style="color:var(--info-txt);">—</div>
+          <div id="kpi-colores-ok-trend" class="kpi-trend"></div>
+        </div>
+        <div class="kpi-sub">cambios de color exitosos</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-sm-4 col-lg">
+    <div class="card h-100 kpi-card" id="kpi-card-formula" onclick="filtrarPorTipo('FORMULA','OK')" style="cursor:pointer; border-color:var(--pur-bdr); transition:all .2s;">
+      <div class="card-body p-3">
+        <div class="kpi-label" style="color:var(--pur-txt);"><i class="bi bi-diagram-3-fill me-1"></i>Fórmulas OK</div>
+        <div class="d-flex align-items-baseline gap-2 flex-wrap mt-1">
+          <div id="kpi-formulas-ok" class="kpi-num" style="color:var(--pur-txt);">—</div>
+          <div id="kpi-formulas-ok-trend" class="kpi-trend"></div>
+        </div>
+        <div class="kpi-sub">cambios de fórmula exitosos</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.kpi-num  { font-size:2.1rem; font-weight:900; line-height:1; font-variant-numeric:tabular-nums; }
+.kpi-label{ font-size:.7rem; text-transform:uppercase; letter-spacing:1px; font-weight:700; }
+.kpi-sub  { font-size:.72rem; color:var(--muted); margin-top:.15rem; }
+.kpi-trend{ font-size:.74rem; }
+.kpi-card:hover { transform:translateY(-2px); box-shadow:0 4px 20px rgba(0,0,0,.15); }
+.kpi-card.selected { box-shadow:0 0 0 2px var(--accent) !important; }
+</style>
+
+<!-- ── Gráficas ────────────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
   <div class="col-12 col-lg-8">
     <div class="card h-100">
-      <div class="card-header d-flex align-items-center justify-content-between">
-        <span><i class="bi bi-calendar3 me-2" style="color:var(--accent);"></i>ZFERs por día — últimos 30 días</span>
-        <div class="d-flex gap-2">
-          <button onclick="setVista('dia')" id="btn-vista-dia"
-                  class="tag t-neutral" style="cursor:pointer; border:none; font-size:.74rem; padding:.22rem .6rem;">Días</button>
-          <button onclick="setVista('semana')" id="btn-vista-sem"
-                  class="tag t-neutral" style="cursor:pointer; border:none; font-size:.74rem; padding:.22rem .6rem;">Semanas</button>
-        </div>
+      <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+        <span id="chart-barras-title" style="font-weight:700;">
+          <i class="bi bi-calendar3 me-2" style="color:var(--accent);"></i>Homologaciones por día
+        </span>
+        <div style="font-size:.75rem; color:var(--muted);">Click en una barra para filtrar</div>
       </div>
       <div class="card-body" style="position:relative; height:280px;">
         <canvas id="chart-barras"></canvas>
       </div>
     </div>
   </div>
-
-  <!-- Donut distribución -->
   <div class="col-12 col-lg-4">
     <div class="card h-100">
-      <div class="card-header">
-        <i class="bi bi-pie-chart-fill me-2" style="color:var(--accent);"></i>Distribución OK
-      </div>
+      <div class="card-header"><i class="bi bi-pie-chart-fill me-2" style="color:var(--accent);"></i>Distribución global OK</div>
       <div class="card-body d-flex flex-column align-items-center justify-content-center gap-3" style="min-height:280px;">
-        <div style="position:relative; width:190px; height:190px;">
+        <div style="position:relative; width:170px; height:170px;">
           <canvas id="chart-donut"></canvas>
-          <div id="donut-center" style="position:absolute; inset:0; display:flex; flex-direction:column;
-               align-items:center; justify-content:center; pointer-events:none;">
-            <div id="donut-total" style="font-size:1.7rem; font-weight:900; color:var(--text); line-height:1;">—</div>
-            <div style="font-size:.7rem; color:var(--muted); letter-spacing:.5px; text-transform:uppercase;">Total OK</div>
+          <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none;">
+            <div id="donut-total" style="font-size:1.55rem; font-weight:900; color:var(--text); line-height:1;">—</div>
+            <div style="font-size:.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">Total OK</div>
           </div>
         </div>
-        <div class="d-flex gap-3">
-          <div class="d-flex align-items-center gap-1" style="font-size:.8rem; color:var(--muted);">
-            <div style="width:12px; height:12px; border-radius:3px; background:#1f6feb; flex-shrink:0;"></div>
-            Color
+        <div class="w-100" style="display:flex; flex-direction:column; gap:.4rem;">
+          <div class="donut-row" onclick="filtrarPorTipo('COLOR','OK')" style="cursor:pointer;">
+            <div style="display:flex; align-items:center; gap:.5rem;"><div style="width:10px;height:10px;border-radius:3px;background:#1f6feb;flex-shrink:0;"></div><span style="font-size:.82rem;">Color</span></div>
+            <span id="donut-colores-pct" style="font-weight:700; color:var(--info-txt); font-size:.82rem;">—</span>
           </div>
-          <div class="d-flex align-items-center gap-1" style="font-size:.8rem; color:var(--muted);">
-            <div style="width:12px; height:12px; border-radius:3px; background:#8957e5; flex-shrink:0;"></div>
-            Fórmula
+          <div class="donut-row" onclick="filtrarPorTipo('FORMULA','OK')" style="cursor:pointer;">
+            <div style="display:flex; align-items:center; gap:.5rem;"><div style="width:10px;height:10px;border-radius:3px;background:#8957e5;flex-shrink:0;"></div><span style="font-size:.82rem;">Fórmula</span></div>
+            <span id="donut-formulas-pct" style="font-weight:700; color:var(--pur-txt); font-size:.82rem;">—</span>
           </div>
         </div>
       </div>
     </div>
   </div>
-
 </div>
 
-<!-- ── Top ZFERs + Últimas ejecuciones ───────────────────────────────────── -->
-<div class="row g-3 mb-2">
+<style>
+.donut-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:.4rem .6rem; border-radius:8px; transition:background .15s;
+}
+.donut-row:hover { background:var(--row-bg-ok); }
+</style>
 
-  <!-- Top 10 ZFERs -->
-  <div class="col-12 col-lg-5">
+<!-- ── Top ZFERs + Drill-down / Recientes ────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-4">
     <div class="card h-100">
-      <div class="card-header">
-        <i class="bi bi-trophy-fill me-2" style="color:var(--accent);"></i>Top 10 ZFERs base (por OK)
-      </div>
+      <div class="card-header"><i class="bi bi-trophy-fill me-2" style="color:var(--accent);"></i>Top 10 ZFERs base</div>
       <div class="card-body p-0">
-        <table class="table table-sm mb-0" style="font-size:.84rem;">
-          <thead>
-            <tr style="background:var(--card-hdr-bg);">
-              <th class="ps-3" style="color:var(--muted); font-weight:600; border-color:var(--border);">#</th>
-              <th style="color:var(--muted); font-weight:600; border-color:var(--border);">ZFER Base</th>
-              <th class="text-end pe-3" style="color:var(--muted); font-weight:600; border-color:var(--border);">Ejecuciones OK</th>
-            </tr>
-          </thead>
+        <table class="table table-sm mb-0" style="font-size:.83rem;">
+          <thead><tr style="background:var(--card-hdr-bg);">
+            <th class="ps-3" style="color:var(--muted); border-color:var(--border);">#</th>
+            <th style="color:var(--muted); border-color:var(--border);">ZFER</th>
+            <th class="text-end pe-3" style="color:var(--muted); border-color:var(--border);">OK</th>
+          </tr></thead>
           <tbody id="top-zfer-body">
-            <tr><td colspan="3" class="text-center py-4" style="color:var(--muted); font-size:.82rem;">Cargando…</td></tr>
+            <tr><td colspan="3" class="text-center py-4" style="color:var(--muted);">Cargando…</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
-
-  <!-- Últimas 10 ejecuciones -->
-  <div class="col-12 col-lg-7">
+  <div class="col-12 col-lg-8">
     <div class="card h-100">
-      <div class="card-header">
-        <i class="bi bi-clock-history me-2" style="color:var(--accent);"></i>Últimas 10 ejecuciones
+      <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+        <span><i class="bi bi-table me-2" style="color:var(--accent);"></i><span id="drill-title">Últimas ejecuciones</span></span>
+        <div class="d-flex align-items-center gap-2">
+          <div id="drill-filtros" class="d-flex gap-1 flex-wrap"></div>
+        </div>
       </div>
       <div class="card-body p-0" style="overflow-x:auto;">
-        <table class="table table-sm mb-0" style="font-size:.82rem; min-width:520px;">
-          <thead>
-            <tr style="background:var(--card-hdr-bg);">
-              <th class="ps-3" style="color:var(--muted); font-weight:600; border-color:var(--border);">ZFER Base</th>
-              <th style="color:var(--muted); font-weight:600; border-color:var(--border);">ZFER Nuevo</th>
-              <th style="color:var(--muted); font-weight:600; border-color:var(--border);">Tipo</th>
-              <th style="color:var(--muted); font-weight:600; border-color:var(--border);">Estado</th>
-              <th class="pe-3" style="color:var(--muted); font-weight:600; border-color:var(--border);">Fecha</th>
-            </tr>
-          </thead>
-          <tbody id="recientes-body">
-            <tr><td colspan="5" class="text-center py-4" style="color:var(--muted); font-size:.82rem;">Cargando…</td></tr>
+        <table class="table table-sm mb-0" style="font-size:.81rem; min-width:520px;">
+          <thead><tr style="background:var(--card-hdr-bg);">
+            <th class="ps-3" style="color:var(--muted); border-color:var(--border);">ZFER Base</th>
+            <th style="color:var(--muted); border-color:var(--border);">ZFER Nuevo</th>
+            <th style="color:var(--muted); border-color:var(--border);">Tipo</th>
+            <th style="color:var(--muted); border-color:var(--border);">Estado</th>
+            <th class="pe-3" style="color:var(--muted); border-color:var(--border);">Fecha</th>
+          </tr></thead>
+          <tbody id="drill-body">
+            <tr><td colspan="5" class="text-center py-4" style="color:var(--muted);">Cargando…</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
-
 </div>
 
-<!-- ── Error banner ───────────────────────────────────────────────────────── -->
+<!-- ── Error banner ───────────────────────────────────────────────────────────── -->
 <div id="ind-error-banner" class="alert-err mt-3" style="display:none;">
-  <i class="bi bi-exclamation-triangle-fill me-2"></i>
-  <span id="ind-error-msg"></span>
+  <i class="bi bi-exclamation-triangle-fill me-2"></i><span id="ind-error-msg"></span>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// ── Estado global ────────────────────────────────────────────────────────────
-let _indData       = null;
-let _chartBarras   = null;
-let _chartDonut    = null;
-let _vistaActual   = 'dia';
-let _refreshTimer  = null;
+// ── Estado global ─────────────────────────────────────────────────────────────
+let _D          = null;   // datos completos del API
+let _chartB     = null;   // chart barras
+let _chartD     = null;   // chart donut
+let _vista      = 'dia';
+let _periodo    = 'historico';
+let _filtro     = {};     // {tipo, estado, fecha, zfer_base}
 
-// ── Paleta de colores consistente con la app ─────────────────────────────────
-const C = {
-  colorOk:     'rgba(31,111,235,0.85)',
-  colorErr:    'rgba(248,81,73,0.75)',
-  formulaOk:   'rgba(137,87,229,0.85)',
-  formulaErr:  'rgba(248,81,73,0.55)',
-  border:      getComputedStyle(document.documentElement).getPropertyValue('--border').trim(),
-  text:        getComputedStyle(document.documentElement).getPropertyValue('--text').trim(),
-  muted:       getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(),
-};
-
-function _cssVar(v) {
-  return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+// ── Tabs helper ───────────────────────────────────────────────────────────────
+function _activarTab(grupo, id) {
+  document.querySelectorAll('.' + grupo).forEach(b => b.classList.remove('active-' + grupo.replace('_','') + 'tab', 'active-ptab', 'active-vtab'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add(grupo === '_ptab' ? 'active-ptab' : 'active-vtab');
 }
 
-// ── Carga principal ──────────────────────────────────────────────────────────
+function setPeriodo(p) {
+  _periodo = p;
+  ['historico','semana','mes'].forEach(id => {
+    const b = document.getElementById('btn-p-' + id);
+    b.classList.toggle('active-ptab', id === p);
+  });
+  if (_D) renderKpis(_D);
+}
+
+function setVista(v) {
+  _vista = v;
+  ['dia','sem','mes'].forEach(id => {
+    const b = document.getElementById('btn-vista-' + id);
+    if (b) b.classList.remove('active-vtab');
+  });
+  const map = {dia:'dia', semana:'sem', mes:'mes'};
+  const b = document.getElementById('btn-vista-' + map[v]);
+  if (b) b.classList.add('active-vtab');
+  const titles = {dia:'últimos 30 días', semana:'últimas 12 semanas', mes:'últimos 12 meses'};
+  document.getElementById('chart-barras-title').innerHTML =
+    `<i class="bi bi-calendar3 me-2" style="color:var(--accent);"></i>Homologaciones — ${titles[v]}`;
+  if (_D) renderBarras(_D, v);
+}
+
+// ── Filtro interactivo ────────────────────────────────────────────────────────
+function filtrarPorTipo(tipo, estado) {
+  _filtro = {};
+  if (tipo)   _filtro.tipo   = tipo;
+  if (estado) _filtro.estado = estado;
+  mostrarFiltroActivo();
+  if (_D) renderBarras(_D, _vista);
+  cargarDrill();
+}
+
+function filtrarPorFecha(fecha) {
+  _filtro.fecha = fecha;
+  mostrarFiltroActivo();
+  cargarDrill();
+}
+
+function filtrarPorZfer(zfer) {
+  _filtro = { zfer_base: zfer };
+  mostrarFiltroActivo();
+  if (_D) renderBarras(_D, _vista);
+  cargarDrill();
+}
+
+function limpiarFiltro() {
+  _filtro = {};
+  document.getElementById('filtro-activo-badge').style.display = 'none';
+  document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('selected'));
+  if (_D) renderBarras(_D, _vista);
+  cargarDrill();
+}
+
+function mostrarFiltroActivo() {
+  const partes = [];
+  if (_filtro.tipo)      partes.push(_filtro.tipo);
+  if (_filtro.estado)    partes.push(_filtro.estado);
+  if (_filtro.fecha)     partes.push(_filtro.fecha);
+  if (_filtro.zfer_base) partes.push('ZFER ' + _filtro.zfer_base);
+  const badge = document.getElementById('filtro-activo-badge');
+  if (partes.length) {
+    badge.style.display = 'flex';
+    document.getElementById('filtro-activo-txt').textContent = partes.join(' · ');
+  } else {
+    badge.style.display = 'none';
+  }
+  // Resaltar KPI card seleccionada
+  document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('selected'));
+  if (_filtro.tipo === null && _filtro.estado === 'OK')      document.getElementById('kpi-card-ok')?.classList.add('selected');
+  if (_filtro.tipo === null && _filtro.estado === 'ERROR')   document.getElementById('kpi-card-err')?.classList.add('selected');
+  if (_filtro.tipo === 'COLOR' && _filtro.estado === 'OK')   document.getElementById('kpi-card-color')?.classList.add('selected');
+  if (_filtro.tipo === 'FORMULA' && _filtro.estado === 'OK') document.getElementById('kpi-card-formula')?.classList.add('selected');
+}
+
+// ── Carga principal ───────────────────────────────────────────────────────────
 async function cargarIndicadores() {
   try {
     const res  = await fetch('/api/indicadores/data');
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Error desconocido');
-    _indData = data;
+    if (!data.ok) throw new Error(data.error || 'Error');
+    _D = data;
     document.getElementById('ind-error-banner').style.display = 'none';
     renderKpis(data);
     renderDonut(data);
-    renderBarras(data, _vistaActual);
+    renderBarras(data, _vista);
     renderTopZfer(data.top_zfer);
-    renderRecientes(data.recientes);
+    cargarDrill();
     document.getElementById('ind-last-update').textContent =
       'Actualizado: ' + new Date().toLocaleTimeString('es-CO');
-  } catch (err) {
-    document.getElementById('ind-error-msg').textContent = err.message;
+  } catch(e) {
+    document.getElementById('ind-error-msg').textContent = e.message;
     document.getElementById('ind-error-banner').style.display = 'block';
+    document.getElementById('ind-last-update').textContent = 'Error al cargar';
   }
 }
 
-// ── KPI cards ────────────────────────────────────────────────────────────────
-function renderKpis(d) {
-  document.getElementById('kpi-total-ok').textContent     = d.total_ok.toLocaleString('es-CO');
-  document.getElementById('kpi-total-error').textContent  = d.total_error.toLocaleString('es-CO');
-  document.getElementById('kpi-colores-ok').textContent   = d.colores_ok.toLocaleString('es-CO');
-  document.getElementById('kpi-formulas-ok').textContent  = d.formulas_ok.toLocaleString('es-CO');
+async function cargarDrill() {
+  const params = new URLSearchParams(_filtro);
+  const title  = [];
+  if (_filtro.tipo)      title.push(_filtro.tipo);
+  if (_filtro.estado)    title.push(_filtro.estado);
+  if (_filtro.fecha)     title.push(_filtro.fecha);
+  if (_filtro.zfer_base) title.push('ZFER ' + _filtro.zfer_base);
+  document.getElementById('drill-title').textContent =
+    title.length ? 'Ejecuciones — ' + title.join(' · ') : 'Últimas ejecuciones';
+  const tbody = document.getElementById('drill-body');
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3" style="color:var(--muted);"><i class="bi bi-hourglass-split me-1"></i>Cargando…</td></tr>';
+  try {
+    const res  = await fetch('/api/indicadores/drill?' + params);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    renderDrill(data.rows);
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-3" style="color:var(--err-txt);">${e.message}</td></tr>`;
+  }
 }
 
-// ── Donut ────────────────────────────────────────────────────────────────────
+// ── KPI cards ─────────────────────────────────────────────────────────────────
+function _trend(ahora, antes, elId) {
+  const el = document.getElementById(elId);
+  if (!el || antes === undefined) { if(el) el.innerHTML=''; return; }
+  if (antes === 0 && ahora === 0) { el.innerHTML=''; return; }
+  if (antes === 0) { el.innerHTML=`<span style="color:var(--ok-txt); font-weight:700;">↑ nuevo</span>`; return; }
+  const pct = Math.round(((ahora - antes) / antes) * 100);
+  const up  = pct >= 0;
+  el.innerHTML = `<span style="color:${up?'var(--ok-txt)':'var(--err-txt)'}; font-weight:700;">${up?'↑':'↓'}${Math.abs(pct)}%</span> <span style="color:var(--muted); font-size:.7rem;">vs ant.</span>`;
+}
+
+function renderKpis(d) {
+  let src, prev;
+  if (_periodo === 'semana') { src = d.esta_semana || {}; prev = d.semana_anterior || {}; }
+  else if (_periodo === 'mes') { src = d.este_mes || {}; prev = d.mes_anterior || {}; }
+  else { src = { ok: d.total_ok, error: d.total_error, colores_ok: d.colores_ok, formulas_ok: d.formulas_ok }; prev = null; }
+
+  const total = (src.ok || 0) + (src.error || 0);
+  const tasa  = total > 0 ? Math.round(src.ok / total * 100) : null;
+  const tasaP = prev ? ((prev.ok||0)+(prev.error||0)) > 0 ? Math.round((prev.ok||0)/((prev.ok||0)+(prev.error||0))*100) : null : null;
+
+  document.getElementById('kpi-total-ok').textContent    = (src.ok    ||0).toLocaleString('es-CO');
+  document.getElementById('kpi-total-error').textContent = (src.error ||0).toLocaleString('es-CO');
+  document.getElementById('kpi-colores-ok').textContent  = (src.colores_ok  ||0).toLocaleString('es-CO');
+  document.getElementById('kpi-formulas-ok').textContent = (src.formulas_ok ||0).toLocaleString('es-CO');
+  document.getElementById('kpi-tasa').textContent        = tasa !== null ? tasa : '—';
+  document.getElementById('kpi-total-ok-sub').textContent =
+    `ejecuciones exitosas (${_periodo === 'semana' ? 'esta semana' : _periodo === 'mes' ? 'este mes' : 'histórico'})`;
+
+  if (prev) {
+    _trend(src.ok,          prev.ok,          'kpi-total-ok-trend');
+    _trend(src.error,       prev.error,        'kpi-total-error-trend');
+    _trend(src.colores_ok,  prev.colores_ok,   'kpi-colores-ok-trend');
+    _trend(src.formulas_ok, prev.formulas_ok,  'kpi-formulas-ok-trend');
+    if (tasa !== null && tasaP !== null) {
+      const el = document.getElementById('kpi-tasa-trend');
+      const diff = tasa - tasaP;
+      el.innerHTML = diff === 0 ? '' : `<span style="color:${diff>0?'var(--ok-txt)':'var(--err-txt)'}; font-weight:700; font-size:.8rem;">${diff>0?'+':''}${diff}pp</span>`;
+    }
+  } else {
+    ['kpi-total-ok-trend','kpi-total-error-trend','kpi-colores-ok-trend','kpi-formulas-ok-trend','kpi-tasa-trend']
+      .forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=''; });
+  }
+}
+
+// ── Donut ─────────────────────────────────────────────────────────────────────
 function renderDonut(d) {
   document.getElementById('donut-total').textContent = d.total_ok.toLocaleString('es-CO');
+  const total = d.total_ok || 1;
+  document.getElementById('donut-colores-pct').textContent  =
+    Math.round(d.colores_ok  / total * 100) + '% (' + d.colores_ok.toLocaleString('es-CO') + ')';
+  document.getElementById('donut-formulas-pct').textContent =
+    Math.round(d.formulas_ok / total * 100) + '% (' + d.formulas_ok.toLocaleString('es-CO') + ')';
+  const datasets = [{ data:[d.colores_ok, d.formulas_ok],
+    backgroundColor:['#1f6feb','#8957e5'],
+    borderColor: getComputedStyle(document.documentElement).getPropertyValue('--card-bg'),
+    borderWidth:3, hoverOffset:6 }];
+  if (_chartD) { _chartD.data.datasets[0].data=[d.colores_ok,d.formulas_ok]; _chartD.update(); return; }
   const ctx = document.getElementById('chart-donut').getContext('2d');
-  const datasets = [{
-    data: [d.colores_ok, d.formulas_ok],
-    backgroundColor: ['#1f6feb', '#8957e5'],
-    borderColor: _cssVar('--card-bg'),
-    borderWidth: 3,
-    hoverOffset: 6,
-  }];
-  if (_chartDonut) {
-    _chartDonut.data.datasets[0].data = [d.colores_ok, d.formulas_ok];
-    _chartDonut.update();
-    return;
-  }
-  _chartDonut = new Chart(ctx, {
-    type: 'doughnut',
-    data: { labels: ['Color', 'Fórmula'], datasets },
-    options: {
-      cutout: '70%',
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString('es-CO')}`,
-          },
-        },
-      },
-      animation: { animateRotate: true, duration: 600 },
-    },
+  _chartD = new Chart(ctx, { type:'doughnut', data:{ labels:['Color','Fórmula'], datasets },
+    options:{ cutout:'72%', plugins:{ legend:{display:false},
+      tooltip:{ callbacks:{ label: c => ` ${c.label}: ${c.parsed.toLocaleString('es-CO')}` } } },
+      animation:{ duration:600 },
+      onClick(e, elems) {
+        if (!elems.length) return;
+        const label = _chartD.data.labels[elems[0].index];
+        filtrarPorTipo(label === 'Color' ? 'COLOR' : 'FORMULA', 'OK');
+      }
+    }
   });
 }
 
-// ── Barras apiladas ──────────────────────────────────────────────────────────
-function setVista(v) {
-  _vistaActual = v;
-  document.getElementById('btn-vista-dia').style.opacity  = v === 'dia' ? '1' : '.5';
-  document.getElementById('btn-vista-sem').style.opacity  = v === 'semana' ? '1' : '.5';
-  if (_indData) renderBarras(_indData, v);
-}
-
+// ── Barras ────────────────────────────────────────────────────────────────────
 function renderBarras(d, vista) {
-  const serie    = vista === 'dia' ? d.por_dia : d.por_semana;
-  const labels   = serie.map(r => r.fecha_inicio || r.fecha || '');
-  const cOk      = serie.map(r => r.colores_ok);
-  const cErr     = serie.map(r => r.colores_error);
-  const fOk      = serie.map(r => r.formulas_ok);
-  const fErr     = serie.map(r => r.formulas_error);
-  const gridColor = 'rgba(128,128,128,0.12)';
-  const tickColor = _cssVar('--muted');
-
-  const datasets = [
-    { label: 'Color OK',      data: cOk,  backgroundColor: C.colorOk,   stack: 'ok' },
-    { label: 'Fórmula OK',    data: fOk,  backgroundColor: C.formulaOk, stack: 'ok' },
-    { label: 'Color Error',   data: cErr, backgroundColor: C.colorErr,  stack: 'err', borderRadius: 2 },
-    { label: 'Fórmula Error', data: fErr, backgroundColor: C.formulaErr,stack: 'err' },
+  const serie  = vista === 'dia' ? d.por_dia : vista === 'semana' ? d.por_semana : d.por_mes;
+  if (!serie) return;
+  const tc = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+  const gc = 'rgba(128,128,128,0.1)';
+  const labels = serie.map(r => {
+    const s = r.fecha_inicio || r.fecha || '';
+    if (!s) return '';
+    const dt = new Date(s + 'T00:00:00');
+    if (vista === 'dia')    return dt.toLocaleDateString('es-CO',{day:'2-digit',month:'short'});
+    if (vista === 'semana') return 'S'+(r.semana%100)+' '+dt.toLocaleDateString('es-CO',{month:'short'});
+    return dt.toLocaleDateString('es-CO',{month:'short',year:'2-digit'});
+  });
+  // Guardar fechas para drill-down por click
+  const _fechas = serie.map(r => r.fecha_inicio || r.fecha || '');
+  const tipo   = _filtro.tipo || null;
+  const allDS  = [
+    { label:'Color OK',    data:serie.map(r=>r.colores_ok),    backgroundColor:'rgba(31,111,235,.85)',  stack:'ok',  borderRadius:3, _tipo:'COLOR'   },
+    { label:'Fórmula OK',  data:serie.map(r=>r.formulas_ok),   backgroundColor:'rgba(137,87,229,.85)', stack:'ok',  borderRadius:3, _tipo:'FORMULA' },
+    { label:'Color Err',   data:serie.map(r=>r.colores_error), backgroundColor:'rgba(248,81,73,.65)',  stack:'err', borderRadius:3, _tipo:'COLOR'   },
+    { label:'Fórmula Err', data:serie.map(r=>r.formulas_error),backgroundColor:'rgba(248,81,73,.4)',  stack:'err', borderRadius:3, _tipo:'FORMULA' },
   ];
-
-  if (_chartBarras) {
-    _chartBarras.data.labels   = labels;
-    _chartBarras.data.datasets = datasets;
-    _chartBarras.update();
-    return;
-  }
-
+  const datasets = tipo ? allDS.filter(d => d._tipo === tipo) : allDS;
+  if (_chartB) { _chartB.data.labels=labels; _chartB.data.datasets=datasets; _chartB.update('active'); return; }
   const ctx = document.getElementById('chart-barras').getContext('2d');
-  _chartBarras = new Chart(ctx, {
-    type: 'bar',
-    data: { labels, datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          labels: { color: tickColor, font: { size: 11 }, padding: 14 },
-          position: 'top',
-        },
-        tooltip: {
-          mode: 'index',
-          intersect: false,
-          callbacks: {
-            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}`,
-          },
-        },
+  _chartB = new Chart(ctx, { type:'bar', data:{ labels, datasets },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:tc, font:{size:11}, padding:12 }, position:'top' },
+        tooltip:{ mode:'index', intersect:false } },
+      scales:{
+        x:{ stacked:true, ticks:{ color:tc, font:{size:10}, maxRotation:45 }, grid:{color:gc} },
+        y:{ stacked:true, beginAtZero:true, ticks:{ color:tc, precision:0 }, grid:{color:gc} }
       },
-      scales: {
-        x: {
-          stacked: true,
-          ticks: { color: tickColor, font: { size: 10 }, maxRotation: 45 },
-          grid: { color: gridColor },
-        },
-        y: {
-          stacked: true,
-          beginAtZero: true,
-          ticks: { color: tickColor, font: { size: 11 }, precision: 0 },
-          grid: { color: gridColor },
-        },
-      },
-    },
+      onClick(e, elems) {
+        if (!elems.length) return;
+        const idx   = elems[0].index;
+        const fecha = _fechas[idx];
+        if (!fecha) return;
+        const fechaFiltro = vista === 'mes'
+          ? fecha.substring(0,7)   // "YYYY-MM"
+          : fecha;                 // "YYYY-MM-DD"
+        filtrarPorFecha(fechaFiltro);
+      }
+    }
   });
 }
 
-// ── Top ZFERs ────────────────────────────────────────────────────────────────
+// ── Top ZFERs ─────────────────────────────────────────────────────────────────
 function renderTopZfer(rows) {
   const tbody = document.getElementById('top-zfer-body');
-  if (!rows || !rows.length) {
-    tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4" style="color:var(--muted); font-size:.82rem;">Sin datos</td></tr>';
-    return;
-  }
-  const maxVal = rows[0].total || 1;
-  tbody.innerHTML = rows.map((r, i) => `
-    <tr style="border-color:var(--border);">
-      <td class="ps-3" style="color:var(--muted); vertical-align:middle;">${i + 1}</td>
+  if (!rows || !rows.length) { tbody.innerHTML='<tr><td colspan="3" class="text-center py-4" style="color:var(--muted);">Sin datos</td></tr>'; return; }
+  const max = rows[0].total || 1;
+  tbody.innerHTML = rows.map((r,i) => `
+    <tr style="border-color:var(--border); cursor:pointer;" onclick="filtrarPorZfer('${r.zfer_base}')" class="tr-hover">
+      <td class="ps-3" style="color:var(--muted); vertical-align:middle; width:28px;">${i+1}</td>
       <td style="vertical-align:middle;">
-        <span style="font-family:monospace; font-weight:700; color:var(--zfer-txt);">${r.zfer_base}</span>
-        <div class="pct-bar-wrap ms-1" style="width:60px;">
-          <div class="pct-bar" style="width:${Math.round(r.total/maxVal*100)}%;"></div>
+        <span style="font-family:monospace; font-weight:700; color:var(--zfer-txt); font-size:.82rem;">${r.zfer_base}</span>
+        <div style="margin-top:3px; height:3px; background:var(--border); border-radius:2px; width:80px; overflow:hidden;">
+          <div style="height:3px; background:var(--accent); border-radius:2px; width:${Math.round(r.total/max*100)}%;"></div>
         </div>
       </td>
-      <td class="text-end pe-3" style="font-weight:700; color:var(--ok-txt); vertical-align:middle;">
-        ${r.total.toLocaleString('es-CO')}
-      </td>
-    </tr>
-  `).join('');
+      <td class="text-end pe-3" style="font-weight:700; color:var(--ok-txt); vertical-align:middle;">${r.total.toLocaleString('es-CO')}</td>
+    </tr>`).join('');
 }
 
-// ── Recientes ────────────────────────────────────────────────────────────────
-function renderRecientes(rows) {
-  const tbody = document.getElementById('recientes-body');
+// ── Drill-down tabla ──────────────────────────────────────────────────────────
+function renderDrill(rows) {
+  const tbody = document.getElementById('drill-body');
   if (!rows || !rows.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4" style="color:var(--muted); font-size:.82rem;">Sin datos</td></tr>';
-    return;
+    tbody.innerHTML='<tr><td colspan="5" class="text-center py-4" style="color:var(--muted);">Sin resultados para este filtro</td></tr>'; return;
   }
   tbody.innerHTML = rows.map(r => {
-    const esOk   = r.estado === 'OK';
-    const estadoBadge = esOk
-      ? `<span class="tag t-color" style="font-size:.75rem; padding:.15rem .5rem;"><i class="bi bi-check2 me-1"></i>OK</span>`
-      : `<span class="tag" style="background:var(--err-bg); color:var(--err-txt); border:1px solid var(--err-bdr); font-size:.75rem; padding:.15rem .5rem;"><i class="bi bi-x me-1"></i>ERROR</span>`;
+    const esOk  = r.estado === 'OK';
+    const badge = esOk
+      ? `<span class="tag t-color" style="font-size:.72rem;padding:.1rem .4rem;"><i class="bi bi-check2 me-1"></i>OK</span>`
+      : `<span class="tag" style="background:var(--err-bg);color:var(--err-txt);border:1px solid var(--err-bdr);font-size:.72rem;padding:.1rem .4rem;" title="${r.error_msg}"><i class="bi bi-x me-1"></i>ERROR</span>`;
     const tipoTag = r.tipo === 'COLOR'
-      ? `<span class="tag t-color" style="font-size:.74rem; padding:.12rem .45rem;">${r.tipo}</span>`
-      : `<span class="tag t-formula" style="font-size:.74rem; padding:.12rem .45rem;">${r.tipo || '—'}</span>`;
-    const detalle = r.tipo === 'COLOR'
-      ? (r.color_nombre ? `<div style="font-size:.73rem; color:var(--muted);">${r.color_nombre}</div>` : '')
-      : (r.formula_nueva ? `<div style="font-size:.73rem; color:var(--muted);">→ ${r.formula_nueva}</div>` : '');
-    return `
-      <tr style="border-color:var(--border); ${esOk ? 'background:var(--row-bg-ok)' : 'background:var(--row-bg-err)'}">
-        <td class="ps-3" style="vertical-align:middle; font-family:monospace; font-size:.8rem; color:var(--zfer-txt);">${r.zfer_base}</td>
-        <td style="vertical-align:middle; font-family:monospace; font-size:.8rem; color:var(--text);">${r.zfer_nuevo || '—'}${detalle}</td>
-        <td style="vertical-align:middle;">${tipoTag}</td>
-        <td style="vertical-align:middle;">${estadoBadge}</td>
-        <td class="pe-3" style="vertical-align:middle; color:var(--muted); white-space:nowrap; font-size:.79rem;">${r.ejecutado_el}</td>
-      </tr>
-    `;
+      ? `<span class="tag t-color" style="font-size:.71rem;padding:.08rem .35rem;">COLOR</span>`
+      : `<span class="tag t-formula" style="font-size:.71rem;padding:.08rem .35rem;">${r.tipo||'—'}</span>`;
+    const det = r.tipo === 'COLOR' && r.color_nombre
+      ? `<div style="font-size:.7rem;color:var(--muted);">${r.color_nombre}</div>` : '';
+    return `<tr style="border-color:var(--border); ${esOk?'background:var(--row-bg-ok)':'background:var(--row-bg-err)'}" class="tr-hover">
+      <td class="ps-3" style="vertical-align:middle; font-family:monospace; font-size:.78rem; color:var(--zfer-txt); cursor:pointer;" onclick="filtrarPorZfer('${r.zfer_base}')">${r.zfer_base}</td>
+      <td style="vertical-align:middle; font-family:monospace; font-size:.78rem; color:var(--text);">${r.zfer_nuevo||'—'}${det}</td>
+      <td style="vertical-align:middle;">${tipoTag}</td>
+      <td style="vertical-align:middle;">${badge}</td>
+      <td class="pe-3" style="vertical-align:middle; color:var(--muted); white-space:nowrap; font-size:.77rem;">${r.ejecutado_el}</td>
+    </tr>`;
   }).join('');
 }
 
-// ── Init ─────────────────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   setVista('dia');
+  setPeriodo('historico');
   cargarIndicadores();
-  _refreshTimer = setInterval(cargarIndicadores, 60_000);
+  setInterval(cargarIndicadores, 60_000);
 });
 
-// Re-colorear charts al cambiar tema
+// Re-render charts on theme toggle
 const _origToggle = window._toggleTheme;
-window._toggleTheme = function () {
+window._toggleTheme = function() {
   if (_origToggle) _origToggle();
-  // Destruir y recrear las gráficas con los nuevos colores del tema
   setTimeout(() => {
-    if (_chartBarras) { _chartBarras.destroy(); _chartBarras = null; }
-    if (_chartDonut)  { _chartDonut.destroy();  _chartDonut  = null; }
-    if (_indData) {
-      renderBarras(_indData, _vistaActual);
-      renderDonut(_indData);
-    }
+    if (_chartB) { _chartB.destroy(); _chartB = null; }
+    if (_chartD) { _chartD.destroy(); _chartD = null; }
+    if (_D) { renderBarras(_D, _vista); renderDonut(_D); }
   }, 250);
 };
 </script>
+
+<style>
+.tr-hover:hover { background:rgba(31,111,235,.04) !important; }
+</style>
 {% endblock %}
